@@ -1,17 +1,6 @@
-import type { Ask, Failure, History, Member, Message, PlanSummary, Reaction, Task, Turn, Wait } from '../api';
+import type { Ask, History, Member, Message, PlanSummary, Reaction, Task, Turn, Wait } from '../api';
+import type { Approval } from '../components/Approval';
 import type { LiveEvent } from '../live';
-
-export interface Approval {
-  turn: string;
-  request: string;
-  tool: string;
-  input?: unknown;
-  /** The person's answer, until the service takes it; with its failure if it was refused. */
-  answer?: { allow: boolean; failure?: Failure };
-}
-
-/** Still waiting on the person: not answered, or its answer was refused. One being sent isn't. */
-export const unanswered = (a: Approval) => !a.answer || !!a.answer.failure;
 
 /** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
 export interface ChatState {

@@ -62,23 +62,3 @@
   color: var(--muted-foreground);
   font-size: 14px;
 }
-/* A new chat's project, above the composer (the prototype's notch). */
-.project-pick {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  margin: 0 0 8px 12px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-.project-pick svg {
-  width: 15px;
-  height: 15px;
-}
-.project-pick select {
-  padding: 4px 8px;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-}

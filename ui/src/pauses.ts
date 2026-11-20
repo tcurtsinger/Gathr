@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type PauseScope, type Pauses } from '../api';
-import { listen } from '../live';
-import { useNewestWins } from '../newest';
+import { api, type Failure, type PauseScope, type Pauses } from './api';
+import { listen } from './live';
+import { useNewestWins } from './newest';
 
 /** What the person can do to a scope (0010): Restart is the resume of a stopped one. */
 export type PauseAction = 'pause' | 'resume' | 'stop';

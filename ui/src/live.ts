@@ -23,7 +23,8 @@ import type {
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
   // `at`: where the text starts in the turn's unsaved reply, in UTF-16 units.
-  | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
+  // `reply_to`: in a room chat, the main message the words sit under once they start with REPLY.
+  | { type: 'delta'; chat: string; turn: string; text: string; at?: number; reply_to?: string | null }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody | ThinkingBody }
   // A new thumbs-up, an agent's or the person's like; a repeat sends nothing. `removed`: the person took theirs back.

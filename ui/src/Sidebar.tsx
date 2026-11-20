@@ -1,7 +1,7 @@
 import { Folder, FolderOpen, Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
-import { ChatMenu } from './chat/ChatMenu';
+import { ChatMenu } from './components/ChatMenu';
 import { FROM_SERVICE, WORD } from './components/marks';
 import { ResizeHandle } from './components/ResizeHandle';
 import { StateMark } from './components/StateMark';

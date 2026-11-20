@@ -508,6 +508,8 @@ export interface Chat {
   needs?: boolean;
   /** The most pressing of its agents' marks its row shows (0071): none while nothing of those three holds. */
   mark?: ChatMark | null;
+  /** A room chat, shown by the new chat screen; any other by the old one. */
+  room?: boolean;
 }
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';
@@ -608,7 +610,7 @@ export interface History {
   /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
-  streaming?: { turn: string; agent: string | null; text: string }[];
+  streaming?: { turn: string; agent: string | null; text: string; reply_to?: string | null }[];
   /** Agents' thumbs-ups, oldest first. */
   reactions?: Reaction[];
   /** Where the person left off, by thread (0077); none yet for a chat not opened since. */

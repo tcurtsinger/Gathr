@@ -1,4 +1,3 @@
-import { Folder } from 'lucide-react';
 import {
   type ReactNode,
   useCallback,
@@ -24,30 +23,32 @@ import {
   type Project,
   type Task,
 } from '../api';
+import { unanswered } from '../components/Approval';
+import { ChatMenu } from '../components/ChatMenu';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
 import { MentionsContext } from '../components/Markdown';
 import { first as firstPick, kept as keptPicks, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
+import { ProjectPick } from '../components/ProjectPick';
+import { type PauseAction, type Run, runOf } from '../pauses';
 import { report } from '../report';
 import { TopLine } from '../TopLine';
 import type { Draft, Refusal } from '../tasks/model';
 import { asQuestion } from '../tasks/rows';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
 import type { Questions } from './Asked';
-import { ChatMenu } from './ChatMenu';
 import { MarksContext, useChatMarks } from './faceMarks';
 import { useFolds } from './folds';
 import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
 import { NewPill } from './NewPill';
-import { type PauseAction, type Run, runOf } from './pauses';
 import { type Fresh, useReads } from './reads';
 import { addressed, nameable, unnamed } from './recipient';
 import { type Opened, useReplying } from './replying';
 import { Summary } from './Summary';
-import { running, unanswered } from './state';
+import { running } from './state';
 import { type Actions, Thread, useStable } from './Thread';
 import { type Unsent, useChat } from './useChat';
 import { useWaiting } from './useWaiting';
@@ -466,24 +467,12 @@ export function ChatView(props: Props) {
                 }
               >
                 {fresh && (
-                  <label className="project-pick">
-                    <Folder aria-hidden="true" />
-                    <select
-                      aria-label="Project"
-                      value={chat.project ?? ''}
-                      onChange={(e) =>
-                        e.target.value === 'new' ? onNewProject() : onProject(e.target.value)
-                      }
-                    >
-                      <option value="">No project</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                      <option value="new">New project</option>
-                    </select>
-                  </label>
+                  <ProjectPick
+                    project={chat.project}
+                    projects={projects}
+                    onProject={onProject}
+                    onNewProject={onNewProject}
+                  />
                 )}
                 {archived ? (
                   <>

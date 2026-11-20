@@ -1,0 +1,312 @@
+/* The room (the owner's picks of 2026-11-20, Shared/designs/rebuild-chat/options.html): the person's messages as
+   bubbles at the right, each agent's main message as SerenityOS's card with its picture in the left margin, and
+   replies to it tucked under it, folded to one line. */
+.room {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+/* The title, then More 4px after it: the title truncates, More stays. */
+.room-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.room-title small {
+  flex: none;
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.room-title h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-archived {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.room-unsent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-foot .notice {
+  margin: 0 0 8px;
+}
+.room-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 24px 8px;
+}
+.room-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.room-foot {
+  width: min(760px, calc(100% - 48px));
+  margin: 8px auto 16px;
+}
+.room-time {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.room-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The person: a bubble at the right. */
+.room-you {
+  align-self: flex-end;
+  max-width: 76%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--accent-surface);
+  overflow-wrap: anywhere;
+}
+.room-words {
+  white-space: pre-wrap;
+}
+.room-item .mention {
+  color: var(--attention);
+  font-weight: 550;
+}
+
+/* An agent's main message: its picture in the margin, a line down to the next card of the round. */
+.room-turn {
+  margin-left: 44px;
+}
+.room-who {
+  position: absolute;
+  top: 9px;
+  left: -44px;
+}
+.room-rule {
+  position: absolute;
+  top: 44px;
+  bottom: -18px;
+  left: -30.75px;
+  width: 1.5px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.room-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--foreground) 3%, var(--background));
+}
+.room-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 18px;
+}
+.room-head b {
+  font-weight: 650;
+}
+.room-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.room-grow {
+  flex: 1;
+}
+.room-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.room-state svg {
+  width: 13px;
+  height: 13px;
+}
+.room-state.live {
+  color: var(--attention);
+}
+.room-state > .mark {
+  --mark: 11px;
+}
+.room-card > .room-body {
+  padding: 0 18px 10px;
+  color: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  font-size: 15px;
+}
+/* Words said while the turn still runs read as a remark until it ends. */
+.room-card[data-live] > .room-body,
+.room-card > .room-why {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+/* The turn's tool runs: one quiet line, opened by a click. */
+.room-steps {
+  padding: 0 12px 8px;
+}
+.room-work {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.room-work svg {
+  width: 13px;
+  height: 13px;
+  transition: rotate 0.15s;
+}
+.room-work[aria-expanded="true"] svg {
+  rotate: 90deg;
+}
+.room-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0 4px;
+  padding: 0 6px 0 23px;
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.room-step-list li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.room-step-list li[data-status="error"] {
+  color: var(--danger);
+}
+.room-step-list code {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Thumbs-ups: a small row under the words. */
+.room-reactions {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px 18px;
+}
+.room-reply .room-reactions {
+  padding: 4px 0 0;
+}
+/* An agent's foot: its thumbs-ups, and the person's own at the right end. */
+.room-foot-row {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px 8px 18px;
+}
+.room-foot-row .room-reactions {
+  padding: 0;
+}
+.room-reply .room-foot-row {
+  padding: 2px 0 0;
+}
+.room-like {
+  margin-left: auto;
+  color: var(--muted-foreground);
+}
+.room-like[aria-pressed="true"] {
+  color: var(--attention);
+}
+/* What a turn waits on the person for, at the foot of its card. */
+.room-asks {
+  padding: 0 14px 12px;
+}
+.room-reply .room-asks {
+  padding: 6px 0 0;
+}
+.room-react {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  font-size: 12.5px;
+}
+
+/* Replies, tucked under the message they answer, behind one line. */
+.room-thread {
+  margin: 6px 0 0 18px;
+  padding-left: 14px;
+  border-left: 1.5px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.room-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--attention);
+  font-size: 13px;
+}
+.room-fold:hover {
+  background: color-mix(in oklab, var(--attention) 10%, transparent);
+}
+.room-fold b {
+  font-weight: 600;
+}
+.room-fold span {
+  color: var(--muted-foreground);
+}
+.room-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 4px;
+}
+.room-reply {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0 9px;
+}
+.room-reply > .face {
+  margin-top: 2px;
+}
+.room-line {
+  font-size: 13.5px;
+}
+.room-line b {
+  font-weight: 650;
+}
+.room-reply p,
+.room-said {
+  margin: 1px 0 0;
+  color: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  font-size: 14.5px;
+}

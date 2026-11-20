@@ -4,8 +4,8 @@ import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Pauses } from '../api';
 import type { LiveEvent } from '../live';
+import { usePauses } from '../pauses';
 import { ChatView } from './ChatView';
-import { usePauses } from './pauses';
 
 const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
 vi.mock('../live', () => ({
