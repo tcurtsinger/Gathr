@@ -27,7 +27,8 @@ impl Tools {
         description = "Agree with the person's message or another agent's in this chat: puts your thumbs-up on it, by \
                        its id, `person` for the person's message your turn answers, or in a check `answer` for the \
                        answer you check. It posts nothing and wakes nobody: after it, end your turn with only \
-                       NO_REPLY. To say more than that you agree, send a message instead."
+                       NO_REPLY. To say more than that you agree, or when a teammate waits on your answer, send \
+                       a message instead."
     )]
     async fn react(
         &self,

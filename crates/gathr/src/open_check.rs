@@ -182,9 +182,11 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
         [&asked_turn],
         |r| r.get(0),
     )?;
+    // A turn that replied in a thread answered a teammate, not the person: its words aren't checked.
     let sql = format!(
         "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2
            AND (opened_by IS NULL OR opened_by NOT IN {NOT_AN_ANSWER}) AND created_ts >= ?3
+           AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.turn_id = turns.id AND m.reply_to IS NOT NULL)
          ORDER BY created_ts DESC, rowid DESC LIMIT 1"
     );
     let newest: Option<(String, String)> = tx

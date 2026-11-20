@@ -113,6 +113,7 @@ checked by the teammates who took no part, before the person relies on it.";
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.
 const ROOM: &str = "- If you have nothing to add, write only NO_REPLY: nothing is posted. To agree, react with a \
 thumbs-up, then write only NO_REPLY. Never write a message to say that you reacted or that you agree.
+- A thumbs-up wakes nobody. When a teammate is waiting on your answer or your result, write it to them with @Name.
 - Keep your line on the board current with set_board_line: what you work on, and its state.
 - Keep your messages brief. Be friendly and professional.
 - Don't push fixes for edge cases nobody has hit, and don't change things over wording or semantics.

@@ -2,7 +2,7 @@
 //! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
 //! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
 //! a REPLY sits under the message it answers; NO_REPLY posts nothing, and a check that reacts and
-//! writes it closes. Each
+//! writes it closes; the check takes the lead's main message, never its reply. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
 //! given.
 
@@ -317,6 +317,37 @@ fn a_reply_sits_under_the_message_that_woke_it_and_one_level_deep() {
     );
     let answered: Vec<&Value> = deltas.iter().map(|d| &d["reply_to"]).collect();
     assert_eq!(answered, [&Value::Null, &main, &main], "{deltas:?}");
+}
+
+#[test]
+fn the_check_takes_the_leads_main_message_never_its_reply_in_a_thread() {
+    let data = TempDir::new();
+    // The lead's words wake Ann, hers wake the lead, whose second turn replies to her.
+    let first = "@Ann @Lead check the map.";
+    let replay = saying(&data.0, &[first, "REPLY\nThanks, I'll merge."]);
+    let room = room(&data.0, &replay);
+    room.say("Plan the walk", None);
+    room.quiet(3);
+
+    // The lead's first words answer the person; its last are a reply to Ann, and aren't checked.
+    let checked = || {
+        let found = rows(
+            &room.data,
+            "SELECT answer FROM open_checks WHERE ended_ts IS NOT NULL",
+        );
+        (!found.is_empty()).then_some(found)
+    };
+    let checked = common::until(10, "the round", checked);
+    let main = rows(
+        &room.data,
+        &format!(
+            "SELECT m.id FROM messages m JOIN turns t ON t.id = m.turn_id WHERE t.agent_id = '{}'
+             AND m.role = 'assistant' AND m.kind = 'text' AND m.reply_to IS NULL",
+            room.lead
+        ),
+    );
+    assert_eq!(main.len(), 1, "{main:?}");
+    assert_eq!(checked, [json!({ "answer": main[0]["id"] })]);
 }
 
 #[test]
