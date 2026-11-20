@@ -26,6 +26,7 @@ mod merging;
 mod models;
 mod pauses;
 mod projects;
+mod questions;
 mod reads;
 mod routes;
 mod search;

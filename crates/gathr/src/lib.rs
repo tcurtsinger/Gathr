@@ -42,6 +42,7 @@ pub mod plans;
 pub mod platform;
 pub mod projects;
 pub mod pushes;
+pub mod questions;
 pub mod quiet;
 pub mod reactions;
 pub mod reads;

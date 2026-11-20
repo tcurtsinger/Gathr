@@ -156,9 +156,10 @@ impl Tools {
 }
 
 /// The tools an agent in a room chat is offered: the rest belong to the old team machinery.
-const ROOM_TOOLS: [&str; 6] = [
+const ROOM_TOOLS: [&str; 7] = [
     "react",
     "set_board_line",
+    "ask_person",
     "read_chat",
     "pr",
     "ci_failures",
