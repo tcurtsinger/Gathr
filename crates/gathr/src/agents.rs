@@ -27,6 +27,8 @@ pub struct Agent {
     pub skin: Option<i64>,
     /// The background the person picked, `#RRGGBB`; until then a grey.
     pub background: Option<String>,
+    /// A picture the person gave it, as a data URL the window made; shown instead of the drawn face.
+    pub picture: Option<String>,
 }
 
 /// What the agent may do without asking (0029). Gathr asks before a push or a write outside the
@@ -78,6 +80,7 @@ pub struct Change {
     pub skin: Option<Option<i64>>,
     /// `#rrggbb` in either case: kept in upper case.
     pub background: Option<Option<String>>,
+    pub picture: Option<Option<String>>,
 }
 
 impl Agent {
@@ -99,6 +102,7 @@ impl Agent {
         next.skin = change.skin.unwrap_or(next.skin);
         let background = change.background.map(|b| b.map(|b| b.to_ascii_uppercase()));
         next.background = background.unwrap_or(next.background);
+        next.picture = change.picture.unwrap_or(next.picture);
         next
     }
 }
@@ -150,7 +154,7 @@ pub type Saved = Result<Result<Agent, Refused>, Error>;
 /// without a face seed (by hand, or by a test) is drawn from its name.
 const COLUMNS: &str =
     "SELECT id, name, account_id, model, effort, approvals, coalesce(face_seed, name), gender, skin,
-                         background FROM agents WHERE removed_ts IS NULL";
+                         background, picture FROM agents WHERE removed_ts IS NULL";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -164,6 +168,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
         gender: r.get(7)?,
         skin: r.get(8)?,
         background: r.get(9)?,
+        picture: r.get(10)?,
     })
 }
 
@@ -209,8 +214,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
     };
     let added = conn.execute(
         "INSERT INTO agents (id, name, name_key, account_id, model, effort, approvals, created_ts,
-                             face_seed, gender, skin, background)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                             face_seed, gender, skin, background, picture)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             agent.id,
             name,
@@ -223,7 +228,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
             agent.face_seed,
             agent.gender,
             agent.skin,
-            agent.background
+            agent.background,
+            agent.picture
         ],
     );
     saved(added.map(|_| Agent { name, ..agent }))
@@ -264,7 +270,7 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     let updated = conn.execute(
         "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
          approvals = ?7, face_seed = ?8, gender = ?9, skin = ?10,
-         background = ?11 WHERE id = ?1 AND removed_ts IS NULL",
+         background = ?11, picture = ?12 WHERE id = ?1 AND removed_ts IS NULL",
         params![
             agent.id,
             name,
@@ -276,7 +282,8 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
             agent.face_seed,
             agent.gender,
             agent.skin,
-            agent.background
+            agent.background,
+            agent.picture
         ],
     );
     match saved(updated)? {
@@ -331,10 +338,12 @@ pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// Marks the agent removed and lets go of its account, once: a second call keeps the first time.
+/// Marks the agent removed, lets go of its account and drops its picture, once: a second call
+/// keeps the first time.
 pub fn mark_removed(conn: &Connection, id: &str) -> Result<(), Error> {
     conn.execute(
-        "UPDATE agents SET removed_ts = ?2, account_id = NULL WHERE id = ?1 AND removed_ts IS NULL",
+        "UPDATE agents SET removed_ts = ?2, account_id = NULL, picture = NULL
+         WHERE id = ?1 AND removed_ts IS NULL",
         params![id, ids::now_us()],
     )?;
     Ok(())
@@ -414,6 +423,7 @@ mod tests {
             gender: None,
             skin: None,
             background: None,
+            picture: None,
         }
     }
 
