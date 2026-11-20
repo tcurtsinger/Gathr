@@ -96,58 +96,6 @@ fn removal_traced(data: &Path, reference: &str) {
     });
 }
 
-#[test]
-fn the_agent_folder_is_shown_saved_and_refused_when_it_cant_be_used() {
-    let data = TempDir::new();
-    let service = TestService::start(&data.0);
-    let shown = service.call("GET", "/api/settings").json();
-    // A data folder that isn't the system's keeps its agents beside it, never in the person's own.
-    let default = beside(&data.0).display().to_string();
-    assert_eq!(
-        shown["agent_folder"], default,
-        "the default for a data folder of its own: {shown}"
-    );
-    let file = data.0.join("a-file");
-    std::fs::write(&file, "").unwrap();
-    for unusable in [
-        PathBuf::new(),
-        PathBuf::from("relative").join("folder"),
-        data.0.join("inside-the-data-folder"),
-        file.join("under-a-file"),
-    ] {
-        let body = json!({ "agent_folder": unusable });
-        let refused = service.send("PATCH", "/api/settings", body);
-        assert_eq!(
-            refused.status,
-            400,
-            "{}: {}",
-            unusable.display(),
-            refused.body
-        );
-        let answer = refused.json();
-        assert_eq!(answer["error"], "Save failed", "{answer}");
-        let why = answer["why"].as_str().unwrap();
-        let trace = traced(&data.0, answer["ref"].as_str().unwrap());
-        assert!(trace.contains("gathr.settings.change"), "{trace}");
-        assert!(
-            trace.contains(&why.replace('\\', "\\\\")),
-            "{why} in {trace}"
-        );
-    }
-    let elsewhere = TempDir::new();
-    let chosen = elsewhere.0.join("Agents");
-    let saved = service.send("PATCH", "/api/settings", json!({ "agent_folder": chosen }));
-    assert_eq!(saved.status, 200, "{}", saved.body);
-    let shown = service.call("GET", "/api/settings").json();
-    assert_eq!(
-        shown["agent_folder"],
-        chosen.display().to_string(),
-        "{shown}"
-    );
-    assert_eq!(shown["stale_days"], 3, "the days stay: {shown}");
-    assert!(chosen.is_dir(), "it was made");
-}
-
 /// A project chat's first turn for an agent whose names no disk takes as they are: the engine's
 /// start (`env.jsonl`), its arguments, and the agent's own folder and Shared.
 struct Started {

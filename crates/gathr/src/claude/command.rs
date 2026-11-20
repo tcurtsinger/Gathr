@@ -391,32 +391,6 @@ fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
 mod tests {
     use super::*;
 
-    /// The hook leaves a wait's check to the classifier only when told the engine is in auto mode;
-    /// Full's hook answers only the hold, for file writes, and a Gathr that can't answer lets them
-    /// go on (0063).
-    #[test]
-    fn only_an_auto_engines_hook_address_says_auto() {
-        let entry = |approvals| {
-            let settings: serde_json::Value =
-                serde_json::from_str(&settings(approvals, Some("http://x/hook"))).unwrap();
-            settings["hooks"]["PreToolUse"][0].clone()
-        };
-        let url = |approvals| entry(approvals)["hooks"][0]["url"].clone();
-        assert_eq!(url(Approvals::Auto), "http://x/hook?auto");
-        assert_eq!(url(Approvals::Edits), "http://x/hook");
-        assert_eq!(url(Approvals::Ask), "http://x/hook");
-        let full = entry(Approvals::Full);
-        assert_eq!(
-            (&full["hooks"][0]["url"], &full["matcher"]),
-            (
-                &serde_json::json!("http://x/hook?full"),
-                &serde_json::json!("Write|Edit|NotebookEdit")
-            ),
-            "{full}"
-        );
-        assert_eq!(full["hooks"][0].get("onFailure"), None, "{full}");
-    }
-
     #[test]
     fn a_version_is_usable_from_the_oldest_proven_one_on_compared_by_number() {
         assert_eq!(

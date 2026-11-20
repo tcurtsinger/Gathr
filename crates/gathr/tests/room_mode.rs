@@ -54,7 +54,6 @@ fn room(data: &Path, replay: &Path) -> Room {
         { "agent": ann, "role": "member" }, { "agent": bo, "role": "member" }]);
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
-    assert_eq!(made.json()["room"], true, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
     Room {
         service,

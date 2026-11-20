@@ -28,7 +28,6 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     let mira = made.json()["id"].as_str().unwrap().to_string();
     let members = json!([{ "agent": mira, "role": "supervisor" }]);
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
-    assert_eq!(made.json()["room"], true, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
     let sent = service.send(
         "POST",

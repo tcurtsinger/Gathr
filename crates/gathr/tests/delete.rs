@@ -105,13 +105,6 @@ fn delete(service: &TestService, path: &str) -> Value {
     deleted.json()
 }
 
-/// What `path`'s delete would do, as the confirm reads it.
-fn counts(service: &TestService, path: &str) -> Value {
-    let counted = service.call("GET", &format!("{path}/delete"));
-    assert_eq!(counted.status, 200, "{}", counted.body);
-    counted.json()
-}
-
 #[test]
 fn a_project_goes_with_its_chats_and_folders_and_shared_and_the_persons_checkout_stay() {
     let data = TempDir::new();
@@ -321,39 +314,5 @@ fn a_removed_agents_name_is_free_and_it_is_in_no_list() {
         seated.status, 400,
         "a removed agent seated: {}",
         seated.body
-    );
-}
-
-#[test]
-fn the_counts_for_deleting_a_project_are_what_its_delete_does() {
-    let data = TempDir::new();
-    let service = TestService::start(&data.0);
-    let account = service.add_account("Work");
-    let kai = agent(&service, &account, "Kai");
-    let (folder, _) = common::project(&data.0.join("repo"));
-    let larder = new_project(
-        &service,
-        "Larder",
-        &folder,
-        json!([member(&kai, "supervisor")]),
-    );
-    let chats: Vec<String> = (0..4).map(|_| chat_in(&service, &larder)).collect();
-    let archive = service.call("POST", &format!("/api/chats/{}/archive", chats[3]));
-    assert_eq!(archive.status, 200, "{}", archive.body);
-    let path = format!("/api/projects/{larder}");
-    // "4 chats will be deleted. Files are kept.": the archived one counts.
-    let expected = json!({ "chats": 4, "tasks": 0, "projects": 1, "leads": [] });
-    assert_eq!(counts(&service, &path), expected);
-
-    let deleted = delete(&service, &path);
-    for field in ["chats", "tasks", "projects", "leads"] {
-        assert_eq!(deleted[field], expected[field], "{field}: {deleted}");
-    }
-    for chat in &chats {
-        assert!(gone(&service, chat), "{chat} is still there");
-    }
-    assert!(
-        project_of(&service, &larder).is_none(),
-        "the project is listed"
     );
 }

@@ -7,10 +7,7 @@ mod common;
 use std::net::TcpStream;
 use std::path::Path;
 
-use common::{
-    TempDir, TestService, call_tool, first_token, gathr, held_recording, next_live, recording,
-    team, text,
-};
+use common::{TempDir, TestService, gathr, held_recording, next_live, recording, team};
 use serde_json::{Value, json};
 
 /// The chat's `working` and `needs` in the list.
@@ -239,27 +236,6 @@ fn an_approval_nobody_answered_goes_with_its_turn() {
     assert_eq!(changes(&service, &mut live, &chat), asked);
 }
 
-/// A team chat whose Supervisor, mid-turn, waits on a check and asks the person a question.
-fn asked_the_person(data: &Path) -> (TestService, String) {
-    let (service, chat, _) = team(data, &held_recording(data, "signed_in"), &[]);
-    say(&service, &chat, None);
-    let (port, lead) = (service.info.port, first_token(data));
-    let check = json!({ "check": "exit 1", "then": "merge it" });
-    let left = text(&call_tool(port, &lead, "wait", check));
-    assert!(left.starts_with("Waiting ("), "{left}");
-    let question = json!({ "what": "Pick a name", "form": "done" });
-    let asked = text(&call_tool(port, &lead, "ask_person", question));
-    assert!(asked.starts_with("Task #1 is on the person's"), "{asked}");
-    (service, chat)
-}
-
-fn answer(service: &TestService) {
-    let done = json!({ "answers": [{ "task": 1, "done": true }] });
-    let sent = service.send("POST", "/api/person-tasks/answer", done);
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    assert_eq!(sent.json()["refused"], json!([]), "{}", sent.body);
-}
-
 #[test]
 fn a_message_waiting_for_a_sign_in_needs_the_person() {
     let data = TempDir::new();
@@ -301,87 +277,6 @@ fn an_archived_chat_carries_no_state() {
     assert_eq!(state(&service, &chat), (false, false));
     let seen = changes(&service, &mut live, &chat);
     assert_eq!(seen, [(true, false), (true, true), (false, false)]);
-}
-
-#[test]
-fn a_restart_keeps_what_needs_the_person_and_carries_on_what_was_running() {
-    let data = TempDir::new();
-    let (service, chat) = asked_the_person(&data.0);
-    until_state(&service, &chat, (true, true));
-    service.stop();
-    // With no service to ask, health says the database answered, and why.
-    let (ok, health) = gathr(&data.0, &["diag", "health"]);
-    assert!(ok, "{health}");
-    let shown = &health["chats"];
-    assert_eq!(shown["from"], "database", "{health}");
-    assert_eq!(shown["why"], "the service isn't running", "{health}");
-    let asked = json!([{ "chat": chat, "working": false, "needs": true }]);
-    assert_eq!(shown["chats"], asked, "{health}");
-
-    let (replay, go, tokens) = (
-        data.0.join("held.jsonl"),
-        data.0.join("go"),
-        data.0.join("env.jsonl"),
-    );
-    let env = [
-        ("GATHR_REPLAY", replay.as_path()),
-        ("GATHR_REPLAY_HOLD", go.as_path()),
-        ("GATHR_REPLAY_ENV", tokens.as_path()),
-    ];
-    // Two turns to the next engine: the carry-on, then the answer's.
-    let once = std::fs::read_to_string(&replay).unwrap();
-    std::fs::write(&replay, once.repeat(2)).unwrap();
-    let service = TestService::with_engine(&data.0, &env);
-    // The cut turn carries on, and holds.
-    until_state(&service, &chat, (true, true));
-    std::fs::write(&go, "").unwrap();
-    service.wait_for(&chat, 10, "the carry-on's end", |h| {
-        h["turns"][1]["status"] == "done"
-    });
-    until_state(&service, &chat, (false, true));
-    let mut live = service.live();
-    answer(&service);
-    service.wait_for(&chat, 10, "the hear-back turn", |h| {
-        h["turns"].as_array().is_some_and(|t| t.len() == 3)
-    });
-    ended(&service, &chat);
-    until_state(&service, &chat, (false, false));
-    let seen = changes(&service, &mut live, &chat);
-    assert_eq!(seen, [(false, false), (true, false), (false, false)]);
-}
-
-/// 0019: the list's failure carries a reference that finds why, and so does a state that couldn't
-/// be worked out for a turn.
-#[test]
-fn a_state_that_cant_be_read_fails_with_a_reference_that_finds_why() {
-    let data = TempDir::new();
-    let service = TestService::start(&data.0);
-    let chat = service.new_chat();
-    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
-    // Not `tasks`: saving a turn reads it for the turn's ask (0061), and the send would fail first.
-    db.execute("ALTER TABLE quiet RENAME TO quiet_gone", [])
-        .unwrap();
-
-    let listed = service.call("GET", "/api/chats");
-    assert_eq!(listed.status, 500, "{}", listed.body);
-    let answer = listed.json();
-    assert_eq!(answer["error"], "Chats failed", "{answer}");
-    let (ok, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);
-    assert!(
-        ok && trace.to_string().contains("no such table"),
-        "the reference doesn't find why the list failed: {trace}"
-    );
-
-    // No engine copy: the turn is queued, and its state can't be worked out either.
-    let sent = say(&service, &chat, None);
-    let (ok, trace) = gathr(&data.0, &["diag", "trace", sent["ref"].as_str().unwrap()]);
-    assert!(ok, "{trace}");
-    let events = trace["events"].as_array().unwrap();
-    let failed = events.iter().find(|e| e["name"] == "gathr.chat.state");
-    let failed = failed.unwrap_or_else(|| panic!("no gathr.chat.state in the trace: {trace}"));
-    assert_eq!(failed["error_type"], "sqlite", "{failed}");
-    let why = failed["attrs"]["why"].as_str().unwrap_or_default();
-    assert!(why.contains("no such table"), "{failed}");
 }
 
 #[test]
@@ -452,47 +347,4 @@ fn two_agents_turns_in_one_chat_ending_together_end_its_working_once() {
     ended(&service, &chat);
     until_state(&service, &chat, (false, false));
     assert_eq!(changes(&service, &mut live, &chat), WORKED);
-}
-
-/// 0071: a chat's row in the list carries its most pressing mark of three, as the sidebar draws it:
-/// `needs_you`, `cant_run` or `working`. A signed-out agent still makes the chat need the person for
-/// a notice, but its row says it can't run.
-#[test]
-fn a_chats_row_carries_its_most_pressing_mark() {
-    let data = TempDir::new();
-    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
-         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
-             ('ann', 'Ann', 'ann', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 1);
-         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO chat_members VALUES ('c', 'ann', 'supervisor', 1), ('c', 'bo', 'member', 1);",
-    )
-    .unwrap();
-    let row = |conn: &rusqlite::Connection| {
-        let chats = gathr::store::chats(conn, false).unwrap();
-        let state = gathr::store::chat_state(conn, "c").unwrap().unwrap();
-        (chats[0]["mark"].clone(), json!(state.mark), state.needs)
-    };
-    let turn = |id: &str, agent: &str, status: &str, at: i64| {
-        let add = "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id)
-                   VALUES (?1, 'c', 'x', ?2, ?3, ?4)";
-        conn.execute(add, rusqlite::params![id, status, at, agent])
-            .unwrap();
-    };
-    assert_eq!(row(&conn), (Value::Null, Value::Null, false));
-    turn("a1", "ann", "running", 2);
-    assert_eq!(row(&conn), (json!("working"), json!("working"), false));
-    turn("b1", "bo", "failed", 3);
-    assert_eq!(row(&conn), (json!("cant_run"), json!("cant_run"), false));
-    conn.execute_batch(
-        "INSERT INTO tasks (chat_id, giver, kind, what, state, created_ts, updated_ts)
-         VALUES ('c', 'ann', 'person', 'Pick a colour', 'ready', 5, 5)",
-    )
-    .unwrap();
-    assert_eq!(row(&conn), (json!("needs_you"), json!("needs_you"), true));
-    conn.execute_batch("DELETE FROM tasks; UPDATE turns SET status = 'done' WHERE id = 'b1';")
-        .unwrap();
-    turn("b2", "bo", "waiting_sign_in", 4);
-    assert_eq!(row(&conn), (json!("cant_run"), json!("cant_run"), true));
 }

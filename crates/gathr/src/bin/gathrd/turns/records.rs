@@ -145,6 +145,7 @@ impl Task {
     /// Saves the turn's status and sends it live. The update is built from what this task holds,
     /// not from the write: a failed write still names the turn's agent, so Retry goes to it.
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
+        self.note_asking(ids);
         let (turn, status_saved, why_saved) =
             (ids.turn.clone(), status.to_string(), why.map(String::from));
         let saved = self

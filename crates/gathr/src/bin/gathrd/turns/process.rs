@@ -159,10 +159,7 @@ impl Task {
         let point = self.compact_at(&assigned).await;
         let compact_at = point.as_ref().map(|(at, _)| *at);
         let first = if codex {
-            args = gathr::codex::command::args(
-                Some(&url),
-                assigned.approvals == gathr::agents::Approvals::Auto,
-            );
+            args = gathr::codex::command::args(Some(&url));
             let opening = gathr::codex::rpc::Opening {
                 resume: session.clone(),
                 cwd: cwd.display().to_string(),

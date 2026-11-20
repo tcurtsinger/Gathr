@@ -126,7 +126,7 @@ fn sent(conn: &Connection, message: &str) -> Result<Option<Sent>, Error> {
 
 /// Gathr's line for `reader` before the person's words: what the reply `target` answers, then who
 /// else of `everyone` got it; none when it answers nothing and went to `reader` alone.
-pub fn said_to(
+fn said_to(
     conn: &Connection,
     target: &Target,
     reader: Option<&str>,

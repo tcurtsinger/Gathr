@@ -9,7 +9,7 @@ mod common;
 use std::path::Path;
 
 use common::replay::{escaped, read_in, turns as engine};
-use common::{TempDir, TestService, call_tool, gathr, rows, team, text, until};
+use common::{TempDir, TestService, gathr, rows, team, until};
 use gathr::http::Response;
 use serde_json::{Value, json};
 
@@ -250,64 +250,6 @@ fn with_bo_signed_out_anns_turn_runs_and_bos_waits_for_sign_in_over_a_restart() 
     let again = TestService::with_engine(&data.0, &[("GATHR_REPLAY", replay.as_path())]);
     turn_is(&again, &chat, &bos, &["done"]);
     reads(&data.0, &bos, "The person sent this to you and Ann.");
-}
-
-/// A Discuss whose answer is refused saves nothing: an outsider picked in a chat with no project
-/// doesn't join, and the refusal is found from its reference.
-#[test]
-fn a_refused_discuss_with_an_outsider_picked_leaves_the_chats_members_as_they_were() {
-    let data = TempDir::new();
-    let (service, chat, lead) = team(&data.0, &engine(&data.0, &[], 4), &[]);
-    let cy = agent(&service, "Cy", &account_of(&service, &lead));
-    let first = post(&service, &chat, json!({ "text": "Word the notice" }));
-    let first = first.json()["turn"].as_str().unwrap().to_string();
-    turn_is(&service, &chat, &first, &["done"]);
-    let token = common::first_token(&data.0);
-    let ask = json!({ "what": "Which notice text should ship?", "choices": [{ "label": "Lost" }, { "label": "Back" }] });
-    let asked = text(&call_tool(service.info.port, &token, "ask_person", ask));
-    assert!(
-        asked.starts_with("Task #1 is on the person's Tasks list."),
-        "{asked}"
-    );
-    let answer = |a: Value| {
-        service.send(
-            "POST",
-            "/api/person-tasks/answer",
-            json!({ "answers": [a] }),
-        )
-    };
-    let picked = answer(json!({ "task": 1, "pick": ["Lost"] }));
-    assert_eq!(picked.json()["refused"], json!([]), "{}", picked.body);
-    let members = |h: &Value| h["members"].as_array().map(|m| m.len());
-    let before = members(&history(&service, &chat));
-
-    let talk = json!({ "task": 1, "discuss": true, "text": "Why lost?", "to": [cy] });
-    let sent = answer(talk);
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    let said = sent.json();
-    assert_eq!(said["refused"][0]["why"], "#1 is already done", "{said}");
-    assert_eq!(
-        members(&history(&service, &chat)),
-        before,
-        "Cy joined a refused Discuss"
-    );
-    let changes = rows(
-        &data.0,
-        &format!(
-            "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.members' AND conversation_id = '{chat}'"
-        ),
-    );
-    assert_eq!(
-        changes,
-        [json!({ "n": 1 })],
-        "only the chat's making changed its members"
-    );
-    let reference = said["refused"][0]["ref"].as_str().unwrap();
-    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
-    assert!(
-        ok && trace.to_string().contains("#1 is already done"),
-        "{reference}: {trace}"
-    );
 }
 
 /// A turn sent again after its engine refused the login reads what it read the first time: Gathr's

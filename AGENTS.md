@@ -2,10 +2,7 @@
 
 Gathr is an open-source desktop app for working with your own AI agents, from different providers (Claude Code, Codex and more), on your own computer: a chat where you and your agents work like a team.
 
-**Status, 2026-11-20: the chat and the team layer are being started over.** The owner's call, after a run in which Gathr's own guards, messages and tests cost more than the work.
-
-- **Kept:** the window's shell, and what is under the chat: the engine drivers, sign-in and logins, storage, updates and releases, approvals, search, diagnostics.
-- **Started over:** the chat screen (its layout, messages, threads and faces) and how agents work as a team (tasks, hear-backs, reviews, merging). They are designed again, small, built beside the old ones, and the old ones are deleted when the new path works. Until then the old code still runs. Don't extend it, and don't repair it past what keeps the app usable.
+**Status, 2026-11-20: the chat and the team layer were started over, and the old ones are deleted.** A chat is a room: messages, replies folded under the message they answer, reactions, a board of the work, and questions to the person. Gathr starts no turn and writes no message by itself, except the team's check of the lead's plan or answer. Under it, kept as it was: the engine drivers, sign-in and logins, storage, updates and releases, approvals, search, diagnostics.
 
 `docs/archive/` is how Gathr was built before that day: the old `AGENTS.md`, the charter and its promises, the truth map, the scenarios, the testing guide and every numbered decision. It is history. Code comments cite decisions by number, and they are there to read. **Nothing in it is a rule, and nobody keeps it up to date.** If a habit comes from there and isn't on this page, it is gone.
 
@@ -65,6 +62,6 @@ Facts, not rules. Read the one your task touches.
 - [docs/running.md](docs/running.md): run a dev service, seed test data, run it installed.
 - [docs/window.md](docs/window.md): use and check a screen in the window.
 - [docs/architecture.md](docs/architecture.md): what is built, part by part.
-- [docs/api.md](docs/api.md), [api-engines](docs/api-engines.md), [api-approvals](docs/api-approvals.md), [api-tasks](docs/api-tasks.md), [api-checks](docs/api-checks.md): the service's API.
+- [docs/api.md](docs/api.md), [api-engines](docs/api-engines.md), [api-approvals](docs/api-approvals.md), [api-tasks](docs/api-tasks.md): the service's API.
 - [DESIGN.md](DESIGN.md) and [designs/README.md](designs/README.md): the design system and its previews. Their chat parts describe the chat that is being replaced.
 - [docs/archive/README.md](docs/archive/README.md): what was archived, and why.

@@ -7,11 +7,6 @@ use serde_json::Value;
 
 use crate::Error;
 
-/// What a member's turn is told of a teammate's message: Gathr's copy of message `id`.
-pub fn told(from: &str, id: &str, text: &str) -> String {
-    format!("{from} wrote to you (message {id}): {text}")
-}
-
 /// The limit until the person picks another (Settings > General).
 pub const DEFAULT_LIMIT: i64 = 50;
 const KEY: &str = "handoff_limit";
