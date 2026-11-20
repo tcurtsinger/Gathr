@@ -91,9 +91,11 @@ pub fn reply_to(conn: &Connection, turn: &str) -> Result<Option<String>, Error> 
 }
 
 /// SQL for a message `m` said in the room, so not an agent's working note: in a turn only its last
-/// block of words is said; the blocks before it are notes, kept in its steps. Empty last words, which
-/// NO_REPLY after notes leaves, say nothing.
-pub const SAID: &str = "(m.role != 'assistant' OR (trim(m.body) != '' AND NOT EXISTS (
+/// block of words is said, once the turn has ended; the blocks before it are notes, kept in its
+/// steps. Empty last words, which NO_REPLY after notes leaves, say nothing.
+pub const SAID: &str = "(m.role != 'assistant' OR (trim(m.body) != ''
+    AND EXISTS (SELECT 1 FROM turns e WHERE e.id = m.turn_id AND e.ended_ts IS NOT NULL)
+    AND NOT EXISTS (
     SELECT 1 FROM messages n WHERE n.chat_id = m.chat_id AND n.ts >= m.ts AND n.turn_id = m.turn_id
       AND n.role = 'assistant' AND n.kind = 'text' AND n.rowid != m.rowid
       AND (n.ts > m.ts OR n.rowid > m.rowid))))";
@@ -203,7 +205,8 @@ pub fn catch_up(
     }))
 }
 
-/// The chat's lines, newest first, the last 30: since `since` without the conversation's own turns
+/// The chat's lines, newest first, the last 30: since `since` (an agent's words when its turn ended
+/// since, as they weren't said before) without the conversation's own turns
 /// and what they carried, or the last of all. Never the turn's own messages or what they carry, nor
 /// what the open check's words hand the turn already (0080): a check its answer and the person's
 /// message, the lead's last word the members' checks.
@@ -224,7 +227,8 @@ fn lines(
            AND NOT EXISTS (SELECT 1 FROM turns u JOIN turns k ON k.answers = u.answers
                            WHERE u.id = ?2 AND u.opened_by = 'last_word' AND k.opened_by = 'check'
                              AND k.id = m.turn_id)
-           AND (?4 IS NULL OR (m.ts > ?4 AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
+           AND (?4 IS NULL OR ((m.ts > ?4 OR (m.role = 'assistant' AND t.ended_ts > ?4))
+               AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
                AND m.id NOT IN (SELECT c.copy_of FROM messages c JOIN mine u ON u.id = c.turn_id
                                 WHERE c.copy_of IS NOT NULL)))
          ORDER BY m.ts DESC, m.id DESC LIMIT ?5"
