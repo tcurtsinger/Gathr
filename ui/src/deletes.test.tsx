@@ -54,7 +54,6 @@ function service(made: Made) {
     if (path === '/api/chats?archived=true') return json([]);
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
-    if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     const [, chatId, action] = path.match(/^\/api\/chats\/([^/?]+)\/?(\w*)$/) ?? [];
     if (action === 'tasks') return json({ tasks: [], waits: [] });

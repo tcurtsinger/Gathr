@@ -11,8 +11,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@assistant-ui/react": "0.15.33",
-    "@assistant-ui/react-streamdown": "0.3.21",
     "@base-ui/react": "1.9.0",
     "@dicebear/core": "9.4.2",
     "@dicebear/dylan": "9.4.2",

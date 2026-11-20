@@ -54,14 +54,10 @@ unselected expanding option. See `approvals/README.md` for copy and checks.
 The shared runtime component is `ui/src/components/Help.tsx`, demonstrated in
 `system.html` with its runtime stylesheet.
 
-## Selected archive and stale patterns
+## Selected archive pattern
 
-The folded Archived group from archive-stale/v1 is selected. The current
-reference is [archive-stale/v3.html](archive-stale/v3.html): the same layout with
-Idle age labels and the service's 1-to-365 day range. v1 is retained as the chosen
-proposal; v2's Archived-button flyout is retired and must not be built. The
-selected anatomy also appears in system.html#archive-stale. No service connects
-to these fixtures. Runtime Archive, Delete and stale rules belong to 0010.
+The folded Archived group is selected; its anatomy is in system.html#archive-stale.
+No service connects to these fixtures.
 
 ## Selected Search
 
@@ -80,11 +76,7 @@ Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `desi
 The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
 
-Archive and stale uses `designs/archive-stale/v3.html`, refining the selected folded group from v1.
-`node designs/archive-stale/check-selected.cjs <absolute evidence folder outside the repo>` checks it and
-`system.html` at 1440 and 1024px in both themes, including confirms, Help, Idle labels and day limits.
-The original v1/v2 proposals stay unchanged; the v2 archive flyout is retired.
 
 Search reference: `node designs/check-search.cjs <absolute evidence folder outside the repo>`
-checks the selected and retired rows, shared Tasks shell, retained query, keyboard cursor,
+checks the selected and retired rows, retained query, keyboard cursor,
 Archived label and fixture states at 1440, 1024 and 390px in both themes.

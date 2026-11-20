@@ -68,47 +68,4 @@
 	get("#archive-restore").onclick = () => {
 		get("#archive-sample-status").textContent = "Restore previewed locally";
 	};
-	get("#archive-general-open").onclick = () => openSettings("General");
-	for (const [id, button] of [
-		["stale-days-help", "stale-days-help-open"],
-		["cancel-days-help", "cancel-days-help-open"],
-	]) {
-		const panel = get("#" + id);
-		panel.addEventListener("toggle", (event) => {
-			const shown = event.newState === "open";
-			get("#" + button).setAttribute("aria-expanded", String(shown));
-			if (!shown) return;
-			const at = get("#" + button).getBoundingClientRect();
-			panel.style.left =
-				Math.max(20, Math.min(at.left, innerWidth - panel.offsetWidth - 20)) +
-				"px";
-			panel.style.top =
-				Math.max(
-					20,
-					Math.min(at.bottom + 6, innerHeight - panel.offsetHeight - 20),
-				) + "px";
-		});
-	}
-	["#system-stale-days", "#system-cancel-days"].forEach((id) => {
-		const input = get(id);
-		const save = () => {
-			const valid = ["#system-stale-days", "#system-cancel-days"].every(
-				(name) => {
-					const value = get(name).value;
-					return (
-						/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 365
-					);
-				},
-			);
-			get("#system-days-invalid").hidden = valid;
-			notify(valid ? "Saved locally" : "");
-		};
-		input.onchange = save;
-		input.onkeydown = (event) => {
-			if (event.key === "Enter") {
-				event.preventDefault();
-				save();
-			}
-		};
-	});
 })();

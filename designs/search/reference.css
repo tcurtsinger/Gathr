@@ -128,8 +128,7 @@
 	min-height: 0;
 }
 #search-content[hidden],
-.ds-search-shell [hidden],
-#tasks-flyout-content[hidden] {
+.ds-search-shell [hidden] {
 	display: none;
 }
 .ds-search-field {
@@ -226,14 +225,6 @@
 }
 .ds-search-status:empty {
 	display: none;
-}
-#tasks-flyout-content {
-	padding: 0 16px 16px;
-	overflow: auto;
-}
-#tasks-flyout-content h4 {
-	font-size: 12px;
-	color: var(--muted-foreground);
 }
 .ds-search-sr {
 	position: absolute;

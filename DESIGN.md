@@ -250,8 +250,7 @@ is open and shares the chat-list scroll region. Archived rows use 34px left padd
 More appears on hover and keyboard focus. Restore returns a
 chat to its original project or Chats without restarting cancelled work.
 The separate Archived button and flyout are retired. See
-[the selected reference](designs/archive-stale/v3.html), a refinement of v1;
-v1 and v2 remain unchanged as the compared proposals.
+[the system page](designs/system.html#archive-stale).
 
 The top line's More keeps Pause/Resume/Restart first, then Archive, then Delete after a
 separator. Row menus use the same shared menu. An archived chat offers Restore
