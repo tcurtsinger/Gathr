@@ -16,8 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { IconButton } from '../components/IconButton';
-import type { Run } from './pauses';
+import type { Run } from '../pauses';
+import { IconButton } from './IconButton';
 
 interface Props {
   label?: string;

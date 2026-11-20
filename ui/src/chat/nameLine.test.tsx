@@ -5,10 +5,11 @@ import { useRef } from 'react';
 import { afterEach, expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import type { Approval } from '../components/Approval';
 import { agents, custom, opened, round, task, tool } from './madeUp';
 import { toThread } from './messages';
 import { chat, noActions, View as Recorded } from './recorded';
-import type { Approval, ChatState } from './state';
+import type { ChatState } from './state';
 import { Thread } from './Thread';
 
 afterEach(async () => {

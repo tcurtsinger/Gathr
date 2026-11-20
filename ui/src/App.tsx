@@ -14,7 +14,6 @@ import {
 import { Board } from './Board';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
-import { usePauses } from './chat/pauses';
 import { Confirm } from './components/Confirm';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
@@ -22,9 +21,11 @@ import { FailureNotice } from './components/Notice';
 import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
 import { NewProject } from './NewProject';
+import { usePauses } from './pauses';
 import { PlanTab } from './plans/PlanTab';
 import { Rail } from './Rail';
 import { report, timeToPaint } from './report';
+import { RoomView } from './room/RoomView';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
@@ -324,6 +325,36 @@ export function App() {
     </div>
   );
 
+  // What both chat screens are given; the old one takes more (its threads, workspace and tasks).
+  const screen = chat && {
+    chat,
+    agents,
+    removed,
+    draft: drafts.current.get(chat.id)?.text ?? '',
+    picks: drafts.current.get(chat.id)?.picks,
+    onDraft: (text: string, picks: Picked[] = []) => {
+      drafts.current.set(chat.id, { text, picks });
+      redraw((n) => n + 1);
+    },
+    unsent: unsent[chat.id] ?? [],
+    onUnsent: (update: (list: SendFailure[]) => SendFailure[]) =>
+      setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) })),
+    openSettings,
+    onNamed: () => loadChats().then(setChats, setFailure),
+    projects,
+    onProject: (project: string) => setFresh({ project }),
+    onStart: start,
+    onNewProject: () => setNewProject(true),
+    notice,
+    pauses: pauses.pauses,
+    onPause: pauses.act,
+    onArchive: (opener: HTMLElement | null) => setAsking({ verb: 'Archive', chat, opener }),
+    onDelete: (opener: HTMLElement | null) => setAsking({ verb: 'Delete', chat, opener }),
+    onRestore: () => restore(chat),
+    restoreFailure: restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined,
+    onReference: openReference,
+  };
+
   const app = (
     <div className="app">
       <Rail
@@ -379,38 +410,17 @@ export function App() {
           </>
         }
       />
-      {chat ? (
+      {screen && chat && (chat.room || !chat.id) ? (
+        <RoomView key={chat.id || 'new'} {...screen} />
+      ) : screen && chat ? (
         <ChatView
-          key={chat.id || 'new'}
-          chat={chat}
-          agents={agents}
-          removed={removed}
-          draft={drafts.current.get(chat.id)?.text ?? ''}
-          picks={drafts.current.get(chat.id)?.picks}
-          onDraft={(text, picks = []) => {
-            drafts.current.set(chat.id, { text, picks });
-            redraw((n) => n + 1);
-          }}
+          key={chat.id}
+          {...screen}
           replyDraft={(topic) => replyDrafts.current.get(`${chat.id}|${topic}`)}
           onReplyDraft={(topic, text, picks) => {
             replyDrafts.current.set(`${chat.id}|${topic}`, { text, picks });
             redraw((n) => n + 1);
           }}
-          unsent={unsent[chat.id] ?? []}
-          onUnsent={(update) => setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) }))}
-          openSettings={openSettings}
-          onNamed={() => loadChats().then(setChats, setFailure)}
-          projects={projects}
-          onProject={(project) => setFresh({ project })}
-          onStart={start}
-          onNewProject={() => setNewProject(true)}
-          pauses={pauses.pauses}
-          onPause={pauses.act}
-          onArchive={(opener) => setAsking({ verb: 'Archive', chat, opener })}
-          onDelete={(opener) => setAsking({ verb: 'Delete', chat, opener })}
-          onRestore={() => restore(chat)}
-          restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
-          onReference={openReference}
           onOpenTask={(task) => openTask(chat.id, task)}
           agentOpen={agentOpen(paneOpen ? tabsOf(chat.id) : undefined)}
           onOpenAgent={(agent) => {
@@ -431,7 +441,6 @@ export function App() {
           found={found?.chat === chat.id ? found : undefined}
           onFound={() => setFound(null)}
           answers={answers}
-          notice={notice}
           workspace={(agent, work) =>
             paneOpen && (
               <Workspace

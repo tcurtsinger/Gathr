@@ -1,8 +1,9 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Member, Waiting } from '../api';
+import { unanswered } from '../components/Approval';
 import { FROM_SERVICE, MARKS, type Mark, pressing, WORD } from '../components/marks';
 import type { Custom } from './messages';
-import { type ChatState, unanswered } from './state';
+import type { ChatState } from './state';
 import { inWords } from './statusWords';
 import { clock, list, open } from './team';
 

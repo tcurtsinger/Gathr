@@ -1,8 +1,8 @@
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
-import { useContext, useEffect, useRef, useState } from 'react';
-import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
+import { useContext, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
+import { AskApproval } from '../components/Approval';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { PickedText } from '../components/PickedText';
@@ -15,7 +15,6 @@ import type { Custom } from './messages';
 import { AgentFace, Bubble, EndRow, NameLine, NewWord, OnTask, Said, Took, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
 import { InPanel } from './Steps';
-import type { Approval } from './state';
 import { Earlier, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
 import { type Actions, useActions, useJump } from './Thread';
@@ -238,60 +237,6 @@ function TextPart({ text }: { text: string }) {
   ) : (
     <MarkdownText />
   );
-}
-
-/** An approval: sending shows on the card, and a refused answer shows under it, to answer again. */
-function AskApproval({
-  approval: a,
-  agent,
-  actions,
-}: {
-  approval: Approval;
-  agent: string;
-  actions: Actions;
-}) {
-  const card = useRef<HTMLDivElement>(null);
-  const failure = a.answer?.failure;
-  const sending = a.answer && !failure;
-  // The answer's button went while it was sent: on a refusal, focus goes back to it.
-  useEffect(() => {
-    if (!failure || document.activeElement !== document.body) return;
-    const slot = a.answer?.allow ? 'approval-card-allow-once' : 'approval-card-deny';
-    card.current?.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.focus();
-  }, [failure, a.answer?.allow]);
-  const { tool, command } = asked(a);
-  return (
-    <>
-      <ApprovalCard
-        ref={card}
-        state={sending ? 'running' : 'request'}
-        statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
-        title={`Allow ${tool}?`}
-        command={command}
-        data-approval={a.request}
-        description={
-          tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.' : undefined
-        }
-        style={{ overflowWrap: 'anywhere' }}
-        subtitle={agent}
-        allowOnceLabel="Allow"
-        denyLabel="Deny"
-        onAllowOnce={() => actions.approve(a.request, true)}
-        onDeny={() => actions.approve(a.request, false)}
-      />
-      {failure && <FailureNotice failure={failure} onReference={actions.reference} />}
-    </>
-  );
-}
-
-/** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
-function asked(a: Approval): { tool: string; command?: string } {
-  const input = a.input as { command?: unknown; check?: unknown } | null | undefined;
-  // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
-  const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
-  const tool = typeof claudeCheck === 'string' ? 'wait check' : a.tool;
-  const command = tool === a.tool ? input?.command : claudeCheck;
-  return { tool, command: typeof command === 'string' ? command : undefined };
 }
 
 /** Under the bubble, what the person can do about how the turn ended: Continue, Retry with its reference, or Sign in. */

@@ -243,8 +243,12 @@ fn picks(
     Ok(answers)
 }
 
-/// The agent the like reaches: the author, while it is one of the chat's agents.
+/// The agent the like reaches: the author, while it is one of the chat's agents. None in a room chat,
+/// where a like is only a reaction: it starts no turn and Gathr writes the agent nothing.
 fn deliverable(conn: &Connection, chat: &str, target: &Target) -> Result<Option<String>, Error> {
+    if crate::room::is_room(conn, chat)? {
+        return Ok(None);
+    }
     let Some(author) = &target.author else {
         return Ok(None);
     };
