@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type History, type Member, type Message, type Reaction, type Turn } from '../api';
+import {
+  api,
+  type Failure,
+  type History,
+  type Member,
+  type Message,
+  type Question,
+  type Reaction,
+  type Turn,
+} from '../api';
 import type { Approval } from '../components/Approval';
 import { type LiveEvent, listen } from '../live';
 
-/** What the room shows: its messages, turns, the words still streaming, its team, thumbs-ups and approvals. */
+/** What the room shows: its messages, turns, the words still streaming, its team, thumbs-ups, approvals, questions. */
 export interface RoomState {
   messages: Message[];
   turns: Record<string, Turn>;
@@ -14,6 +23,7 @@ export interface RoomState {
   members: Member[];
   reactions: Reaction[];
   approvals: Approval[];
+  questions: Question[];
 }
 
 export const emptyRoom: RoomState = {
@@ -24,6 +34,7 @@ export const emptyRoom: RoomState = {
   members: [],
   reactions: [],
   approvals: [],
+  questions: [],
 };
 
 export function fromHistory(h: History): RoomState {
@@ -40,6 +51,7 @@ export function fromHistory(h: History): RoomState {
       tool: a.tool,
       input: a.input,
     })),
+    questions: h.questions ?? [],
   };
 }
 
@@ -97,6 +109,8 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
     }
     case 'members':
       return { ...s, members: e.members };
+    case 'questions':
+      return { ...s, questions: e.questions };
     default:
       return s;
   }
@@ -160,5 +174,11 @@ export function useRoom(chat: string) {
     [chat],
   );
 
-  return { state, failure, reload: load, approve };
+  // The answer shows at once; the live event brings the same.
+  const answer = useCallback(async (id: number, pick?: string, words?: string) => {
+    const { question } = await api.answerQuestion(id, pick, words);
+    setState((s) => ({ ...s, questions: s.questions.map((q) => (q.id === id ? question : q)) }));
+  }, []);
+
+  return { state, failure, reload: load, approve, answer };
 }

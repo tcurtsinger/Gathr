@@ -7,6 +7,7 @@ import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
+import { AnsweredLine, QuestionCard } from './Question';
 import { type Card, type Item, type Said, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
@@ -34,9 +35,10 @@ export function people(members: Member[], known: FaceOf[]): People {
   };
 }
 
-/** What the person can do on a card: answer its approval, open a refusal's reference, like its words. */
+/** What the person can do on a card: answer its approval or question, open a refusal's reference, like its words. */
 export interface Acts {
   approve: (request: string, allow: boolean) => void;
+  answer: (question: number, pick?: string, words?: string) => Promise<unknown>;
   reference: (ref: string) => void;
   like: (message: string, give: boolean) => void;
 }
@@ -49,10 +51,12 @@ interface Props {
   header?: ReactNode;
   /** At the foot: the message box. */
   children?: ReactNode;
+  /** The preview's placement B: open questions are pinned at the foot, so the chat shows answered ones as a line. */
+  pinned?: boolean;
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ state, people, acts, header, children }: Props) {
+export function Room({ state, people, acts, header, children, pinned }: Props) {
   const items = shape(state);
   const scroll = useStuck(state);
   const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts };
@@ -61,13 +65,24 @@ export function Room({ state, people, acts, header, children }: Props) {
       <div className="room-scroll" ref={scroll}>
         <div className="room-col">
           {header}
-          {items.map((item, i) =>
-            item.kind === 'said' ? (
-              <You key={item.id} said={item} ctx={ctx} />
-            ) : (
-              <Main key={item.id} card={item} joined={items[i + 1]?.kind === 'card'} ctx={ctx} />
-            ),
-          )}
+          {items.map((item, i) => {
+            const joined = !!items[i + 1] && items[i + 1].kind !== 'said';
+            if (item.kind === 'said') return <You key={item.id} said={item} ctx={ctx} />;
+            if (item.kind === 'card') return <Main key={item.id} card={item} joined={joined} ctx={ctx} />;
+            const q = item.question;
+            if (pinned)
+              return q.answered ? <AnsweredLine key={item.id} question={q} people={people} /> : null;
+            return (
+              <QuestionCard
+                key={item.id}
+                question={q}
+                people={people}
+                onAnswer={acts.answer}
+                onReference={acts.reference}
+                joined={joined}
+              />
+            );
+          })}
         </div>
       </div>
       <div className="room-foot">{children}</div>
@@ -326,7 +341,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
 }
 
 /** "9:21", in the person's own clock. */
-function clock(iso?: string | null) {
+export function clock(iso?: string | null) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
 }
 
@@ -341,10 +356,15 @@ function useNow(running: boolean) {
   return running ? Math.max(now, Date.now()) : now;
 }
 
-/** The chat stays at its newest message while the person is there; scrolled up, it stays where they are. */
+/**
+ * The chat stays at its newest message while the person is there; scrolled up, it stays where they are. A new question
+ * to the person brings it down to its newest message, so it is seen.
+ */
 function useStuck(state: RoomState) {
   const box = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
+  const open = state.questions.filter((q) => !q.answered).length;
+  const asked = useRef(open);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -367,6 +387,8 @@ function useStuck(state: RoomState) {
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: every change to the room may grow it
   useLayoutEffect(() => {
+    if (open > asked.current) stuck.current = true;
+    asked.current = open;
     const el = box.current;
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   }, [state]);

@@ -1,18 +1,20 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { BoardLine, Member, Message, ToolBody, Turn } from '../api';
+import type { BoardLine, Member, Message, Question, ToolBody, Turn } from '../api';
 import { Board } from '../Board';
 import { Composer } from '../components/Composer';
 import type { FaceOf } from '../components/Face';
 import type { Picked } from '../components/mention';
 import { TopLine } from '../TopLine';
+import { QuestionCard } from './Question';
 import { people, Room } from './Room';
 import type { RoomState } from './useRoom';
 import '../theme.css';
 import '../app.css';
 
 // A made-up chat, as in the mock-up: Mira leads, Ann and Bo build, Rev reviews. Times count back from now. Bo's turn
-// waits for an approval, and the person liked Ann's message.
+// waits for an approval, and the person liked Ann's message. Ann asked the person a question, answered; Mira asks one.
+// ?placement=b pins the open question above the message box (placement B); the real screen is placement A.
 const agents: FaceOf[] = [
   { id: 'mira', name: 'Mira', face_seed: 'Mira', background: '#619eff' },
   { id: 'ann', name: 'Ann', face_seed: 'Ann', background: '#ffd166' },
@@ -127,6 +129,40 @@ turn(
 turn('ann', 19, 0.2, words(pr), ['Merged #291.'], ['Bash']);
 const bo = turn('bo', 23, null, '', [], ['Read', 'Read', 'Edit', 'Edit', 'Bash']);
 
+const questions: Question[] = [
+  {
+    id: 1,
+    chat: 'preview',
+    agent: 'ann',
+    name: 'Ann',
+    question: 'Which columns go in the file by default?',
+    choices: [
+      { label: 'All of them', detail: null },
+      { label: 'What the page shows', detail: 'the columns picked there' },
+    ],
+    pick: 'What the page shows',
+    words: 'And the order id first.',
+    asked: at(8),
+    answered: at(9),
+  },
+  {
+    id: 2,
+    chat: 'preview',
+    agent: 'mira',
+    name: 'Mira',
+    question:
+      'Where should the **Export** button go?\n\nBo has it in the toolbar; the page also has a menu under *More*.',
+    choices: [
+      { label: 'Toolbar', detail: 'seen at once' },
+      { label: 'More menu', detail: null },
+    ],
+    pick: null,
+    words: null,
+    asked: at(21.5),
+    answered: null,
+  },
+];
+
 const room: RoomState = {
   messages,
   turns: Object.fromEntries(turns.map((t) => [t.id, t])),
@@ -142,6 +178,7 @@ const room: RoomState = {
   approvals: [
     { turn: bo, request: 'r1', tool: 'Bash', input: { command: 'npm run e2e -- orders --rows 40000' } },
   ],
+  questions,
 };
 const board: BoardLine[] = [
   { id: 1, owner: 'ann', name: 'Ann', text: 'Export from the service', state: 'done' },
@@ -157,15 +194,26 @@ window.fetch = (url, init) =>
     : fetched(url, init);
 
 const ignore = () => {};
+const pinned = new URLSearchParams(location.search).get('placement') === 'b';
 
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
+  const everyone = people(members, agents);
   const acts = {
     approve: (request: string) =>
       setState((s) => ({ ...s, approvals: s.approvals.filter((a) => a.request !== request) })),
     reference: ignore,
+    answer: async (id: number, pick?: string, words?: string) =>
+      setState((s) => ({
+        ...s,
+        questions: s.questions.map((q) =>
+          q.id === id
+            ? { ...q, pick: pick ?? null, words: words?.trim() || null, answered: new Date().toISOString() }
+            : q,
+        ),
+      })),
     like: (message: string, give: boolean) =>
       setState((s) => ({
         ...s,
@@ -187,7 +235,19 @@ function Preview() {
         </div>
       </TopLine>
       <main className="chat room" aria-label="Orders export">
-        <Room state={state} people={people(members, agents)} acts={acts}>
+        <Room state={state} people={everyone} acts={acts} pinned={pinned}>
+          {pinned &&
+            state.questions
+              .filter((q) => !q.answered)
+              .map((q) => (
+                <QuestionCard
+                  key={q.id}
+                  question={q}
+                  people={everyone}
+                  onAnswer={acts.answer}
+                  onReference={ignore}
+                />
+              ))}
           <Composer
             draft={draft.text}
             picks={draft.picks}
