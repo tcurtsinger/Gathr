@@ -9,6 +9,8 @@ export interface RoomState {
   turns: Record<string, Turn>;
   /** Each running turn's words not saved yet. */
   partial: Record<string, string>;
+  /** The main message each streaming reply sits under, before its words are saved. */
+  under: Record<string, string>;
   members: Member[];
   reactions: Reaction[];
   approvals: Approval[];
@@ -18,6 +20,7 @@ export const emptyRoom: RoomState = {
   messages: [],
   turns: {},
   partial: {},
+  under: {},
   members: [],
   reactions: [],
   approvals: [],
@@ -28,6 +31,7 @@ export function fromHistory(h: History): RoomState {
     messages: h.messages,
     turns: Object.fromEntries(h.turns.map((t) => [t.id, t])),
     partial: Object.fromEntries((h.streaming ?? []).map((s) => [s.turn, s.text])),
+    under: Object.fromEntries((h.streaming ?? []).flatMap((s) => (s.reply_to ? [[s.turn, s.reply_to]] : []))),
     members: h.members ?? [],
     reactions: h.reactions ?? [],
     approvals: h.approvals.map((a) => ({
@@ -46,7 +50,12 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
       const was = s.partial[e.turn] ?? '';
       const at = e.at ?? was.length;
       if (at + e.text.length <= was.length) return s;
-      return { ...s, partial: { ...s.partial, [e.turn]: was + e.text.slice(Math.max(0, was.length - at)) } };
+      const under = e.reply_to ? { ...s.under, [e.turn]: e.reply_to } : s.under;
+      return {
+        ...s,
+        under,
+        partial: { ...s.partial, [e.turn]: was + e.text.slice(Math.max(0, was.length - at)) },
+      };
     }
     case 'message': {
       const m = e.message;
@@ -78,7 +87,8 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
     }
     case 'approval': {
       const asked = { turn: e.turn, request: e.request_id, tool: e.tool, input: e.input };
-      return { ...s, approvals: [...s.approvals, asked] };
+      // The history may hold it already.
+      return { ...s, approvals: [...s.approvals.filter((a) => a.request !== e.request_id), asked] };
     }
     case 'reaction': {
       const same = (r: Reaction) => r.message === e.reaction.message && r.agent === e.reaction.agent;
@@ -101,15 +111,18 @@ export function useRoom(chat: string) {
   const held = useRef<LiveEvent[] | null>(null);
 
   const load = useCallback(() => {
-    held.current = [];
+    // Each load holds its own events; one a newer load started over is dropped, as its history may be the older.
+    const late: LiveEvent[] = [];
+    held.current = late;
     api.history(chat).then(
       (h) => {
-        const late = held.current ?? [];
+        if (held.current !== late) return;
         held.current = null;
         setState(late.reduce(apply, fromHistory(h)));
         setFailure(null);
       },
       (f: Failure) => {
+        if (held.current !== late) return;
         held.current = null;
         setFailure(f);
       },

@@ -608,7 +608,7 @@ export interface History {
   /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
-  streaming?: { turn: string; agent: string | null; text: string }[];
+  streaming?: { turn: string; agent: string | null; text: string; reply_to?: string | null }[];
   /** Agents' thumbs-ups, oldest first. */
   reactions?: Reaction[];
   /** Where the person left off, by thread (0077); none yet for a chat not opened since. */

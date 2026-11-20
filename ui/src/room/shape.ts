@@ -36,7 +36,10 @@ const open = (t: Turn) => t.status === 'running' || t.status === 'queued';
  */
 export function shape(s: RoomState): Item[] {
   const byTurn = new Map<string, Message[]>();
+  // The person's message that opened a turn: the service makes the turn just before it, and its card goes after it.
+  const opener = new Map<string, number>();
   for (const m of s.messages) {
+    if (m.role === 'user' && m.turn) opener.set(m.turn, time(m.time));
     if (m.role !== 'assistant' || !m.turn) continue;
     byTurn.set(m.turn, [...(byTurn.get(m.turn) ?? []), m]);
   }
@@ -50,7 +53,7 @@ export function shape(s: RoomState): Item[] {
       .join('\n\n');
     if (!text && turn.status === 'done') continue;
     const steps = mine.filter((m) => m.kind === 'tool').map((m) => m.body as ToolBody);
-    const at = time(turn.created ?? mine[0]?.time);
+    const at = Math.max(time(turn.created ?? mine[0]?.time), opener.get(turn.id) ?? 0);
     cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, steps, at, replies: [] });
   }
   const cardOf = new Map<string, string>();
@@ -63,7 +66,8 @@ export function shape(s: RoomState): Item[] {
     const host = to && (cardOf.get(to) ?? to);
     if (host && host !== id) parent.set(id, host);
   };
-  for (const c of cards.values()) under(c.id, byTurn.get(c.id)?.find((m) => m.reply_to)?.reply_to);
+  for (const c of cards.values())
+    under(c.id, byTurn.get(c.id)?.find((m) => m.reply_to)?.reply_to ?? s.under[c.id]);
   const items: Item[] = [...cards.values()];
   for (const m of s.messages) {
     if (m.role !== 'user' || m.kind !== 'text') continue;
@@ -81,7 +85,9 @@ export function shape(s: RoomState): Item[] {
     }
     return at;
   };
-  const byAt = (a: Item, b: Item) => (a.at || 0) - (b.at || 0);
+  // At the same moment, the person's message comes before the card that answers it.
+  const byAt = (a: Item, b: Item) =>
+    (a.at || 0) - (b.at || 0) || Number(a.kind === 'card') - Number(b.kind === 'card');
   const byId = new Map(items.map((i) => [i.id, i]));
   const main: Item[] = [];
   for (const item of items.sort(byAt)) {

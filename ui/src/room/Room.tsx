@@ -348,11 +348,22 @@ function useStuck(state: RoomState) {
   useEffect(() => {
     const el = box.current;
     if (!el) return;
+    let width = el.clientWidth;
     const read = () => {
-      stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      // A scroll the box's new width made, before the observer below hears of it, isn't the person's.
+      if (el.clientWidth === width) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     };
+    // The box resized: the window, or the board arriving beside it after the chat drew.
+    const resized = new ResizeObserver(() => {
+      width = el.clientWidth;
+      if (stuck.current) el.scrollTop = el.scrollHeight;
+    });
+    resized.observe(el);
     el.addEventListener('scroll', read);
-    return () => el.removeEventListener('scroll', read);
+    return () => {
+      el.removeEventListener('scroll', read);
+      resized.disconnect();
+    };
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: every change to the room may grow it
   useLayoutEffect(() => {

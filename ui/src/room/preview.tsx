@@ -131,6 +131,7 @@ const room: RoomState = {
   messages,
   turns: Object.fromEntries(turns.map((t) => [t.id, t])),
   partial: { [bo]: 'Wiring the button to the new download, then checking it with 40,000 rows.' },
+  under: {},
   members,
   reactions: [
     { message: words(plan), agent: 'ann', time: at(1) },
