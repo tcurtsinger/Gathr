@@ -60,42 +60,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
         },
     )
     .unwrap();
-    // Recreate the prior schema to exercise the real database upgrade boundary.
-    let before =
-        "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
-                  ALTER TABLE tasks DROP COLUMN finish_see; ALTER TABLE tasks DROP COLUMN finish_ts;
-                  ALTER TABLE tasks RENAME COLUMN asks TO idle_lefts;
-                  ALTER TABLE tasks DROP COLUMN in_passing; ALTER TABLE tasks DROP COLUMN heard_as;
-                  ALTER TABLE tasks DROP COLUMN judged;
-                  DROP TABLE friction;
-                  ALTER TABLE waits DROP COLUMN seen;
-                  ALTER TABLE tasks DROP COLUMN signed_off; DROP TABLE landings;
-                  DROP TABLE quiet; DROP INDEX messages_person; DROP TABLE review_notes;
-                  DROP TABLE changes; ALTER TABLE tasks DROP COLUMN first_reviewed;
-                  DROP TABLE task_sessions;
-                  ALTER TABLE agent_context DROP COLUMN told;
-                  ALTER TABLE agent_context DROP COLUMN window_of;
-                  ALTER TABLE agent_context DROP COLUMN ran;
-                  ALTER TABLE turns DROP COLUMN opened_by; ALTER TABLE turns DROP COLUMN opened_version;
-                  DROP TABLE reactions;
-                  ALTER TABLE tasks DROP COLUMN done; ALTER TABLE tasks DROP COLUMN proof;
-                  ALTER TABLE tasks DROP COLUMN place; ALTER TABLE tasks DROP COLUMN size;
-                  ALTER TABLE tasks DROP COLUMN size_lines; ALTER TABLE tasks DROP COLUMN started_ts;
-                  ALTER TABLE tasks DROP COLUMN carry; ALTER TABLE tasks DROP COLUMN edited_ts;
-                  ALTER TABLE tasks DROP COLUMN edited;
-                  DROP INDEX tasks_checking; ALTER TABLE tasks DROP COLUMN checks;
-                  DROP TABLE plan_parts; DROP TABLE plan_versions; DROP TABLE plans;
-                  DROP INDEX turns_by_ask; DROP INDEX tasks_by_ask; ALTER TABLE turns DROP COLUMN ask_id;
-                  ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks; ALTER TABLE tasks DROP COLUMN look_into;
-                  DROP TABLE held_turns; ALTER TABLE messages DROP COLUMN picks;
-                  ALTER TABLE turns DROP COLUMN result_of; ALTER TABLE messages DROP COLUMN about;
-                 DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
-                  DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-                  PRAGMA user_version = 25;";
-    conn.execute_batch(before).unwrap();
+    common::old::back_to(&conn, 25);
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
     for (task, expected) in [(done, true), (unfinished, false)] {

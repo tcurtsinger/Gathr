@@ -493,12 +493,7 @@ fn an_upgrade_starts_no_round_for_an_older_message() {
     let (mut conn, _) = room(&dir);
     says(&conn, "T", "Done: tags show in the list.");
     moved(&mut conn, ("T", "mira"), None, "done");
-    conn.execute_batch("DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 59;")
-        .unwrap();
+    common::old::back_to(&conn, 59);
     drop(conn);
     let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
     assert_eq!(settle(&mut conn), []);

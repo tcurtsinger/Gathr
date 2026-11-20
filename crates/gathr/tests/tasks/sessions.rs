@@ -296,30 +296,7 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
     turn(&conn, "failed-4", "bo", Some(4), "failed");
     gathr::store::set_engine_session(&conn, "c", Some("ann"), "s-ann", "acc").unwrap();
     gathr::store::set_engine_session(&conn, "c", Some("bo"), "s-bo", "acc").unwrap();
-    conn.execute_batch(
-        "DROP TABLE task_sessions; ALTER TABLE turns DROP COLUMN opened_by;
-         ALTER TABLE turns DROP COLUMN opened_version; DROP TABLE reactions;
-         ALTER TABLE tasks DROP COLUMN done; ALTER TABLE tasks DROP COLUMN proof;
-         ALTER TABLE tasks DROP COLUMN place; ALTER TABLE tasks DROP COLUMN size;
-         ALTER TABLE tasks DROP COLUMN size_lines; ALTER TABLE tasks DROP COLUMN started_ts;
-         ALTER TABLE tasks DROP COLUMN carry; ALTER TABLE tasks DROP COLUMN edited_ts;
-         ALTER TABLE tasks DROP COLUMN edited;
-         DROP INDEX tasks_checking; ALTER TABLE tasks DROP COLUMN checks;
-         DROP TABLE plan_parts; DROP TABLE plan_versions; DROP TABLE plans;
-         DROP INDEX turns_by_ask; DROP INDEX tasks_by_ask; ALTER TABLE turns DROP COLUMN ask_id;
-         ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks; ALTER TABLE tasks DROP COLUMN look_into;
-         DROP TABLE held_turns; ALTER TABLE changes DROP COLUMN size; ALTER TABLE changes DROP COLUMN line_of;
-         ALTER TABLE messages DROP COLUMN picks; ALTER TABLE turns DROP COLUMN result_of;
-         ALTER TABLE landings DROP COLUMN turn; ALTER TABLE messages DROP COLUMN about;
-                 DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
-         ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
-         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         PRAGMA user_version = 41;",
-    )
-    .unwrap();
+    common::old::back_to(&conn, 41);
     drop(conn);
 
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
