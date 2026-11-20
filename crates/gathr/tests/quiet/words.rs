@@ -13,6 +13,17 @@ fn a_wake_and_a_silent_turns_telling_are_the_kept_samples() {
     samples::same("wake: one, at once", &woke[0].text);
     let recorded = samples::opened(&conn, &woke[0].turn);
     assert_eq!(recorded, (Some("wake".into()), Some(words::WAKE)));
+    // Started 2 minutes or more after it was queued, a turn of Gathr's says first how long ago.
+    samples::same("wake: late", &words::late(180_000_000, false).unwrap());
+    samples::same(
+        "wake: late, lines",
+        &words::late(7_500_000_000, true).unwrap(),
+    );
+    assert_eq!(
+        words::late(119_999_999, true),
+        None,
+        "on time, nothing more"
+    );
 
     let dir = TempDir::new();
     let mut conn = team(&dir);

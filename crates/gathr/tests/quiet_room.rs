@@ -6,6 +6,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
+use common::replay::{escaped, read_in};
 use common::{
     TempDir, TestService, call_tool, first_token, held_recording, recording, rows, text, until,
     waiting,
@@ -408,4 +409,46 @@ fn approval_answered_late(start: Option<&str>) {
         "its silence counts the time it waited on the person: {line}, answered at {answered}"
     );
     std::fs::write(data.0.join("go"), "").unwrap();
+}
+
+/// A wake held behind the lead's turn in another chat, starting 2 minutes or more after it was
+/// queued, says first how long ago that was: its "for" times were written then.
+#[test]
+fn a_wake_that_starts_late_says_how_long_ago_it_was_queued() {
+    let data = TempDir::new();
+    let replay = held_recording(&data.0, "signed_in");
+    let (service, chat, lead) = common::team(&data.0, &replay, &env(&[]));
+    pause(&service, "/api/pauses", &chat);
+    let solo = service.send("POST", "/api/chats", json!({})).json();
+    let solo = solo["id"].as_str().unwrap();
+    let path = format!("/api/chats/{solo}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Plan it", "agent": lead }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    service.wait_for(solo, 20, "the lead's turn to run", |h| {
+        turns_of(h, &lead).iter().any(|t| t["status"] == "running")
+    });
+
+    let conn = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    conn.execute(
+        "INSERT INTO tasks (chat_id, owner, kind, what, state, created_ts, updated_ts)
+         SELECT ?1, id, 'work', 'Fix the build', 'ready', ?2, ?2 FROM agents WHERE name = 'Ann'",
+        params![chat, gathr::ids::now_us()],
+    )
+    .unwrap();
+    resume(&service, &chat);
+    let queued = "SELECT id FROM turns WHERE opened_by = 'wake' AND status = 'queued'";
+    let wake = until(30, "the wake to queue behind the lead's turn", || {
+        rows(&data.0, queued).into_iter().next()
+    });
+    let wake = wake["id"].as_str().unwrap();
+    let aged = "UPDATE turns SET created_ts = created_ts - 180000000 WHERE id = ?1";
+    assert_eq!(conn.execute(aged, [wake]).unwrap(), 1);
+    std::fs::write(data.0.join("go"), "").unwrap();
+
+    service.wait_for(&chat, 30, "the wake to end", |h| {
+        turns_of(h, &lead).iter().any(|t| t["status"] == "done")
+    });
+    let opened = read_in(&data.0, wake);
+    let late = escaped(&gathr::words::late(180_000_000, false).unwrap());
+    assert!(opened.contains(&late), "the wake's opening: {opened}");
 }
