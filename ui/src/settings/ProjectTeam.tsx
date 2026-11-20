@@ -1,13 +1,17 @@
 import { X } from 'lucide-react';
 import { useId } from 'react';
 import type { Agent, Role } from '../api';
-import { roleName } from '../chat/team';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import type { Seat } from './Projects';
 
 const MOST = 5;
 const roles: Role[] = ['supervisor', 'member', 'reviewer'];
+const roleName: Record<Role, string> = {
+  supervisor: 'Supervisor',
+  reviewer: 'Reviewer',
+  member: 'Member',
+};
 
 interface Props {
   seats: Seat[];

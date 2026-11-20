@@ -17,7 +17,7 @@
   fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><strong><span
   class="logo" aria-hidden="true"><i></i><i></i></span>Gathr</strong><button onclick="theme()" aria-label="Switch theme" title="Switch theme">◐</button>
 </div>
-<button class="navbutton" data-id="nav-new" onclick="location.href='../new-chat/v12.html'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+<button class="navbutton" data-id="nav-new"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg><span>New</span></button
 ><button class="navbutton" data-id="nav-search" onclick="document.querySelector('.search').hidden=!document.querySelector('.search').hidden"><svg width="18" height="18"
   viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"
@@ -791,10 +791,7 @@ function send() {
   let d = document.querySelector('#draft');
   if (!d.value.trim()) return;
   const p = document.querySelector('.reading');
-  if (!p) {
-    location.href = '../chat/v14.html';
-    return;
-  }
+  if (!p) return;
   const a = document.createElement('article');
   a.className = 'message user';
   a.textContent = d.value;
@@ -843,10 +840,6 @@ document.addEventListener('keydown', e => {
     '.settings-panel[open], .agent-menu[open], .agent-inline .agent-workspace:not([hidden])')) {
     document.querySelector('dialog').close();
     document.querySelector('.panel')?.setAttribute('hidden', '');
-  }
-  if (e.ctrlKey && e.key === 'n') {
-    e.preventDefault();
-    location.href = '../new-chat/v12.html';
   }
 });
 </script>

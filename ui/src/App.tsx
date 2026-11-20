@@ -1,40 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import {
-  type Agent,
-  api,
-  type Chat,
-  type Failure,
-  type Named,
-  type PickedName,
-  type Project,
-  type Task,
-} from './api';
-import { ChatView } from './chat/ChatView';
-import type { SendFailure } from './chat/messages';
+import { type Agent, api, type Chat, type Failure, type Named, type PickedName, type Project } from './api';
 import { Confirm } from './components/Confirm';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
 import { FailureNotice } from './components/Notice';
-import { WorkspaceToggle } from './components/workspace';
 import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
-import { PlanTab } from './plans/PlanTab';
 import { Rail } from './Rail';
 import { report, timeToPaint } from './report';
-import { RoomView } from './room/RoomView';
+import { RoomView, type Unsent } from './room/RoomView';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
 import { TopLine } from './TopLine';
-import { asQuestion } from './tasks/rows';
-import { TasksFlyout } from './tasks/TasksFlyout';
-import { TasksTab } from './tasks/TasksTab';
-import { usePersonTasks } from './tasks/usePersonTasks';
-import { type FileTab, fileId, Workspace } from './tasks/Workspace';
 import { readyVersion, useAppUpdate } from './update';
 import './app.css';
 
@@ -63,21 +44,12 @@ export function App() {
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
-  // Each thread's reply draft, by chat and thread (0076), kept the same way.
-  const replyDrafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
-  const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
+  const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
   const [, redraw] = useState(0);
-  const person = usePersonTasks(setFailure);
   const pauses = usePauses(setFailure);
   const appUpdate = useAppUpdate(setFailure);
-  // Each chat's workspace: the files opened from its questions, the agent opened from Summary, the plan opened
-  // from the timeline, and the tab shown.
-  const [tabs, setTabs] = useState<Record<string, Tabs>>({});
-  // The task each chat's Tasks tab shows, opened from its list, the chat's Open task or the Tasks flyout; none
-  // shows the list.
-  const [opened, setOpened] = useState<Record<string, number | undefined>>({});
-  // A search hit's message (none for a title: the latest), until its chat shows it.
-  const [found, setFound] = useState<{ chat: string; message?: string; at: number } | null>(null);
+  // Whether each chat's sidebar is open, as the person left it there.
+  const [sidebars, setSidebars] = useState<Record<string, boolean>>({});
 
   // A chat's state told while a list loads may be newer than that list: it is put back on top of it.
   const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs' | 'mark'>>[]>([]);
@@ -175,8 +147,7 @@ export function App() {
     setFresh({ project });
     setSelected(null);
   }, []);
-  const keep = (chat: string, f: SendFailure) =>
-    setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
+  const keep = (chat: string, f: Unsent) => setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
   const start = (text: string, agent?: string, picks?: PickedName[]) => {
     const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, picks, failure: e });
     const draft = fresh;
@@ -256,51 +227,15 @@ export function App() {
     for (const c of projectChats(project)) going.current.delete(c.id);
     setDeleting(null);
   };
-  const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
-  // One draft and one Send per question, in the chat and in the Tasks view alike (0073).
-  const answers = { drafts: person.drafts, onDraft: person.draft, onSend: person.send };
-  const paneOpen = !!chat?.id && !!person.open[chat.id];
-  const tabsOf = (c: string): Tabs => tabs[c] ?? { files: [], selected: 'tasks' };
-  const setTab = (c: string, change: (t: Tabs) => Partial<Tabs>) =>
-    setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
   const name = (agent: string | null) =>
     [...agents, ...removed].find((a) => a.id === agent)?.name ?? 'An agent';
-  // A task opened from the chat or the plan's tab: the panel's Tasks, at that task.
-  const openTask = (of: string, task: number) => {
-    setOpened((all) => ({ ...all, [of]: task }));
-    person.setOpen(of, true);
-    setTab(of, () => ({ selected: 'tasks' }));
-  };
-  // The plan's tab at the version shown; the newest when the plan has no such version yet.
-  const planTab = (of: string, plan: Tabs['plan'], tasks: Task[]) =>
-    plan && {
-      version: plan.version,
-      waits: plan.waits,
-      view: (
-        <PlanTab
-          key={plan.id}
-          chat={of}
-          plan={plan.id}
-          version={plan.version}
-          name={name}
-          tasks={tasks}
-          onOpenTask={(task) => openTask(of, task)}
-          onVersion={(version) => setTab(of, () => ({ plan: { ...plan, version } }))}
-          onWaits={(waits) => setTab(of, (t) => ({ plan: t.plan && { ...t.plan, waits } }))}
-          onReference={openReference}
-        />
-      ),
-      onClose: () =>
-        setTab(of, (t) => ({ plan: undefined, selected: t.selected === 'plan' ? 'tasks' : t.selected })),
-    };
   // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
-  const openChat = (id: string, then: () => void) => {
-    const open = () => {
-      choose(id);
-      then();
-    };
-    if ([...chats, ...archived].some((c) => c.id === id)) open();
-    else reloadLists().catch(setFailure).finally(open);
+  const openChat = (id: string) => {
+    if ([...chats, ...archived].some((c) => c.id === id)) choose(id);
+    else
+      reloadLists()
+        .catch(setFailure)
+        .finally(() => choose(id));
   };
   const openReference = (reference: string) =>
     setSettings((s) => ({
@@ -325,7 +260,6 @@ export function App() {
     </div>
   );
 
-  // What both chat screens are given; the old one takes more (its threads, workspace and tasks).
   const screen = chat && {
     chat,
     agents,
@@ -337,7 +271,7 @@ export function App() {
       redraw((n) => n + 1);
     },
     unsent: unsent[chat.id] ?? [],
-    onUnsent: (update: (list: SendFailure[]) => SendFailure[]) =>
+    onUnsent: (update: (list: Unsent[]) => Unsent[]) =>
       setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) })),
     openSettings,
     onNamed: () => loadChats().then(setChats, setFailure),
@@ -385,124 +319,16 @@ export function App() {
           })
         }
         actions={
-          <>
-            <SearchFlyout
-              name={name}
-              onReference={openReference}
-              onOpen={(hit, at) =>
-                openChat(hit.chat, () =>
-                  setFound({ chat: hit.chat, message: 'message' in hit ? hit.message : undefined, at }),
-                )
-              }
-            />
-            <TasksFlyout
-              tasks={person.tasks}
-              stale={person.stale}
-              name={name}
-              onOpen={(t) =>
-                openChat(t.chat, () => {
-                  setOpened((all) => ({ ...all, [t.chat]: t.number }));
-                  person.setOpen(t.chat, true);
-                  setTab(t.chat, () => ({ selected: 'tasks' }));
-                })
-              }
-            />
-          </>
+          <SearchFlyout name={name} onReference={openReference} onOpen={(hit) => openChat(hit.chat)} />
         }
       />
-      {screen && chat && (chat.room || !chat.id) ? (
+      {screen ? (
         <RoomView
-          key={chat.id || 'new'}
+          key={screen.chat.id || 'new'}
           {...screen}
-          sidebar={person.open[chat.id]}
-          onSidebar={(open) => person.setOpen(chat.id, open)}
+          sidebar={sidebars[screen.chat.id]}
+          onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
           onFailure={setFailure}
-        />
-      ) : screen && chat ? (
-        <ChatView
-          key={chat.id}
-          {...screen}
-          replyDraft={(topic) => replyDrafts.current.get(`${chat.id}|${topic}`)}
-          onReplyDraft={(topic, text, picks) => {
-            replyDrafts.current.set(`${chat.id}|${topic}`, { text, picks });
-            redraw((n) => n + 1);
-          }}
-          onOpenTask={(task) => openTask(chat.id, task)}
-          agentOpen={agentOpen(paneOpen ? tabsOf(chat.id) : undefined)}
-          onOpenAgent={(agent) => {
-            // Drawn at once, so the keyboard can follow to the agent's tab.
-            flushSync(() => {
-              setTab(chat.id, () => ({ agent, selected: 'agent' }));
-              person.setOpen(chat.id, true);
-            });
-            document.getElementById('workspace-tab-agent')?.focus();
-          }}
-          onOpenPlan={(id, version) => {
-            setTab(chat.id, (t) => ({
-              plan: { id, version, waits: t.plan?.id === id && t.plan.waits },
-              selected: 'plan',
-            }));
-            person.setOpen(chat.id, true);
-          }}
-          found={found?.chat === chat.id ? found : undefined}
-          onFound={() => setFound(null)}
-          answers={answers}
-          workspace={(agent, work) =>
-            paneOpen && (
-              <Workspace
-                agent={agent}
-                onCloseAgent={() =>
-                  setTab(chat.id, (t) => ({
-                    agent: undefined,
-                    selected: t.selected === 'agent' ? 'tasks' : t.selected,
-                  }))
-                }
-                plan={planTab(chat.id, tabsOf(chat.id).plan, work.tasks)}
-                waiting={chatTasks.length > 0}
-                files={tabsOf(chat.id).files}
-                selected={tabsOf(chat.id).selected}
-                onSelect={(id) => setTab(chat.id, () => ({ selected: id }))}
-                onCloseFile={(id) =>
-                  setTab(chat.id, (t) => ({
-                    files: t.files.filter((f) => fileId(f) !== id),
-                    selected: t.selected === id ? 'tasks' : t.selected,
-                  }))
-                }
-                tasks={
-                  <TasksTab
-                    key={chat.id}
-                    tasks={work.tasks}
-                    members={work.members}
-                    opened={opened[chat.id]}
-                    onOpen={(n) => setOpened((all) => ({ ...all, [chat.id]: n }))}
-                    drafts={person.drafts}
-                    onDraft={person.draft}
-                    name={name}
-                    onOpenFile={(task, index) => {
-                      const file = { task: task.number, index, name: task.files?.[index]?.name ?? '' };
-                      setTab(chat.id, (t) => ({
-                        files: t.files.some((f) => fileId(f) === fileId(file)) ? t.files : [...t.files, file],
-                        selected: fileId(file),
-                      }));
-                    }}
-                    onAnswer={(task, draft) => person.send(asQuestion(task, work.tasks), draft)}
-                    onReference={openReference}
-                    onSettle={(t, action) => person.settle(t.number, action)}
-                    project={chat.project}
-                  />
-                }
-              />
-            )
-          }
-          headerEnd={
-            chat.id && (
-              <WorkspaceToggle
-                open={paneOpen}
-                waiting={chatTasks.length > 0}
-                onToggle={() => person.setOpen(chat.id, !paneOpen)}
-              />
-            )
-          }
         />
       ) : (
         <>
@@ -557,22 +383,6 @@ export function App() {
     </div>
   );
   return <KnownFaces.Provider value={faces}>{app}</KnownFaces.Provider>;
-}
-
-/** The agent whose tab a chat's workspace has, and whether it is the tab shown. */
-const agentOpen = (tabs?: Tabs) =>
-  tabs?.agent === undefined ? undefined : { agent: tabs.agent, shown: tabs.selected === 'agent' };
-
-/**
- * A chat's workspace tabs: its opened files, the agent whose panel is open, the plan at the version shown, and
- * the tab shown.
- */
-interface Tabs {
-  files: FileTab[];
-  agent?: string;
-  /** `waits`: the plan waits on the person, which puts a dot on its tab. */
-  plan?: { id: number; version: number; waits?: boolean };
-  selected: string;
 }
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */

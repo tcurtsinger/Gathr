@@ -18,7 +18,7 @@ interface Props {
 }
 
 /**
- * The flyout beside navigation that Search and Tasks share (DESIGN.md "Navigation and workspace"):
+ * The flyout beside navigation, Search's (DESIGN.md "Navigation and workspace"):
  * the prototype's Radix popover. Escape, an outside click, Close
  * or its trigger closes it.
  */

@@ -1,13 +1,4 @@
-import {
-  Archive,
-  ArchiveRestore,
-  FoldVertical,
-  MoreHorizontal,
-  Pause,
-  Play,
-  Settings,
-  Trash2,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, MoreHorizontal, Pause, Play, Settings, Trash2 } from 'lucide-react';
 import { Fragment, type ReactElement, useRef } from 'react';
 import {
   DropdownMenu,
@@ -36,8 +27,6 @@ interface Props {
   onArchive?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
   onDelete?: (opener: HTMLElement | null) => void;
-  /** An agent's panel: Compact its conversation (compaction plan, K4); `asked` while one waits or runs. */
-  compact?: { asked: boolean; onCompact: () => void };
   /** A project's row: its settings (0043). */
   onProjectSettings?: (opener: HTMLElement | null) => void;
   className?: string;
@@ -48,7 +37,7 @@ interface Props {
 /**
  * A More menu (the prototype's ChatActions): the pause item, then Archive or Restore, then Delete,
  * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, a
- * project's row Project settings and Delete, and an agent's panel Compact.
+ * project's row Project settings and Delete.
  */
 export function ChatMenu({
   label = 'More',
@@ -58,7 +47,6 @@ export function ChatMenu({
   onRestore,
   onDelete,
   onProjectSettings,
-  compact,
   className,
   align = 'end',
 }: Props) {
@@ -88,14 +76,6 @@ export function ChatMenu({
       <DropdownMenuItem key="archive" onSelect={() => onArchive(trigger.current)}>
         <Archive />
         Archive
-      </DropdownMenuItem>,
-    ]);
-  if (compact)
-    items.push([
-      'compact',
-      <DropdownMenuItem key="compact" disabled={compact.asked} onSelect={compact.onCompact}>
-        <FoldVertical />
-        {compact.asked ? 'Compaction queued' : 'Compact'}
       </DropdownMenuItem>,
     ]);
   if (onProjectSettings)

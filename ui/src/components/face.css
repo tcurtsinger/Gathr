@@ -42,31 +42,6 @@
   height: 16px;
 }
 
-/* Gathr's face, and the person's: a quiet disc, its dots or initial centred. */
-.face-gathr,
-.face-you {
-  display: grid;
-  place-items: center;
-  background: color-mix(in oklab, var(--foreground) 10%, var(--background));
-  color: var(--muted-foreground);
-}
-.face-gathr > svg {
-  width: 66%;
-  height: 66%;
-  clip-path: none;
-  fill: currentColor;
-}
-.face-you {
-  background: var(--accent-surface);
-  color: var(--foreground);
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1;
-}
-.face-you:is([data-size="24"], [data-size="20"], [data-size="16"]) {
-  font-size: 10px;
-}
-
 /* Its state (0071): top right, on the face's edge, cut out of the surface it sits on by a ring of that surface's
    colour (--behind, the chat's own by default), so it reads on any background a face is drawn on. */
 .mark {
@@ -142,45 +117,4 @@
   .mark[data-spin] > svg {
     animation: none;
   }
-}
-
-/* A face's card (0071): its name, then its state in the mark's shape and word, what and since when. */
-.face-card {
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 140px;
-  padding: 7px 11px 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--popover);
-  box-shadow: 0 6px 20px #00000033;
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 18px;
-  white-space: nowrap;
-  pointer-events: none;
-  --behind: var(--popover);
-}
-.face-card-name {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 13.5px;
-}
-.face-card-name b {
-  font-weight: 600;
-}
-.face-card-name span {
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-}
-.face-card-state {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.face-card-state > .mark {
-  --mark: 10px;
 }

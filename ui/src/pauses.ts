@@ -66,13 +66,3 @@ export function runOf({ pauses }: Pauses, chat: string): Run {
   const scope: PauseScope = p.scope === 'app' ? { scope: 'app' } : { scope: 'chat', target: chat };
   return { state: p.state, by: p.by, scope };
 }
-
-/** An agent's own pause, and when its account's usage comes back while it's out. */
-export function agentPause({ pauses, usage }: Pauses, agent: string) {
-  return {
-    paused: pauses.some((p) => p.scope === 'agent' && p.target === agent),
-    // Held turns start 30 s after the reset (0010), so a hold that has just passed still holds.
-    usageUntil:
-      usage.find((u) => u.agents.includes(agent) && u.until_us + 30e6 > Date.now() * 1000)?.until_us ?? null,
-  };
-}

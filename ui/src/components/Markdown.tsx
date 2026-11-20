@@ -1,10 +1,7 @@
-import { useAuiState } from '@assistant-ui/react';
-import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { code } from '@streamdown/code';
-import { type ComponentProps, createContext, useContext, useMemo, useState } from 'react';
+import { type ComponentProps, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown';
-import { blockSplitter } from './blocks';
 import './markdown.css';
 
 interface Node {
@@ -22,9 +19,6 @@ function htmlAsText() {
   };
   return walk;
 }
-
-/** The names of the chat's agents: an @Name of one in an agent's words reads as a mention (0082). */
-export const MentionsContext = createContext<readonly string[]>([]);
 
 const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -109,33 +103,5 @@ export function Markdown({ text, className, names }: { text: string; className?:
     >
       {text}
     </Streamdown>
-  );
-}
-
-/** An agent's text, formatted by Streamdown as it streams (0030). */
-export function MarkdownText() {
-  // A reply already finished when it's drawn parses in one pass (a chat with hundreds of them opens
-  // faster). One drawn while streaming stays in streaming mode, so its end never re-parses it whole.
-  const running = useAuiState((s) => s.message.status?.type === 'running');
-  const [mode] = useState<'static' | 'streaming'>(running ? 'streaming' : 'static');
-  const [split] = useState(() => (running ? blockSplitter() : undefined));
-  const names = useContext(MentionsContext);
-  const key = names.join('\n');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the same names make the same plugins
-  const remark = useMemo(() => (names.length ? [...remarkPlugins, mentions(names)] : remarkPlugins), [key]);
-  return (
-    <StreamdownTextPrimitive
-      mode={mode}
-      parseMarkdownIntoBlocksFn={split}
-      remarkPlugins={remark}
-      rehypePlugins={rehypePlugins}
-      components={components}
-      linkSafety={{ enabled: false }}
-      controls={controls}
-      // Streamdown caps a table at 300px and scrolls it, which hid its header row; it shows whole.
-      tableMaxHeight={Number.POSITIVE_INFINITY}
-      plugins={plugins}
-      containerClassName="markdown"
-    />
   );
 }
