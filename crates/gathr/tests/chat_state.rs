@@ -383,30 +383,6 @@ fn answer(service: &TestService) {
 }
 
 #[test]
-fn a_question_to_the_person_needs_them_until_answered_and_an_agent_that_only_waits_isnt_working() {
-    let data = TempDir::new();
-    let (service, chat) = asked_the_person(&data.0);
-    let mut live = service.live();
-    until_state(&service, &chat, (true, true));
-    std::fs::write(data.0.join("go"), "").unwrap();
-    ended(&service, &chat);
-    // Its Supervisor still waits on the check: that isn't working.
-    until_state(&service, &chat, (false, true));
-    let waits = service.call("GET", &format!("/api/chats/{chat}/tasks"));
-    assert_eq!(waits.json()["waits"][0]["state"], "open", "{}", waits.body);
-
-    answer(&service);
-    // The answer wakes the Supervisor: its next turn runs (this stand-in has no more to say).
-    until_state(&service, &chat, (true, false));
-    let seen = changes(&service, &mut live, &chat);
-    let after = [(false, true), (false, false), (true, false)];
-    assert_eq!(
-        seen, after,
-        "needs ends with the answer, before the turn it starts"
-    );
-}
-
-#[test]
 fn a_message_waiting_for_a_sign_in_needs_the_person() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);

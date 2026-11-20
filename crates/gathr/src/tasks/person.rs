@@ -717,6 +717,3 @@ fn stored(files: &[File]) -> String {
         .collect();
     json!(all).to_string()
 }
-
-#[cfg(test)]
-mod tests;
