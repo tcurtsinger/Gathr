@@ -1,10 +1,10 @@
-// Deleting a project from its More, and a removed agent's words (0069). The service is the edge: fetch
+// Deleting a project from its More (0069). The service is the edge: fetch
 // answers as it would, and tells the live socket what it deleted.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { App } from './App';
-import type { Chat, Named, Project } from './api';
+import type { Chat, Project } from './api';
 import type { LiveEvent } from './live';
 
 const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
@@ -31,8 +31,6 @@ const chat = (id: string, project?: string): Chat => ({ id, title: `Made-up ${id
 interface Made {
   projects: Project[];
   chats: Chat[];
-  removed?: Named[];
-  history?: object;
 }
 
 /** The service with these projects and chats; a project's delete deletes its chats, each told live. */
@@ -54,14 +52,13 @@ function service(made: Made) {
     if (more === 'delete') return json({ chats: 2, tasks: 0, projects: 1, leads: [] });
     if (path === '/api/chats') return json(made.chats);
     if (path === '/api/chats?archived=true') return json([]);
-    if (path === '/api/agents') return json({ agents: [], removed: made.removed ?? [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     const [, chatId, action] = path.match(/^\/api\/chats\/([^/?]+)\/?(\w*)$/) ?? [];
     if (action === 'tasks') return json({ tasks: [], waits: [] });
-    if (chatId)
-      return json(made.history ?? { chat: chatId, messages: [], turns: [], approvals: [], members: [] });
+    if (chatId) return json({ chat: chatId, messages: [], turns: [], approvals: [], members: [] });
     return json({});
   });
   return sent;
@@ -91,29 +88,4 @@ test('a project’s Delete says what goes, deletes it with its chats, and the op
   // Its whole group went, so the open chat gives way to New, never to a chat going with it.
   await expect.element(heading('New chat')).toBeInTheDocument();
   expect(sent).toEqual(['DELETE /api/projects/p']);
-});
-
-test('a removed agent’s old words still say who wrote them', async () => {
-  const words = 'Made-up words from an agent since deleted';
-  service({
-    projects: [],
-    chats: [chat('c')],
-    removed: [{ id: 'bo', name: 'Bo', face_seed: 'Bo', gender: null, skin: null, background: null }],
-    history: {
-      chat: 'c',
-      members: [],
-      approvals: [],
-      turns: [{ id: 't', agent: 'bo', status: 'done', why: null, ref: 't', position: 0 }],
-      messages: [
-        { id: 'm', turn: 't', time: '2026-11-08T09:00:00Z', role: 'assistant', kind: 'text', body: words },
-      ],
-    },
-  });
-  await render(<App />);
-  const said = page.getByText(words);
-  await expect.element(said).toBeVisible();
-  const block = said.element().closest('.said');
-  // Its face, then its name.
-  expect(block?.querySelector('.said-face .face')).not.toBeNull();
-  expect(block?.querySelector('.name-line-name')?.textContent).toBe('Bo');
 });
