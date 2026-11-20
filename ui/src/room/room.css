@@ -204,6 +204,10 @@
   gap: 8px;
   min-width: 0;
 }
+.room-step-list li.room-note {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .room-step-list li[data-status="error"] {
   color: var(--danger);
 }

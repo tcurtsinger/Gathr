@@ -116,6 +116,8 @@ struct Running {
     /// which are never sent, and the message the words sit under. `partial_units` counts what is sent.
     reply: Option<(usize, Option<String>)>,
     streamed: bool,
+    /// It has saved words: a NO_REPLY after them is saved too (`save_reply`).
+    worded: bool,
     /// Tool calls under way.
     tools: HashMap<String, OpenTool>,
     thought: Option<thinking::OpenThought>,

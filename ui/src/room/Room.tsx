@@ -1,6 +1,6 @@
 import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Member, Message, Reaction, ToolBody } from '../api';
+import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { Face, type FaceMark, type FaceOf } from '../components/Face';
 import { IconButton } from '../components/IconButton';
@@ -8,7 +8,7 @@ import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
 import { QuestionCard } from './Question';
-import { type Card, type Item, type Said, shape, stepsLine, working } from './shape';
+import { type Card, type Item, type Said, type Step, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
 
@@ -165,7 +165,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         {card.text && <Markdown className="room-body" text={card.text} names={ctx.people.names} />}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
-        <Foot said={card.said} ctx={ctx} />
+        <Foot said={card.said} last={card.last} ctx={ctx} />
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
       {card.replies.length > 0 && <Thread replies={card.replies} ctx={ctx} />}
@@ -214,8 +214,8 @@ function State({ card }: { card: Card }) {
   );
 }
 
-/** All of the turn's tool runs as one line; a click opens them. */
-function Steps({ steps, running }: { steps: ToolBody[]; running: boolean }) {
+/** All of the turn's tool runs and working notes as one line; a click opens them, in the order they came. */
+function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="room-steps">
@@ -225,13 +225,20 @@ function Steps({ steps, running }: { steps: ToolBody[]; running: boolean }) {
       </button>
       {open && (
         <ol className="room-step-list">
-          {steps.map((s, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
-            <li key={i} data-status={s.status}>
-              <span>{s.input?.title ?? s.tool}</span>
-              {s.input?.text && <code>{s.input.text}</code>}
-            </li>
-          ))}
+          {steps.map((s, i) =>
+            'note' in s ? (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
+              <li key={i} className="room-note">
+                {s.note}
+              </li>
+            ) : (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
+              <li key={i} data-status={s.status}>
+                <span>{s.input?.title ?? s.tool}</span>
+                {s.input?.text && <code>{s.input.text}</code>}
+              </li>
+            ),
+          )}
         </ol>
       )}
     </div>
@@ -254,8 +261,7 @@ function Reactions({ said, ctx }: { said: Message[]; ctx: Ctx }) {
 }
 
 /** An agent's foot: its thumbs-ups, and at the right the person's own, on its last words. */
-function Foot({ said, ctx }: { said: Message[]; ctx: Ctx }) {
-  const last = said.at(-1);
+function Foot({ said, last, ctx }: { said: Message[]; last?: Message; ctx: Ctx }) {
   if (!last) return <Reactions said={said} ctx={ctx} />;
   const mine = ctx.reactions.some((r) => r.message === last.id && r.agent === PERSON);
   return (
@@ -355,7 +361,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           )}
         </div>
         {item.text && <Markdown className="room-said" text={item.text} names={ctx.people.names} />}
-        <Foot said={item.said} ctx={ctx} />
+        <Foot said={item.said} last={item.last} ctx={ctx} />
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>
     </div>
