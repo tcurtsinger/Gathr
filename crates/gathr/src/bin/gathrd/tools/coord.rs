@@ -235,7 +235,7 @@ impl Tools {
                 let others = tasks::list(c, &chat)?
                     .into_iter()
                     .filter(|t| t.number != task.number && !t.state.settled())
-                    .map(|t| line(c, &t))
+                    .map(|t| tasks::listed_line(c, &t))
                     .collect::<Result<Vec<_>, _>>()?;
                 let state = match task.state {
                     // A task waiting for its plan (0063) waits on no task.
@@ -488,41 +488,7 @@ impl Tools {
         let started = Instant::now();
         let (chat, agent) = (caller.chat.clone(), caller.agent.clone());
         let listed = self
-            .db(move |c| {
-                // Its own stopped tasks too: it can still report on them (0047). And its own
-                // reviews that went out of date: it records them again on the same task.
-                let mine = |t: &tasks::Task| {
-                    let stopped =
-                        matches!(t.state, State::Blocked | State::Failed | State::Stopped);
-                    let stale = t.kind == Kind::Review && t.state == State::Done && t.outdated;
-                    t.owner.is_some() && t.owner == agent && (stopped || stale)
-                };
-                let open = tasks::list(c, &chat)?
-                    .into_iter()
-                    .filter(|t| !t.state.settled() || mine(t));
-                let mut lines: Vec<String> = open.map(|t| line(c, &t)).collect::<Result<_, _>>()?;
-                if lines.is_empty() {
-                    lines.push("No open tasks.".into());
-                }
-                for w in waits::in_chat(c, &chat, agent.as_deref())? {
-                    if w.state == "open" {
-                        let parts = w.parts.len() as i64;
-                        let name = tasks::wait_name(c, &w.kind, w.target.as_deref(), parts)?;
-                        let mut line = format!("Wait {}: {name}. Next: {}", w.id, w.then_do);
-                        // What it is seen to wait on, and a look that can't be made: neither
-                        // waits unseen (G101).
-                        if let Some(saw) = w.saw() {
-                            line.push_str(&format!(". Last look: {saw}"));
-                        }
-                        if let Some((failed, error)) = w.failing() {
-                            let looks = if failed == 1 { "look" } else { "looks" };
-                            line.push_str(&format!(". The last {failed} {looks} failed: {error}"));
-                        }
-                        lines.push(line);
-                    }
-                }
-                Ok((lines.join("\n"), Vec::new()))
-            })
+            .db(move |c| Ok((tasks::listed(c, &chat, agent.as_deref())?, Vec::new())))
             .await;
         Ok(self.answer(&caller, "list_tasks", started, listed).await)
     }
@@ -659,37 +625,6 @@ impl Tools {
 
 fn trace_of(caller: &Caller) -> String {
     caller.trace().unwrap_or_else(gathr::ids::trace_id)
-}
-
-fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
-    let owner = tasks::owner_name(conn, t.owner.as_deref())?;
-    let reason = t
-        .reason
-        .as_ref()
-        .map_or(String::new(), |r| format!(" ({r})"));
-    let state = t.state.as_str();
-    // A review says which commit it is of, and where its PR is now once that has moved past it (G42).
-    let short = |commit: &str| commit.get(..7).unwrap_or(commit).to_string();
-    let review = match (&t.reviewed, t.kind) {
-        (Some(reviewed), Kind::Review) => {
-            let at = short(reviewed);
-            match (t.outdated, t.pr, &t.pr_head) {
-                (true, Some(pr), Some(head)) => {
-                    format!(
-                        " [reviewed at {at}, out of date: #{pr} is at {}]",
-                        short(head)
-                    )
-                }
-                (true, ..) => format!(" [reviewed at {at}, out of date]"),
-                _ => format!(" [reviewed at {at}]"),
-            }
-        }
-        _ => String::new(),
-    };
-    Ok(format!(
-        "#{} {owner} {state}{reason}{review}: {}",
-        t.number, t.what
-    ))
 }
 
 /// The task a report is on: the one named, else the turn's, else the caller's one open task.

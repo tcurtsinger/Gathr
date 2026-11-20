@@ -74,6 +74,7 @@ impl Task {
             engine_began: false,
             said: false,
             compacted: false,
+            restore_pending: false,
             limited: false,
             progress_at: Instant::now(),
             stalled: false,

@@ -18,9 +18,6 @@ use super::{Assignment, Ids, Queued, Task};
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
     pub id: Option<String>,
-    /// The engine compacted the conversation since a turn last opened: the next hears the chat's
-    /// last lines, as a new conversation does (0081).
-    pub compacted: bool,
     /// The task it was opened for: each Init writes that task's row (N5).
     pub task: Option<i64>,
     /// It resumed `id` and no Init has come yet: a turn that fails now was refused the id (N8).
@@ -187,21 +184,21 @@ impl Task {
 
     /// What a turn is sent before its ask, never saved: what the team chat said that the agent
     /// hasn't heard (0081) and its task's questions to the person, and in a new conversation's first
-    /// turn, the opening (N6) before that. A turn of Gathr's words that starts late says so first.
+    /// turn, the opening (N6) before that.
     pub(super) async fn opening(
         &mut self,
         next: &Queued,
         choice: &Conversation,
         fresh: bool,
         text: String,
-    ) -> String {
+    ) -> (String, bool) {
         let text = self.held_start(&next.ids, text).await;
         if self.compactions.contains(&next.ids.turn) {
-            return text;
+            return (text, false);
         }
         // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
-        let summed = std::mem::take(&mut self.session.compacted);
+        let summed = self.summed(None, &next.ids).await;
         // An engine opened again on a task's conversation goes on from that conversation's last turn.
         let resumed = match choice {
             Conversation::Resume { session, .. } if fresh => Some(session.clone()),
@@ -209,6 +206,11 @@ impl Task {
         };
         let (heard, asked) = self.heard(&next.ids, new || summed, resumed).await;
         let github = self.github_opening(&next.ids, choice, new || summed).await;
+        let (text, restored) = if summed {
+            self.recalled(&next.ids, text).await
+        } else {
+            (text, false)
+        };
         let said = [heard.clone(), asked, github, Some(text)];
         let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
         let late = self.late(&next.ids, heard.is_some()).await;
@@ -218,7 +220,7 @@ impl Task {
         };
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
-            return first(text);
+            return (first(text), restored);
         };
         let (task, ask, lines) = (*task, next.text.clone(), heard.is_some());
         let made = self
@@ -232,12 +234,92 @@ impl Task {
             .attr("gathr.task.id", task);
         let Some(Ok((opening, count))) = made else {
             self.record(event.error("sqlite").attr("why", format!("{made:?}")));
-            return first(text);
+            return (first(text), restored);
         };
         let chars = opening.chars().count();
         let event = event.ok().attr("gathr.task.count", count);
         self.record(event.attr("gathr.message.chars", chars));
-        first(format!("{opening}\n\n{text}"))
+        (first(format!("{opening}\n\n{text}")), restored)
+    }
+
+    async fn recalled(&self, ids: &Ids, text: String) -> (String, bool) {
+        let (turn, chat, agent) = (ids.turn.clone(), ids.chat.clone(), ids.agent.clone());
+        let (task, ask) = (
+            ids.task,
+            text.lines().next().unwrap_or_default().to_string(),
+        );
+        let read = self
+            .chats
+            .writer
+            .call(move |c| {
+                let mut lines = vec!["Your conversation was compacted.".to_string()];
+                if let Some(plan) = gathr::plans::recall(c, &turn)? {
+                    lines.push(plan);
+                }
+                lines.push(gathr::tasks::listed(c, &chat, agent.as_deref())?);
+                if let Some(task) = task {
+                    let t = gathr::tasks::get(c, task)?
+                        .ok_or(gathr::Error::Refused(format!("No task #{task}")))?;
+                    let giver = gathr::tasks::owner_name(c, t.giver.as_deref())?;
+                    let brief = gathr::tasks::task_brief(c, &t, &giver, t.carry.as_deref())?;
+                    if brief.lines().next() != Some(ask.as_str()) {
+                        lines.push(brief);
+                    }
+                }
+                Ok::<_, gathr::Error>(lines.join("\n"))
+            })
+            .await;
+        let event = Event::point("gathr.context.recalled")
+            .trace(&ids.trace)
+            .chat(&ids.chat);
+        match read {
+            Some(Ok(recalled)) => {
+                self.record(event.ok().attr("chars", recalled.chars().count()));
+                (format!("{recalled}\n\n{text}"), true)
+            }
+            failed => {
+                self.record(event.error("sqlite").attr("why", format!("{failed:?}")));
+                (text, false)
+            }
+        }
+    }
+
+    /// Read the pending marker, or set it after compaction and clear it after a restored send.
+    pub(super) async fn summed(&self, mark: Option<bool>, ids: &Ids) -> bool {
+        let (Some(session), Some(assigned)) = (self.session.id.clone(), self.assigned.as_ref())
+        else {
+            return false;
+        };
+        let (chat, agent, account) = (
+            assigned.chat.clone(),
+            assigned.agent.clone().unwrap_or_default(),
+            assigned.account.clone(),
+        );
+        let read = self
+            .chats
+            .writer
+            .call(move |c| {
+                if let Some(mark) = mark {
+                    gathr::sessions::summed(c, &chat, &agent, &account, &session, mark)?;
+                    Ok(mark)
+                } else {
+                    gathr::sessions::is_summed(c, &chat, &agent, &account, &session)
+                }
+            })
+            .await;
+        match read {
+            Some(Ok(summed)) => summed,
+            failed => {
+                self.record(
+                    Event::point("gathr.context.summed")
+                        .trace(&ids.trace)
+                        .chat(&assigned.chat)
+                        .error("sqlite")
+                        .attr("why", format!("{failed:?}")),
+                );
+                false
+            }
+        }
     }
 
     /// How long ago a turn opened by Gathr's words was queued, when it starts 2 minutes or more
