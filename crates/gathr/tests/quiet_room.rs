@@ -412,7 +412,8 @@ fn approval_answered_late(start: Option<&str>) {
 }
 
 /// A wake held behind the lead's turn in another chat, starting 2 minutes or more after it was
-/// queued, says first how long ago that was: its "for" times were written then.
+/// queued, says first how long ago that was: its "for" times were written then. The person's pick
+/// held behind the same turn says nothing of it: they wrote it.
 #[test]
 fn a_wake_that_starts_late_says_how_long_ago_it_was_queued() {
     let data = TempDir::new();
@@ -441,14 +442,31 @@ fn a_wake_that_starts_late_says_how_long_ago_it_was_queued() {
         rows(&data.0, queued).into_iter().next()
     });
     let wake = wake["id"].as_str().unwrap();
-    let aged = "UPDATE turns SET created_ts = created_ts - 180000000 WHERE id = ?1";
-    assert_eq!(conn.execute(aged, [wake]).unwrap(), 1);
+    // The person's message to the lead and Ann waits behind the same turn: their words, not Gathr's.
+    let picks = json!([{ "at": 0, "len": 5, "agent": lead }, { "at": 6, "len": 4, "agent": member(&service, &chat, "Ann") }]);
+    let to_both = json!({ "text": "@Lead @Ann Look again", "agent": lead, "picks": picks });
+    let sent = service.send("POST", &format!("/api/chats/{chat}/messages"), to_both);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let picked = format!(
+        "SELECT id FROM turns WHERE opened_by = 'picked' AND agent_id = '{lead}' AND status = 'queued'"
+    );
+    let picked = until(30, "the pick to queue behind the lead's turn", || {
+        rows(&data.0, &picked).into_iter().next()
+    });
+    let picked = picked["id"].as_str().unwrap();
+    let aged = "UPDATE turns SET created_ts = created_ts - 180000000 WHERE id IN (?1, ?2)";
+    assert_eq!(conn.execute(aged, [wake, picked]).unwrap(), 2);
     std::fs::write(data.0.join("go"), "").unwrap();
 
-    service.wait_for(&chat, 30, "the wake to end", |h| {
-        turns_of(h, &lead).iter().any(|t| t["status"] == "done")
+    // The pick runs on the engine whose recording the wake played: it is sent, and never ends.
+    let opened = until(30, "the pick to reach the lead's engine", || {
+        Some(read_in(&data.0, picked)).filter(|sent| !sent.is_empty())
     });
-    let opened = read_in(&data.0, wake);
+    let woke = read_in(&data.0, wake);
     let late = escaped(&gathr::words::late(180_000_000, false).unwrap());
-    assert!(opened.contains(&late), "the wake's opening: {opened}");
+    assert!(woke.contains(&late), "the wake's opening: {woke}");
+    assert!(
+        !opened.contains("Gathr queued this turn"),
+        "the person's pick: {opened}"
+    );
 }

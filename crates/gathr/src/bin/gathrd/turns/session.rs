@@ -242,7 +242,11 @@ impl Task {
 
     /// How long ago a turn opened by Gathr's words was queued, when it starts 2 minutes or more
     /// after: its words were written then. With `lines`, the chat's lines below say what changed.
+    /// A reply or a pick has Gathr's line, but the person wrote its ask.
     async fn late(&self, ids: &Ids, lines: bool) -> Option<String> {
+        if ids.person {
+            return None;
+        }
         let turn = ids.turn.clone();
         let queued = move |c: &mut rusqlite::Connection| {
             let sql = "SELECT created_ts FROM turns WHERE id = ?1 AND opened_version IS NOT NULL";
