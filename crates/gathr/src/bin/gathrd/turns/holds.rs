@@ -48,7 +48,7 @@ impl Task {
             return None;
         }
         let pauses = self.chats.pauses();
-        pauses::holding(&pauses, &ids.chat, ids.agent.as_deref()).map(|_| "pause")
+        pauses::holding(&pauses, &ids.chat).map(|_| "pause")
     }
 
     /// Marks each queued turn with what holds it: saved, and sent live when it changes.
@@ -243,8 +243,7 @@ impl Task {
         // The person's messages already queued in the scope wait for Restart too: only what they
         // send after the stop runs.
         for queued in &mut self.queue {
-            let (chat, agent) = (&queued.ids.chat, queued.ids.agent.as_deref());
-            if pauses::holding(&pause, chat, agent).is_some() {
+            if pauses::holding(&pause, &queued.ids.chat).is_some() {
                 queued.ids.person = false;
             }
         }
@@ -252,8 +251,7 @@ impl Task {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
-        if self.engine.is_none() || pauses::holding(&pause, &chat, self.agent.as_deref()).is_none()
-        {
+        if self.engine.is_none() || pauses::holding(&pause, &chat).is_none() {
             return;
         }
         let (c, agent) = (chat.clone(), self.agent.clone());

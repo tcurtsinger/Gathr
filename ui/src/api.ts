@@ -117,16 +117,16 @@ export interface Context {
   compact_at?: number | null;
 }
 
-/** The whole app, or one chat or agent. */
-export type PauseScope = { scope: 'app' } | { scope: 'chat' | 'agent'; target: string };
+/** The whole app, or one chat. */
+export type PauseScope = { scope: 'app' } | { scope: 'chat'; target: string };
 
 /**
  * A pause (0010): pausing while a turn, background command or wait's check in it still runs, paused once quiet,
  * stopped after Stop now until Restart (its resume).
  */
 export interface Pause {
-  scope: 'app' | 'chat' | 'agent';
-  /** The chat's or agent's id; empty for the app. */
+  scope: 'app' | 'chat';
+  /** The chat's id; empty for the app. */
   target: string;
   state: 'pausing' | 'paused' | 'stopped';
   /** The agent that paused it; null for the person. */

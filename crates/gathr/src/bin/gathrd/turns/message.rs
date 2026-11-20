@@ -83,13 +83,12 @@ impl Task {
             answers: start.answers.clone(),
             person: false,
         };
-        // What holds it, by name: an update, or the pause of the app, the chat or the agent (G163).
+        // What holds it, by name: an update, or the pause of the app or the chat (G163).
         let pauses = self.chats.pauses();
-        let pause = gathr::pauses::holding(&pauses, &ids.chat, ids.agent.as_deref());
+        let pause = gathr::pauses::holding(&pauses, &ids.chat);
         let held = match (self.holder(&ids), pause.map(|p| p.scope.as_str())) {
             (Some("update"), _) => "held_update",
             (Some(_), Some("app")) => "held_app",
-            (Some(_), Some("agent")) => "held_agent",
             (Some(_), _) => "held",
             (None, _) => "queued",
         };

@@ -1,4 +1,4 @@
-//! Pause, resume and Stop now for the person (0010, F10): the whole app, one chat or one agent.
+//! Pause, resume and Stop now for the person (0010, F10): the whole app or one chat.
 //! Restart is the resume of a stopped scope: its carry-ons start in the same sessions.
 
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/pauses/stop", post(stop_now))
 }
 
-/// A scope: `app`, or `chat` or `agent` with its id as `target`.
+/// A scope: `app`, or `chat` with its id as `target`.
 #[derive(Deserialize)]
 pub struct Scope {
     scope: String,

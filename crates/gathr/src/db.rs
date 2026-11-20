@@ -76,6 +76,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0066_agent_picture.sql"),
     include_str!("../migrations/0067_questions.sql"),
     include_str!("../migrations/0068_drop_old_tables.sql"),
+    include_str!("../migrations/0069_no_agent_pause.sql"),
 ];
 
 /// The schema version this build writes.
@@ -627,7 +628,7 @@ mod drop_old_tables_test {
         drop(conn);
 
         let conn = open(&path).unwrap();
-        assert_eq!(schema_version(&conn).unwrap(), 68);
+        assert_eq!(schema_version(&conn).unwrap(), SCHEMA_VERSION);
         assert_eq!(kept(&conn), before);
         let found: Vec<i64> = conn
             .prepare("SELECT rowid FROM message_search WHERE message_search MATCH 'gravel' ORDER BY rowid")
@@ -654,5 +655,34 @@ mod drop_old_tables_test {
             )
             .unwrap();
         assert_eq!(left, 0);
+    }
+
+    /// 0069 removes the pauses of one agent; a chat's and the app's stay.
+    #[test]
+    fn an_agents_pause_goes_and_a_chats_and_the_apps_stay() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-agent-pause-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..68] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 68;
+             INSERT INTO pauses (scope, target, since_ts) VALUES
+                 ('app', '', 1), ('chat', 'c', 2), ('agent', 'mira', 3);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let left: Vec<String> = conn
+            .prepare("SELECT scope FROM pauses ORDER BY since_ts")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(left, ["app", "chat"]);
     }
 }

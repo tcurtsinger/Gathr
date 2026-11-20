@@ -157,7 +157,7 @@ pub struct Removed {
     pub projects: Vec<String>,
 }
 
-/// Removes `agent` in one transaction (0069): its queued turns stopped and its pauses gone; it
+/// Removes `agent` in one transaction (0069): its queued turns stopped; it
 /// leaves every team it isn't the only agent of, the next agent leading where it led; its row stays,
 /// marked removed. What it was the only agent of stays for the service to delete, so a second call
 /// finds it again.
@@ -165,10 +165,6 @@ pub fn remove_agent(conn: &mut Connection, agent: &str) -> Result<Removed, Error
     let tx = conn.transaction()?;
     let plan = agent_plan(&tx, agent)?;
     let now = crate::ids::now_us();
-    tx.execute(
-        "DELETE FROM pauses WHERE scope = 'agent' AND target = ?1",
-        [agent],
-    )?;
     let mut removed = Removed::default();
     for (seat, team) in teams(&tx, agent, &plan.projects, &plan.chats)? {
         let next = next_lead(&team, agent).map(|m| m.agent.clone());
