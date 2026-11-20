@@ -15,8 +15,13 @@ their existing opening.
 
 A pending restoration belongs to the conversation: `task_sessions` and `engine_sessions`
 keep its marker alongside the provider session id and account. A different task's turn cannot
-take it, and a service restart cannot lose it. The first opening of that conversation clears
-all rows pointing to it. Replacing a row with another session clears its old marker.
+take it, and a service restart cannot lose it. Reading the opening leaves the marker in place;
+only successfully sending the restored opening clears all rows pointing to that conversation.
+A crash during its GitHub read therefore restores it on retry. Replacing a row with another
+session clears its old marker.
+
+A review fix follows the same source work task as conversation selection, restoring that work
+task's plan and part while keeping the fix task's own brief and questions.
 
 Migration 0063 adds the marker to both session tables. Published migrations 0061 and 0062
 keep their slots. Existing databases start with no pending marker.

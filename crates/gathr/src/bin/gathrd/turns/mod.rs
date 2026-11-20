@@ -146,6 +146,8 @@ struct Running {
     said: bool,
     /// The engine compacted the conversation during it.
     compacted: bool,
+    /// A restored opening still waits to be written, possibly buffered by Codex's thread open.
+    restore_pending: bool,
     /// The engine said the account is out of usage during it.
     limited: bool,
     /// When it last showed progress, and whether it was flagged for showing none.
@@ -609,7 +611,10 @@ impl Task {
             true => format!("{}\n\n{}", gathr::context::SOON, next.text),
             false => next.text.clone(),
         };
-        let text = self.opening(next, &choice, fresh, text).await;
+        let (text, restored) = self.opening(next, &choice, fresh, text).await;
+        if let Some(turn) = self.turn.as_mut() {
+            turn.restore_pending = restored;
+        }
         let written = match compaction {
             true => self.write_compact(&next.ids.turn).await,
             false => self.write_user(&text, Some(&next.ids.turn)).await,

@@ -7,6 +7,7 @@
 //! `sha=` head onto that base, a real new commit, and answers as GitHub's merge API does. Each call
 //! is appended to `<file>.calls`, one JSON array of its arguments a line, so a test sees what
 //! Gathr asked. One with `sleep_ms` answers that much later, for a GitHub that stalls.
+//! `hold_until` waits for that file, so a test can interrupt a read and release it afterward.
 
 use std::io::Write;
 
@@ -44,6 +45,11 @@ fn main() {
         };
         if let Some(ms) = answer["sleep_ms"].as_u64() {
             std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+        if let Some(file) = answer["hold_until"].as_str() {
+            while !std::path::Path::new(file).is_file() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
         }
         print!("{}", out.as_str().unwrap_or_default());
         eprint!("{}", answer["err"].as_str().unwrap_or_default());

@@ -120,7 +120,9 @@ pub fn choose(
     if answers {
         return Ok(Conversation::Latest);
     }
-    if let Some(session) = work_tasks(conn, task, agent, account)? {
+    if let Some(work) = work_task(conn, task, agent)?
+        && let Some(session) = session_on(conn, work, agent, account)?
+    {
         return Ok(Conversation::Resume {
             task,
             session,
@@ -146,14 +148,9 @@ fn session_on(
         .optional()?)
 }
 
-/// For a fix Gathr gave (named in `review_notes.fix`): its PR's work task's session, when that task
-/// is `agent`'s and its session lives in `account`'s folder (answer 4).
-fn work_tasks(
-    conn: &Connection,
-    fix: i64,
-    agent: &str,
-    account: &str,
-) -> Result<Option<String>, Error> {
+/// For a fix Gathr gave (named in `review_notes.fix`): its PR's source work task, when that task
+/// is `agent`'s (answer 4). Plan recall follows the same work task as conversation selection.
+pub(crate) fn work_task(conn: &Connection, fix: i64, agent: &str) -> Result<Option<i64>, Error> {
     let of_fix: Option<(String, i64)> = conn
         .query_row(
             "SELECT chat_id, pr FROM tasks WHERE number = ?1 AND pr IS NOT NULL
@@ -166,9 +163,7 @@ fn work_tasks(
         return Ok(None);
     };
     match crate::tasks::notes::work_on(conn, &chat, pr)? {
-        Some((owner, work)) if owner == agent && work != fix => {
-            session_on(conn, work, agent, account)
-        }
+        Some((owner, work)) if owner == agent && work != fix => Ok(Some(work)),
         _ => Ok(None),
     }
 }
@@ -227,26 +222,22 @@ pub fn summed(
     Ok(())
 }
 
-/// Consume the marker only when opening the conversation that compacted.
-pub fn take_summed(
+/// Whether this conversation still needs its post-compaction opening.
+pub fn is_summed(
     conn: &Connection,
     chat: &str,
     agent: &str,
     account: &str,
     session: &str,
 ) -> Result<bool, Error> {
-    let found: bool = conn.query_row(
+    Ok(conn.query_row(
         "SELECT EXISTS (SELECT 1 FROM task_sessions WHERE chat_id = ?1 AND agent_id = ?2
              AND account_id = ?3 AND session_id = ?4 AND summed = 1)
          OR EXISTS (SELECT 1 FROM engine_sessions WHERE chat_id = ?1 AND agent_key = ?2
              AND account_id = ?3 AND session_id = ?4 AND summed = 1)",
         params![chat, agent, account, session],
         |r| r.get(0),
-    )?;
-    if found {
-        summed(conn, chat, agent, account, session, false)?;
-    }
-    Ok(found)
+    )?)
 }
 
 /// Whether `task`'s conversation was told it nears compaction, as `context::tell_soon` and

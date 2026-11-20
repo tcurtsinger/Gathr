@@ -1,6 +1,141 @@
 use super::*;
 
 #[test]
+fn an_opening_interrupted_while_reading_github_is_restored_after_restart() {
+    let (data, mut room) = compact_room();
+    let repos = TempDir::new();
+    let (folder, head) = common::project(&repos.0);
+    let task = give_ann(&room, "Task A");
+    compact_ann(&room);
+    let members =
+        json!([{"agent":room.lead,"role":"supervisor"},{"agent":room.ann,"role":"member"}]);
+    let project = room.service.send(
+        "POST",
+        "/api/projects",
+        json!({"name":"Notes", "folder":folder,"members":members}),
+    );
+    assert_eq!(project.status, 200, "{}", project.body);
+    let conn = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    conn.execute(
+        "UPDATE chats SET project_id = ?2 WHERE id = ?1",
+        rusqlite::params![room.chat, project.json()["id"].as_str().unwrap()],
+    )
+    .unwrap();
+    conn.execute("UPDATE tasks SET pr = 5 WHERE number = ?1", [task])
+        .unwrap();
+    let view = json!({"number":5,"title":"Notes","state":"OPEN","headRefOid":head,
+        "headRefName":"room/notes","baseRefName":"main","files":[],"statusCheckRollup":[]});
+    let answers = data.0.join("gh.json");
+    let go = data.0.join("github-go");
+    let _release = common::replay::LetGo(go.clone());
+    std::fs::write(
+        &answers,
+        json!([{"args":["pr","view"],"out":view.to_string(),"hold_until":go}]).to_string(),
+    )
+    .unwrap();
+    let (port, token) = (room.service.info.port, room.service.info.token.clone());
+    let request = std::thread::spawn(move || {
+        gathr::http::call(port, &token, "POST", &format!("/api/tasks/{task}/restart"))
+    });
+    until(20, "the first opening's PR read to start", || {
+        let calls = std::fs::read_to_string(data.0.join("gh.json.calls")).ok()?;
+        calls
+            .lines()
+            .any(|c| c.contains("statusCheckRollup,files"))
+            .then_some(())
+    });
+    // Only this disposable service is killed: its engine has fake credentials and no message yet.
+    room.service.child.kill().unwrap();
+    room.service.child.wait().unwrap();
+    std::fs::write(&go, "").unwrap();
+    let _ = request.join().unwrap();
+    let Room {
+        service,
+        data: folder,
+        chat,
+        lead,
+        ann,
+    } = room;
+    drop(service);
+    std::fs::write(
+        &answers,
+        json!([{"args":["pr","view"],"out":view.to_string()}]).to_string(),
+    )
+    .unwrap();
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &data.0.join("played.jsonl")),
+            ("GATHR_REPLAY_SESSION", Path::new("echo")),
+            ("GATHR_GH_PATH", &common::fake_gh()),
+            ("GATHR_FAKE_GH", &answers),
+        ],
+    );
+    let room = Room {
+        service,
+        data: folder,
+        chat,
+        lead,
+        ann,
+    };
+    settled(&room, task, "held");
+    let history = quiet(&room);
+    let opened: Vec<_> = history["turns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| t["task"] == task && t["agent"] == room.ann)
+        .map(|t| common::replay::read_in(&data.0, t["id"].as_str().unwrap()))
+        .collect();
+    assert!(
+        opened
+            .iter()
+            .any(|t| t.contains("Your conversation was compacted.")),
+        "lost during opening: {opened:?}"
+    );
+}
+
+#[test]
+fn a_review_fix_after_compaction_restores_the_source_work_tasks_plan() {
+    let (data, room) = compact_room();
+    let account = room
+        .service
+        .call("GET", &format!("/api/agents/{}", room.lead))
+        .json()["account"]
+        .clone();
+    let rev = join(&room, "Rev", "reviewer", account.as_str().unwrap());
+    let work = give(
+        &room,
+        &room.lead_token(),
+        json!({"to":"Ann","what":"Build notes","pr":7}),
+    );
+    settled(&room, work, "held");
+    let conn = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    conn.execute(
+        "INSERT INTO plans (id, chat_id, ask_id, lead, created_ts)
+        SELECT 700, chat_id, ask_id, giver, 1 FROM tasks WHERE number = ?1",
+        [work],
+    )
+    .unwrap();
+    conn.execute_batch("INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, decided)
+        VALUES (700,700,2,'seed-plan','seed-turn','Find notes','Filter notes',1,'approved');").unwrap();
+    conn.execute("INSERT INTO plan_parts (version_id,n,owner,what,why,done,proof,place,size,size_lines,task)
+        SELECT 700,3,owner,what,'why','done','proof','place','size',10,number FROM tasks WHERE number=?1", [work]).unwrap();
+    compact_ann(&room);
+    let fix = reviewed_with_a_wrong_note(&room, &rev, 7);
+    let turn = turn_on(&room, fix, 1);
+    let opened = common::replay::read_in(&data.0, turn["id"].as_str().unwrap());
+    for words in [
+        "Your conversation was compacted.",
+        "Plan: Find notes, version 2, approved",
+        "Your task is part 3: Build notes",
+        "Fix the review of #7",
+    ] {
+        assert!(opened.contains(words), "missing {words}: {opened}");
+    }
+}
+
+#[test]
 fn a_report_ask_after_auto_compaction_restores_the_tasks_full_brief() {
     let data = TempDir::new();
     let frames = std::fs::read_to_string(common::recording("compact_claude")).unwrap();
@@ -66,7 +201,7 @@ fn compact_ann(room: &Room) {
 }
 
 #[test]
-fn a_failed_restoration_marker_read_is_found_from_the_turns_reference() {
+fn a_failed_restoration_marker_write_is_found_from_the_turns_reference() {
     let (data, room) = compact_room();
     let task = give_ann(&room, "Task A");
     compact_ann(&room);
@@ -74,7 +209,7 @@ fn a_failed_restoration_marker_read_is_found_from_the_turns_reference() {
     conn.execute_batch(
         "CREATE TRIGGER fail_summed BEFORE UPDATE OF summed ON task_sessions
          WHEN OLD.summed = 1 AND NEW.summed = 0
-         BEGIN SELECT RAISE(FAIL, 'forced restoration marker read failure'); END;",
+         BEGIN SELECT RAISE(FAIL, 'forced restoration marker write failure'); END;",
     )
     .unwrap();
     restart(&room, task);
@@ -92,7 +227,7 @@ fn a_failed_restoration_marker_read_is_found_from_the_turns_reference() {
     assert!(
         event
             .to_string()
-            .contains("forced restoration marker read failure"),
+            .contains("forced restoration marker write failure"),
         "{event}"
     );
 }

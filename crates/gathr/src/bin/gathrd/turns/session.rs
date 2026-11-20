@@ -189,14 +189,14 @@ impl Task {
         choice: &Conversation,
         fresh: bool,
         text: String,
-    ) -> String {
+    ) -> (String, bool) {
         let text = self.held_start(&next.ids, text).await;
         if self.compactions.contains(&next.ids.turn) {
-            return text;
+            return (text, false);
         }
         // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
-        let summed = self.summed(false, &next.ids).await;
+        let summed = self.summed(None, &next.ids).await;
         // An engine opened again on a task's conversation goes on from that conversation's last turn.
         let resumed = match choice {
             Conversation::Resume { session, .. } if fresh => Some(session.clone()),
@@ -204,16 +204,16 @@ impl Task {
         };
         let (heard, asked) = self.heard(&next.ids, new || summed, resumed).await;
         let github = self.github_opening(&next.ids, choice, new || summed).await;
-        let text = if summed {
+        let (text, restored) = if summed {
             self.recalled(&next.ids, text).await
         } else {
-            text
+            (text, false)
         };
         let said = [heard.clone(), asked, github, Some(text)];
         let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
-            return text;
+            return (text, restored);
         };
         let (task, ask, lines) = (*task, next.text.clone(), heard.is_some());
         let made = self
@@ -227,15 +227,15 @@ impl Task {
             .attr("gathr.task.id", task);
         let Some(Ok((opening, count))) = made else {
             self.record(event.error("sqlite").attr("why", format!("{made:?}")));
-            return text;
+            return (text, restored);
         };
         let chars = opening.chars().count();
         let event = event.ok().attr("gathr.task.count", count);
         self.record(event.attr("gathr.message.chars", chars));
-        format!("{opening}\n\n{text}")
+        (format!("{opening}\n\n{text}"), restored)
     }
 
-    async fn recalled(&self, ids: &Ids, text: String) -> String {
+    async fn recalled(&self, ids: &Ids, text: String) -> (String, bool) {
         let (turn, chat, agent) = (ids.turn.clone(), ids.chat.clone(), ids.agent.clone());
         let (task, ask) = (
             ids.task,
@@ -268,17 +268,17 @@ impl Task {
         match read {
             Some(Ok(recalled)) => {
                 self.record(event.ok().attr("chars", recalled.chars().count()));
-                format!("{recalled}\n\n{text}")
+                (format!("{recalled}\n\n{text}"), true)
             }
             failed => {
                 self.record(event.error("sqlite").attr("why", format!("{failed:?}")));
-                text
+                (text, false)
             }
         }
     }
 
-    /// Save a compaction, or consume it on this same conversation's next opening.
-    pub(super) async fn summed(&self, mark: bool, ids: &Ids) -> bool {
+    /// Read the pending marker, or set it after compaction and clear it after a restored send.
+    pub(super) async fn summed(&self, mark: Option<bool>, ids: &Ids) -> bool {
         let (Some(session), Some(assigned)) = (self.session.id.clone(), self.assigned.as_ref())
         else {
             return false;
@@ -292,11 +292,11 @@ impl Task {
             .chats
             .writer
             .call(move |c| {
-                if mark {
-                    gathr::sessions::summed(c, &chat, &agent, &account, &session, true)?;
-                    Ok(true)
+                if let Some(mark) = mark {
+                    gathr::sessions::summed(c, &chat, &agent, &account, &session, mark)?;
+                    Ok(mark)
                 } else {
-                    gathr::sessions::take_summed(c, &chat, &agent, &account, &session)
+                    gathr::sessions::is_summed(c, &chat, &agent, &account, &session)
                 }
             })
             .await;

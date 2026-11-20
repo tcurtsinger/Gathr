@@ -86,7 +86,7 @@ impl Task {
         };
         turn.compacted = true;
         let ids = turn.ids.clone();
-        self.summed(true, &ids).await;
+        self.summed(Some(true), &ids).await;
         // Claude Code says how its compaction began; Codex doesn't, so Compact says so (K4).
         let trigger = match self.compactions.contains(&ids.turn) {
             true => "manual".to_string(),
