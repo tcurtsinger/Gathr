@@ -3,6 +3,17 @@
  * on the shell; the frame holds navigation, the chat and the workspace, with 6px of shell on its right and
  * below. Navigation is 246px until resized (--sidebar-width), from 190 to 400px; 190px below 760px.
  */
+/* The window itself never scrolls: the app fills it and only its panes scroll. The page is the window's height
+   and cuts whatever reaches past it, a hidden status line deep in a long pane included, so nothing makes it
+   taller. Placed, so a box placed from the page itself is cut too. */
+html:has(.app) {
+  overflow: hidden;
+}
+body:has(.app) {
+  position: relative;
+  height: 100dvh;
+  overflow: clip;
+}
 .app {
   --rail: 44px;
   --inset: 6px;

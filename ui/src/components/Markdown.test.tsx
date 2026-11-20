@@ -107,12 +107,14 @@ test('a reply reads as SerenityOS’s does in its bubble: bullets hang, items 3p
   const [one, two] = root.querySelectorAll('p');
   expect(Math.round(box(two).top - box(one).bottom)).toBe(10);
 
+  // To two places: Edge reports a size to four, WebKit on a Mac to five.
+  const size = (style: CSSStyleDeclaration) => Number.parseFloat(style.fontSize).toFixed(2);
   const heading = getComputedStyle(root.querySelector('h2') as HTMLElement);
   // A section label (0082): a step larger than the 15.5px words, semibold, never a page title.
-  expect([heading.fontSize, heading.fontWeight]).toEqual(['16.4688px', '600']);
+  expect([size(heading), heading.fontWeight]).toEqual(['16.47', '600']);
   const code = getComputedStyle(root.querySelector('[data-streamdown="inline-code"]') as HTMLElement);
   // The bubble's 15.5px words at 400: code a step smaller, at their weight.
-  expect([code.fontSize, code.fontWeight]).toEqual(['13.02px', '400']);
+  expect([size(code), code.fontWeight]).toEqual(['13.02', '400']);
 });
 
 // Vale's review of #154: an item written with two paragraphs keeps them as two lines, 6px apart (the plan's
