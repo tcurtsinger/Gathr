@@ -94,7 +94,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
          ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
          ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          ALTER TABLE engine_sessions DROP COLUMN summed;
-                  PRAGMA user_version = 25;";
+                  ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();

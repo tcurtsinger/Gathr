@@ -317,7 +317,7 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
          ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
          ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          ALTER TABLE engine_sessions DROP COLUMN summed;
-         PRAGMA user_version = 41;",
+         ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = 41;",
     )
     .unwrap();
     drop(conn);

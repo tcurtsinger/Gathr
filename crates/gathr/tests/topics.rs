@@ -472,7 +472,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
          ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          ALTER TABLE engine_sessions DROP COLUMN summed;
          ALTER TABLE task_sessions DROP COLUMN summed;
-         PRAGMA user_version = 54;",
+         ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = 54;",
     )
     .unwrap();
     let before = rows_of(

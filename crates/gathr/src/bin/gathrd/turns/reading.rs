@@ -193,15 +193,19 @@ impl Task {
                 }
             }
             Frame::TextDelta(text) => {
+                let Some(text) = self.reply_delta(text).await else {
+                    return;
+                };
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
                 let at = turn.partial_units;
-                turn.partial.push_str(&text);
                 turn.partial_units += text.encode_utf16().count();
+                let reply_to = turn.reply.as_ref().and_then(|(_, to)| to.clone());
                 let first = !std::mem::replace(&mut turn.streamed, true);
                 let (ids, sent) = (turn.ids.clone(), turn.sent_us);
-                let delta = json!({ "type": "delta", "turn": ids.turn, "text": text, "at": at });
+                let delta = json!({ "type": "delta", "turn": ids.turn, "text": text, "at": at,
+                    "reply_to": reply_to });
                 self.publish(&ids.chat, delta);
                 if first {
                     let mut event = Event::point("gathr.turn.first_token").trace(&ids.trace);
@@ -215,6 +219,7 @@ impl Task {
                 };
                 turn.partial.clear();
                 turn.partial_units = 0;
+                turn.reply = None;
                 let ids = turn.ids.clone();
                 self.save_reply(&ids, text, false).await;
             }
@@ -337,6 +342,40 @@ impl Task {
             }
             Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
+    }
+
+    /// A streamed piece of the running turn's words as it is sent: none while what came may still be
+    /// a REPLY line in a room chat (`room::start`). The piece that tells sends all that came, past that
+    /// line, and from then each piece names the message the words sit under, as they are saved.
+    async fn reply_delta(&mut self, text: String) -> Option<String> {
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
+        let turn = self.turn.as_mut()?;
+        turn.partial.push_str(&text);
+        if turn.reply.is_some() {
+            return Some(text);
+        }
+        let skip = match room.then(|| gathr::room::start(&turn.partial)) {
+            Some(gathr::room::Start::Undecided) => return None,
+            Some(gathr::room::Start::Reply(rest)) => Some(turn.partial.len() - rest.len()),
+            _ => None,
+        };
+        let id = turn.ids.turn.clone();
+        let to = match skip {
+            Some(_) => {
+                let read = move |c: &mut rusqlite::Connection| gathr::room::reply_to(c, &id);
+                self.chats
+                    .writer
+                    .call(read)
+                    .await
+                    .and_then(Result::ok)
+                    .flatten()
+            }
+            None => None,
+        };
+        let turn = self.turn.as_mut()?;
+        let skip = skip.unwrap_or(0);
+        turn.reply = Some((skip, to));
+        Some(turn.partial[skip..].to_string()).filter(|s| !s.is_empty())
     }
 
     /// Records a tool call that came without the field its step is read from: the engine's
@@ -504,6 +543,7 @@ impl Task {
         };
         let text = std::mem::take(&mut turn.partial);
         turn.partial_units = 0;
+        turn.reply = None;
         let ids = turn.ids.clone();
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         self.save_reply(&ids, text, true).await;
@@ -543,8 +583,10 @@ impl Task {
         self.idle_since = std::time::Instant::now();
         // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
         let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
-        // A like asks the agent to end without replying when it has nothing to add (0057): that is done.
-        let empty = empty && !self.opened_by_like(&turn.ids.turn).await;
+        // A like asks the agent to end without replying when it has nothing to add (0057): that is done,
+        // as is any turn in a room chat that has nothing to add.
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
+        let empty = empty && !room && !self.opened_by_like(&turn.ids.turn).await;
         // A compaction that ends without one failed, whatever the engine said (K4).
         let compaction = self.compactions.contains(&turn.ids.turn);
         let not_compacted = compaction && !turn.compacted && !turn.stopping && !turn.signed_out;
@@ -621,15 +663,13 @@ impl Task {
             (true, None, true) => self.end_carried(&turn.ids, why.as_deref()).await,
             _ => self.set_turn(&turn.ids, status, why.as_deref()).await,
         }
-        if status == "done" {
-            let ids = turn.ids;
-            let ended = crate::mentions::Ended {
-                chat: ids.chat,
-                turn: ids.turn,
-                trace: ids.trace,
-            };
-            crate::mentions::wake(self.chats.clone(), ended);
-        }
+        let ids = turn.ids;
+        let ended = crate::mentions::Ended {
+            chat: ids.chat,
+            turn: ids.turn,
+            trace: ids.trace,
+        };
+        crate::mentions::wake(self.chats.clone(), ended, status == "done");
         self.try_next().await;
     }
 

@@ -351,7 +351,7 @@ fn the_upgrade_from_0055_keeps_every_rowid_and_the_search_index() {
          ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          ALTER TABLE engine_sessions DROP COLUMN summed;
          ALTER TABLE task_sessions DROP COLUMN summed;
-         PRAGMA user_version = 55;",
+         ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = 55;",
     )
     .unwrap();
     let ids = "SELECT rowid || ':' || id FROM messages ORDER BY rowid";

@@ -797,7 +797,7 @@ fn an_answered_turn_queued_before_the_upgrade_is_not_told_its_answer_twice() {
         "DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          ALTER TABLE engine_sessions DROP COLUMN summed;
          ALTER TABLE task_sessions DROP COLUMN summed;
-         ALTER TABLE turns DROP COLUMN session_id; PRAGMA user_version = {before};"
+         ALTER TABLE turns DROP COLUMN session_id; ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = {before};"
     ))
     .unwrap();
     drop(conn);

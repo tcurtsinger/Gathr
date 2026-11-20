@@ -77,6 +77,7 @@ fn room(data: &Path, repos: &Path, gh: Value) -> Room {
         .as_str()
         .unwrap()
         .to_string();
+    common::old_chat(data, &chat);
     let sent = service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),
@@ -344,6 +345,7 @@ fn live_reads_of_a_real_pr() {
         .as_str()
         .unwrap()
         .to_string();
+    common::old_chat(&data.0, &chat);
     let path = format!("/api/chats/{chat}/messages");
     service.send("POST", &path, json!({ "text": "Look", "agent": lead }));
     let token = nth(&data.0.join("env.jsonl"), 0)["GATHR_AGENT_TOKEN"]

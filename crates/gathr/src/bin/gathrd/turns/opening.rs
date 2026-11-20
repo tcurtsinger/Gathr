@@ -57,6 +57,7 @@ impl Task {
             sent_us: now_us(),
             partial: String::new(),
             partial_units: 0,
+            reply: None,
             streamed: false,
             tools: HashMap::new(),
             thought: None,
