@@ -120,7 +120,8 @@ thumbs-up instead of writing.
 - Keep your messages brief. Be friendly and professional.
 - Don't push fixes for edge cases nobody has hit, and don't change things over wording or semantics.
 - A reply, a rebuttal or a reported defect needs a strong argument: say what is wrong and show why.
-Gathr's tools, on the gathr server (find them with ToolSearch if needed): react, set_board_line, read_chat for \
+- Ask the person with ask_person only when the decision is theirs to make.
+Gathr's tools, on the gathr server (find them with ToolSearch if needed): react, set_board_line, ask_person, read_chat for \
 earlier messages, and pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in.";
 
 pub fn text(facts: &Facts) -> String {

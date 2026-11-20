@@ -1,6 +1,7 @@
-//! `ask_person` (F9, 0010): the one tool for anything an agent needs from the person. From the chat's
-//! Supervisor it lands on the person's Tasks list; from a member it goes to the Supervisor first,
-//! who checks it. Files named with it are copied when it's given.
+//! `ask_person` (F9, 0010): the one tool for anything an agent needs from the person. In a room chat
+//! it stores a question of its own (`gathr::questions`). In an older chat, from the chat's Supervisor
+//! it lands on the person's Tasks list; from a member it goes to the Supervisor first, who checks it.
+//! Files named with it are copied when it's given.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -13,7 +14,9 @@ use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
+use serde_json::json;
 
+use super::Caller;
 use super::server::{Tools, caller_of};
 
 /// The most files with one task, and the largest: pages and plans, not builds.
@@ -48,8 +51,8 @@ pub struct ChoiceIn {
 #[tool_router(router = person_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Ask the person for input or action. In a team, only the Supervisor gives them tasks; \
-                       member requests go to the Supervisor for review. The answer wakes you here."
+        description = "Ask the person for input or action. The answer wakes you here. In an older team chat, \
+                       only the Supervisor gives them tasks; member requests go to the Supervisor for review."
     )]
     async fn ask_person(
         &self,
@@ -58,6 +61,14 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
+        let chat = caller.chat.clone();
+        let room = self
+            .chats
+            .writer
+            .call(move |c| gathr::room::is_room(c, &chat));
+        if let Some(Ok(true)) = room.await {
+            return Ok(self.ask_in_room(&caller, ask, started).await);
+        }
         let folder = self
             .chats
             .data
@@ -156,6 +167,54 @@ impl Tools {
             let _ = std::fs::remove_dir_all(&folder);
         }
         Ok(self.answer(&caller, "ask_person", started, asked).await)
+    }
+}
+
+impl Tools {
+    /// In a room chat a question has its own home (`gathr::questions`): `what` with `why` below it and the
+    /// choices, nothing else. The window hears the chat's questions whole, and the chat now needs the person.
+    async fn ask_in_room(
+        &self,
+        caller: &Caller,
+        ask: AskPerson,
+        started: Instant,
+    ) -> CallToolResult {
+        let (chat, agent) = (
+            caller.chat.clone(),
+            caller.agent.clone().unwrap_or_default(),
+        );
+        let what = ask.what.unwrap_or_default();
+        let question = match ask.why.as_deref().map(str::trim) {
+            Some(why) if !why.is_empty() => format!("{}\n\n{why}", what.trim()),
+            _ => what,
+        };
+        let choices: Vec<gathr::questions::Choice> = ask
+            .choices
+            .unwrap_or_default()
+            .into_iter()
+            .map(|c| gathr::questions::Choice {
+                label: c.label,
+                detail: c.detail,
+            })
+            .collect();
+        let asked = self
+            .chats
+            .writer
+            .call(move |c| {
+                let id = gathr::questions::ask(c, (&chat, &agent), &question, &choices)?;
+                Ok::<_, Error>((id, gathr::questions::of_chat(c, &chat)?))
+            })
+            .await
+            .unwrap_or_else(|| Err(Error::Other("the database didn't answer".into())));
+        let said = asked.map(|(id, questions)| {
+            let event = json!({ "type": "questions", "chat": caller.chat, "questions": questions });
+            self.chats.publish(event);
+            format!("Question {id} is with the person. Their answer wakes you here.")
+        });
+        let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
+        crate::chat_state::changed(&self.chats, &caller.chat, &trace).await;
+        let said = said.map_err(|e| e.to_string());
+        self.respond(caller, "ask_person", started, said).await
     }
 }
 

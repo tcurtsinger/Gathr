@@ -74,6 +74,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0064_board_lines.sql"),
     include_str!("../migrations/0065_chat_room.sql"),
     include_str!("../migrations/0066_agent_picture.sql"),
+    include_str!("../migrations/0067_questions.sql"),
 ];
 
 /// The schema version this build writes.
@@ -724,13 +725,12 @@ mod tests {
         assert_eq!(tried, [true, false, false, false, false]);
     }
 
-    /// 0066: an agent from before has no picture, and removing an agent drops its picture. The last migration
-    /// is held back by position, so the test stays right when an earlier number lands beside it.
+    /// 0066: an agent from before has no picture, and removing an agent drops its picture.
     #[test]
     fn an_agent_from_before_has_no_picture_and_removing_drops_one() {
         let path = temp_db("picture");
         let conn = Connection::open(&path).unwrap();
-        let before = MIGRATIONS.len() - 1;
+        let before = 65;
         for sql in &MIGRATIONS[..before] {
             conn.execute_batch(sql).unwrap();
         }

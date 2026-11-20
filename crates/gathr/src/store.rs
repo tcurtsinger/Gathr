@@ -51,10 +51,12 @@ const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
     AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
 
 /// Whether chat `c` waits on the person, as far as the database knows: a turn waits for a sign-in,
-/// a question to them is open, they were told nothing in it moves and that stretch hasn't ended
-/// (0052), or a plan waits on them (0062). An approval waiting is the service's to add (it's in no table).
+/// a question to them is open (a room chat's or a task), they were told nothing in it moves and that
+/// stretch hasn't ended (0052), or a plan waits on them (0062). An approval waiting is the service's to
+/// add (it's in no table).
 const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
         AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
+    OR EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)
     OR EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
     OR EXISTS (SELECT 1 FROM quiet q WHERE q.chat_id = c.id AND q.told_ts IS NOT NULL)
     OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.chat_id = c.id
@@ -62,7 +64,8 @@ const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
         AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
 /// Whether chat `c` waits on the person for an answer of theirs: `NEEDS` but a sign-in.
-const ASKS: &str = "(EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
+const ASKS: &str = "(EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)
+    OR EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
     OR EXISTS (SELECT 1 FROM quiet q WHERE q.chat_id = c.id AND q.told_ts IS NOT NULL)
     OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.chat_id = c.id
         AND v.sent_ts IS NOT NULL AND v.decided IS NULL
@@ -219,9 +222,11 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .optional()?
         .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
+    let questions = crate::questions::of_chat(conn, chat)?;
     Ok(
         json!({ "chat": chat, "agent": agent, "project": project, "folder": folder, "room": room,
-        "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns }),
+        "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns,
+        "questions": questions }),
     )
 }
 

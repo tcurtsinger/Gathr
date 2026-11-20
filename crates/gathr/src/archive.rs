@@ -147,6 +147,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM reactions WHERE chat_id = ?1".into(),
         "DELETE FROM reads WHERE chat_id = ?1".into(),
         "DELETE FROM board_lines WHERE chat_id = ?1".into(),
+        "DELETE FROM questions WHERE chat_id = ?1".into(),
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         format!("DELETE FROM task_after WHERE task IN {of_tasks} OR after_task IN {of_tasks}"),

@@ -66,7 +66,8 @@ pub enum Opened {
     Liked,
     /// The person replied in a thread (0076): Gathr's line names what the reply answers, and who else got it.
     Reply,
-    /// The person picked several agents (0028): Gathr's line names the others.
+    /// The person picked several agents (0028): Gathr's line names the others. Or the person answered a
+    /// room chat's question: the line carries the answer (`questions`).
     Picked,
     Person,
     Teammate,
