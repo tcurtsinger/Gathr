@@ -132,6 +132,7 @@ type Fields = {
   face_seed?: string;
   skin: number | null;
   background: string | null;
+  picture?: string | null;
   /** Background's last colour not among the twelve, while the form is open: never sent. */
   custom?: string;
 };
@@ -163,7 +164,17 @@ function AgentForm(props: FormProps) {
     skin: null,
     background: null,
   };
-  const { name, account, model, effort, approvals, face_seed, skin, background }: Fields = {
+  const {
+    name,
+    account,
+    model,
+    effort,
+    approvals,
+    face_seed,
+    skin,
+    background,
+    picture = null,
+  }: Fields = {
     ...(agent ?? blank),
     ...edits,
   };
@@ -190,6 +201,7 @@ function AgentForm(props: FormProps) {
     ...(seed !== (agent?.face_seed ?? name.trim()) && { face_seed: seed }),
     ...(skin !== (agent?.skin ?? null) && { skin }),
     ...(background !== (agent?.background ?? null) && { background }),
+    ...(picture !== (agent?.picture ?? null) && { picture }),
   };
   const draft = { name: name.trim(), account, model: model ?? null, effort, approvals, ...face };
   const changed =
@@ -252,6 +264,7 @@ function AgentForm(props: FormProps) {
         seed={seed}
         skin={skin}
         background={background}
+        picture={picture}
         remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}
         onChange={edit}
       />

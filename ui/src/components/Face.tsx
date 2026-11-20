@@ -37,6 +37,8 @@ export interface FaceOf {
   skin?: number | null;
   /** #RRGGBB as the person picked it; none is a grey. */
   background?: string | null;
+  /** A picture the person uploaded, a data URL: shown in place of the drawing. */
+  picture?: string | null;
 }
 
 /** Every agent the window knows, removed ones too, by id: a place that knows only the id draws the saved face. */
@@ -61,9 +63,9 @@ interface Props {
 }
 
 /**
- * An agent's face (0074): its drawing on the background the person picked, the same everywhere, with its state's
- * mark at 20 and up (0071). Fields given here win (a form's unsaved face); otherwise the face the window knows for
- * the id.
+ * An agent's face (0074): its picture, or its drawing on the background the person picked, the same everywhere,
+ * with its state's mark at 20 and up (0071). Fields given here win (a form's unsaved face); otherwise the face the
+ * window knows for the id.
  */
 export function Face({ agent, size, mark, label }: Props) {
   const known = useContext(KnownFaces).get(agent.id);
@@ -80,7 +82,11 @@ export function Face({ agent, size, mark, label }: Props) {
       style={{ background: drawnOn(shown.background) }}
       {...named}
     >
-      <Drawn seed={shown.face_seed ?? shown.name} skin={shown.skin ?? null} />
+      {shown.picture ? (
+        <img src={shown.picture} alt="" draggable={false} />
+      ) : (
+        <Drawn seed={shown.face_seed ?? shown.name} skin={shown.skin ?? null} />
+      )}
       {mark?.state && size >= 20 && size <= 36 && (
         <StateMark state={mark.state} size={size} spin={mark.spin} />
       )}

@@ -5,6 +5,7 @@ use rusqlite::Connection;
 
 // A new migration adds its undo here, at the top.
 const UNDO: &[(i64, &str)] = &[
+    (66, "ALTER TABLE agents DROP COLUMN picture;"),
     (65, "ALTER TABLE chats DROP COLUMN room;"),
     (64, "DROP TABLE board_lines;"),
     (
