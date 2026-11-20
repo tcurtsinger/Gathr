@@ -78,9 +78,10 @@ fn waiting(
     let vale = room.reviews(&lead, &[5]);
     let lead_cwd = PathBuf::from(nth(&data.join("env.jsonl"), 0)["cwd"].as_str().unwrap());
     let vale_cwd = PathBuf::from(nth(&data.join("env.jsonl"), 1)["cwd"].as_str().unwrap());
-    std::fs::write(lead_cwd.join("go"), "").unwrap();
+    // Lead's turn is let go only after the wait: a wait on Lead is refused once Lead is idle.
     let left = room.call(&vale, "wait", wait(&room));
     assert_eq!(left["isError"], false, "{}", text(&left));
+    std::fs::write(lead_cwd.join("go"), "").unwrap();
     (room, vale, vale_cwd)
 }
 
