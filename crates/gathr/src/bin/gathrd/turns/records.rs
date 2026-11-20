@@ -93,11 +93,18 @@ impl Task {
     }
 
     /// Saves a block of the turn's reply. Once one is refused, it and every later block are kept
-    /// in order, unsaved, until a save works: a window reads them as `streaming` meanwhile.
+    /// in order, unsaved, until a save works: a window reads them as `streaming` meanwhile. Only the
+    /// last block is the turn's message (`room::SAID`): NO_REPLY after earlier words is saved empty,
+    /// so those stay working notes.
     pub(super) async fn save_reply(&mut self, ids: &Ids, text: String, ending: bool) {
-        let text = gathr::room::posted(&text).to_string();
-        if text.is_empty() {
+        let worded = self.turn.as_ref().is_some_and(|t| t.worded);
+        let posted = gathr::room::posted(&text).to_string();
+        if posted.is_empty() && !(worded && !text.trim().is_empty()) {
             return;
+        }
+        let text = posted;
+        if let Some(turn) = self.turn.as_mut() {
+            turn.worded = true;
         }
         if self.turn.as_ref().is_none_or(|t| t.save_failed.is_none()) {
             match self.db_message(ids, "assistant", "text", &text).await {

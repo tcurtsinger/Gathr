@@ -1,12 +1,12 @@
 //! What an agent hears of its chat when its turn opens (0081, after SerenityOS's catch-up): the
 //! chat's lines as `Name: words`, with the turn's own ask. A turn that starts a new conversation hears
 //! the last 30; one that goes on in its conversation hears what came since the agent's last turn,
-//! without the lines it said and read there. Never the message that opened the turn, a tool row
-//! or Gathr's copy of a message. The lead hears every line whole; a member hears whole the person's
-//! lines, Gathr's, the lead's and those that name it, and another member's cut to its first sentence.
-//! A whole line is capped as `read_chat` caps it.
+//! without the lines it said and read there. Never the message that opened the turn, a tool row,
+//! an agent's working note (`SAID`) or Gathr's copy of a message. The lead hears every line whole;
+//! a member hears whole the person's lines, Gathr's, the lead's and those that name it, and another
+//! member's cut to its first sentence. A whole line is capped as `read_chat` caps it.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::Error;
 use crate::team::{self, Member, Role};
@@ -88,6 +88,26 @@ pub fn reply_to(conn: &Connection, turn: &str) -> Result<Option<String>, Error> 
                   ORDER BY c.ts DESC, c.rowid DESC LIMIT 1))";
     let found = conn.prepare_cached(sql)?.query_row([turn], |r| r.get(0));
     Ok(found?)
+}
+
+/// SQL for a message `m` said in the room, so not an agent's working note: in a turn only its last
+/// block of words is said; the blocks before it are notes, kept in its steps. Empty last words, which
+/// NO_REPLY after notes leaves, say nothing.
+pub const SAID: &str = "(m.role != 'assistant' OR (trim(m.body) != '' AND NOT EXISTS (
+    SELECT 1 FROM messages n WHERE n.chat_id = m.chat_id AND n.ts >= m.ts AND n.turn_id = m.turn_id
+      AND n.role = 'assistant' AND n.kind = 'text' AND n.rowid != m.rowid
+      AND (n.ts > m.ts OR n.rowid > m.rowid))))";
+
+/// What `turn` said (`SAID`): its last block of words, with its id. `None` when it wrote none, or
+/// ended on NO_REPLY.
+pub fn last_words(conn: &Connection, turn: &str) -> Result<Option<(String, String)>, Error> {
+    let sql = "SELECT id, body FROM messages WHERE turn_id = ?1 AND role = 'assistant'
+               AND kind = 'text' ORDER BY ts DESC, rowid DESC LIMIT 1";
+    let found: Option<(String, String)> = conn
+        .prepare_cached(sql)?
+        .query_row([turn], |r| Ok((r.get(0)?, r.get(1)?)))
+        .optional()?;
+    Ok(found.filter(|(_, body)| !body.trim().is_empty()))
 }
 
 /// The most lines a turn hears.
@@ -197,7 +217,7 @@ fn lines(
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
          WHERE m.chat_id = ?1 AND m.kind = 'text' AND m.copy_of IS NULL
            AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
-           AND m.turn_id IS NOT ?2
+           AND {SAID} AND m.turn_id IS NOT ?2
            AND m.id NOT IN (SELECT copy_of FROM messages WHERE turn_id = ?2 AND copy_of IS NOT NULL)
            AND NOT EXISTS (SELECT 1 FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
                            WHERE u.id = ?2 AND u.opened_by = 'check' AND m.id IN (c.asked, c.answer))

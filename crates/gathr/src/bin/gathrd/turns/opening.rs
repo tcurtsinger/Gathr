@@ -55,6 +55,7 @@ impl Task {
             partial_units: 0,
             reply: None,
             streamed: false,
+            worded: false,
             tools: HashMap::new(),
             thought: None,
             thought_began: None,

@@ -62,7 +62,9 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
       const was = s.partial[e.turn] ?? '';
       const at = e.at ?? was.length;
       if (at + e.text.length <= was.length) return s;
-      const under = e.reply_to ? { ...s.under, [e.turn]: e.reply_to } : s.under;
+      // Each block of words says where it sits: a turn's last one decides.
+      const { [e.turn]: _, ...rest } = s.under;
+      const under = e.reply_to ? { ...rest, [e.turn]: e.reply_to } : rest;
       return {
         ...s,
         under,

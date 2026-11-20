@@ -2,7 +2,8 @@
 //! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
 //! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
 //! a REPLY sits under the message it answers; NO_REPLY posts nothing, and a check that reacts and
-//! writes it closes; the check takes the lead's main message, never its reply. Each
+//! writes it closes; the check takes the lead's main message, never its reply; only a turn's last
+//! words are its message, heard, waking and placed, its earlier words kept as notes. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
 //! given.
 
@@ -38,6 +39,44 @@ fn saying_held(dir: &Path, turns: &[&str], held: Option<usize>) -> PathBuf {
         .collect();
     let file = dir.join("saying.jsonl");
     std::fs::write(&file, said.join("\n") + "\n").unwrap();
+    file
+}
+
+/// Claude Code's stand-in writing, in each of `turns`, its blocks of words with a command run
+/// between each block and the next.
+fn blocks(dir: &Path, turns: &[&[&str]]) -> PathBuf {
+    let frames = std::fs::read_to_string(common::recording("signed_in")).unwrap();
+    let lines: Vec<&str> = frames.trim_end().lines().collect();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() }).to_string();
+    let mut all = Vec::new();
+    for (at, said) in turns.iter().enumerate() {
+        let (last, notes) = said.split_last().unwrap();
+        all.extend(lines[..4].iter().map(|l| l.to_string()));
+        for (n, note) in notes.iter().enumerate() {
+            let id = format!("toolu_{at}_{n}");
+            let content = json!([{ "type": "text", "text": note }]);
+            let message = json!({ "id": format!("msg_{at}_{n}"), "type": "message", "role": "assistant",
+                "content": content });
+            all.push(out(json!({ "type": "assistant", "message": message,
+                "parent_tool_use_id": null, "session_id": "default" })));
+            let input = json!({ "command": "git status --short", "description": "Show changes" });
+            let content = json!([{ "type": "tool_use", "id": id, "name": "Bash", "input": input }]);
+            let message = json!({ "id": format!("msg_{at}_{n}_t"), "type": "message",
+                "role": "assistant", "content": content });
+            all.push(out(json!({ "type": "assistant", "message": message,
+                "parent_tool_use_id": null, "session_id": "default" })));
+            let result = json!([{ "tool_use_id": id, "type": "tool_result", "content": "ok",
+                "is_error": false }]);
+            all.push(out(
+                json!({ "type": "user", "message": { "role": "user", "content": result },
+                "parent_tool_use_id": null, "session_id": "default" }),
+            ));
+        }
+        let last = escaped(&escaped(last));
+        all.extend(lines[4..].iter().map(|l| l.replace("Hi!", &last)));
+    }
+    let file = dir.join("blocks.jsonl");
+    std::fs::write(&file, all.join("\n") + "\n").unwrap();
     file
 }
 
@@ -439,6 +478,62 @@ fn a_check_that_reacts_and_writes_no_reply_closes_and_posts_nothing() {
     let want = [
         (ann.clone(), json!("The map is ready."), Value::Null),
         (json!(lead), json!("The map is ready."), Value::Null),
+    ];
+    assert_eq!(said, want, "{history}");
+}
+
+#[test]
+fn only_a_turns_last_words_are_heard_and_wake_whom_they_name() {
+    let data = TempDir::new();
+    // Every engine plays the same turn: a note naming Bo, a command, then words naming Ann.
+    let turn: &[&str] = &["Looking at @Bo's map first.", "@Ann the map is ready."];
+    let room = room(&data.0, &blocks(&data.0, &[turn]));
+    room.say("Plan the walk", None);
+    let history = room.quiet(2);
+
+    // The lead's last words woke Ann; its note named Bo, who was woken by nothing.
+    assert_eq!(room.turns_of(&history, &room.ann), [json!("teammate")]);
+    assert!(room.turns_of(&history, &room.bo).is_empty(), "{history}");
+    let turns = history["turns"].as_array().unwrap().iter();
+    let ann = turns
+        .into_iter()
+        .find(|t| t["agent"] == room.ann.as_str())
+        .unwrap();
+    let read = common::replay::read_in(&room.data, ann["id"].as_str().unwrap());
+    assert!(read.contains("the map is ready"), "{read}");
+    assert!(!read.contains("Looking at"), "{read}");
+    // The note is kept, as words of the lead's turn.
+    let kept = agents_words(&history).into_iter().map(|(_, body, _)| body);
+    assert!(
+        kept.into_iter().any(|b| b == "Looking at @Bo's map first."),
+        "{history}"
+    );
+}
+
+#[test]
+fn a_turn_whose_last_words_start_with_reply_is_a_reply_whatever_came_before() {
+    let data = TempDir::new();
+    // The lead, woken by the person, posts a main message; Ann's same turn answers it.
+    let turn: &[&str] = &["Looking into it.", "REPLY\n@Ann the river bends."];
+    let room = room(&data.0, &blocks(&data.0, &[turn]));
+    room.say("Plan the walk", None);
+    let history = room.quiet(2);
+
+    let said = agents_words(&history);
+    let main = history["messages"].as_array().unwrap().iter();
+    let mut main =
+        main.filter(|m| m["role"] == "assistant" && m["body"] == "@Ann the river bends.");
+    let main = main.next().unwrap()["id"].clone();
+    let note = json!("Looking into it.");
+    let want = [
+        (json!(room.lead), note.clone(), Value::Null),
+        (
+            json!(room.lead),
+            json!("@Ann the river bends."),
+            Value::Null,
+        ),
+        (json!(room.ann), note, Value::Null),
+        (json!(room.ann), json!("@Ann the river bends."), main),
     ];
     assert_eq!(said, want, "{history}");
 }

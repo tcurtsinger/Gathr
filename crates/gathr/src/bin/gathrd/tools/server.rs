@@ -192,17 +192,19 @@ fn read(conn: &Connection, chat: &str, ask: &ReadChat) -> Result<String, String>
     Ok(lines.join("\n"))
 }
 
-/// The chat's text messages that pass `filter`, newest first, with who wrote each.
+/// The chat's text messages that pass `filter`, newest first, with who wrote each: an agent's working
+/// notes aren't among them.
 fn rows(
     conn: &Connection,
     filter: &str,
     params: Vec<rusqlite::types::Value>,
     limit: usize,
 ) -> Result<Vec<Row>, String> {
+    let said = gathr::room::SAID;
     let query = format!(
         "SELECT m.id, m.role, a.name, m.body FROM messages m \
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id \
-         WHERE m.chat_id = ?1 AND m.kind = 'text' {filter} \
+         WHERE m.chat_id = ?1 AND m.kind = 'text' AND {said} {filter} \
          ORDER BY m.ts DESC, m.id DESC LIMIT {limit}"
     );
     let row = |r: &rusqlite::Row| {

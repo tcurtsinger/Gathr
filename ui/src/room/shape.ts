@@ -1,16 +1,26 @@
 import type { Message, Question, ToolBody, Turn } from '../api';
 import type { RoomState } from './useRoom';
 
-/** An agent's turn as a card: its words, its tool runs, and the replies tucked under it. */
+/** A block of words an agent wrote before its last words in a turn: kept in the turn's steps, never its message. */
+export interface Note {
+  note: string;
+}
+
+export type Step = ToolBody | Note;
+
+/** An agent's turn as a card: its last words, its steps, and the replies tucked under it. */
 export interface Card {
   kind: 'card';
   id: string;
   turn: Turn;
-  /** Its saved words, then the words still streaming. */
+  /** Its last words: the block streaming now, else its last saved one. */
   text: string;
-  /** Its saved messages of words: thumbs-ups go on these. */
+  /** Its saved messages of words, notes too: thumbs-ups on any show, and a search hit on any opens the card. */
   said: Message[];
-  steps: ToolBody[];
+  /** The message of its last words: the person's thumbs-up goes on it. */
+  last?: Message;
+  /** Its tool runs and its working notes, in the order they came. */
+  steps: Step[];
   at: number;
   replies: Item[];
 }
@@ -65,28 +75,33 @@ export function shape(s: RoomState): (Item | Asked)[] {
       ref: '',
       created: mine[0]?.time,
     };
-    if (turn.status === 'queued' && !s.partial[turn.id]) continue;
+    const streaming = s.partial[turn.id];
+    if (turn.status === 'queued' && !streaming) continue;
     const said = mine.filter((m) => m.kind === 'text' && typeof m.body === 'string');
-    const text = [...said.map((m) => m.body as string), s.partial[turn.id] ?? '']
-      .filter(Boolean)
-      .join('\n\n');
+    // Only the last words are the message. While the turn runs, words it went on from to a tool are a note already.
+    const newest = said.at(-1);
+    const moved = mine.findLast((m) => m.kind === 'tool' || m.kind === 'text') !== newest;
+    const last = !streaming && newest && !(open(turn) && moved) ? newest : undefined;
+    const text = streaming || ((last?.body as string | undefined) ?? '');
     if (!text && turn.status === 'done') continue;
-    const steps = mine.filter((m) => m.kind === 'tool').map((m) => m.body as ToolBody);
+    const steps = mine.flatMap((m): Step[] => {
+      if (m.kind === 'tool') return [m.body as ToolBody];
+      return m.kind === 'text' && m !== last && m.body ? [{ note: m.body as string }] : [];
+    });
     const at = Math.max(time(turn.created ?? mine[0]?.time), opener.get(turn.id) ?? 0);
-    cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, steps, at, replies: [] });
+    cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, last, steps, at, replies: [] });
   }
   const cardOf = new Map<string, string>();
   for (const c of cards.values()) for (const m of byTurn.get(c.id) ?? []) cardOf.set(m.id, c.id);
 
   // Where each item sits: under the main message its `reply_to` names (an agent's card or the person's message),
-  // or in the main chat.
+  // or in the main chat. An agent's card sits where its last words do.
   const parent = new Map<string, string>();
   const under = (id: string, to?: string | null) => {
     const host = to && (cardOf.get(to) ?? to);
     if (host && host !== id) parent.set(id, host);
   };
-  for (const c of cards.values())
-    under(c.id, byTurn.get(c.id)?.find((m) => m.reply_to)?.reply_to ?? s.under[c.id]);
+  for (const c of cards.values()) under(c.id, s.partial[c.id] ? s.under[c.id] : c.said.at(-1)?.reply_to);
   const items: Item[] = [...cards.values()];
   for (const m of s.messages) {
     if (m.role !== 'user' || m.kind !== 'text') continue;
@@ -132,14 +147,17 @@ const COUNTED: Record<string, [string, string]> = {
   PowerShell: ['Ran', 'command'],
 };
 
-/** What a turn's tool runs did, as its one line: "Read 4 files, ran 2 commands", "Ran 14 steps", "5 steps so far". */
-export function stepsLine(steps: ToolBody[], running: boolean): string {
+/**
+ * What a turn's steps did, as its one line: "Read 4 files, ran 2 commands", "Ran 14 steps", "5 steps so far". A
+ * working note counts as a step.
+ */
+export function stepsLine(steps: Step[], running: boolean): string {
   const n = steps.length;
   if (running) return `${n} ${n === 1 ? 'step' : 'steps'} so far`;
   const counts = new Map<string, number>();
   let other = 0;
   for (const s of steps) {
-    const kind = COUNTED[s.tool];
+    const kind = 'tool' in s ? COUNTED[s.tool] : undefined;
     if (!kind) other++;
     else counts.set(kind.join(' '), (counts.get(kind.join(' ')) ?? 0) + 1);
   }

@@ -76,8 +76,8 @@ pub fn paused_line(limit: i64) -> String {
     format!("Paused after {limit} hand-offs between agents. Resume to carry on.")
 }
 
-/// A member an agent's words named (0081): what it is told, `{from}: {words}`, with the words of the
-/// sender's messages that name it, and the first of them, which Gathr's copy carries.
+/// A member an agent's words named (0081): what it is told, `{from}: {words}`, and the message of
+/// those words, which Gathr's copy carries.
 #[derive(Debug)]
 pub struct Named {
     pub to: String,
@@ -107,9 +107,9 @@ pub struct Mentions {
 }
 
 /// The members `turn`'s words name with `@Name` (0081), but its own agent and, for a check, the lead
-/// it checks, each recorded as a hand-off from the turn's agent. Its words are its text messages in
-/// the chat. Past the limit the chat pauses, the line saying so goes in the turn, and nobody from
-/// that member on is named. None in a chat of one agent, or an
+/// it checks, each recorded as a hand-off from the turn's agent. Its words are its last words
+/// (`room::last_words`), never its working notes. Past the limit the chat pauses, the line saying
+/// so goes in the turn, and nobody from that member on is named. None in a chat of one agent, or an
 /// archived one.
 pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, Error> {
     let found: Option<(String, Option<String>)> = conn
@@ -140,13 +140,9 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
     else {
         return Ok(woke);
     };
-    let said: Vec<(String, String)> = conn
-        .prepare_cached(
-            "SELECT id, body FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND kind = 'text'
-             AND to_agent IS NULL ORDER BY ts, id",
-        )?
-        .query_map([turn], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .collect::<Result<_, _>>()?;
+    let Some((message, words)) = crate::room::last_words(conn, turn)? else {
+        return Ok(woke);
+    };
     // A check's words reach the lead whose answer it checks in the lead's last word (0080): naming
     // the lead there wakes nobody.
     let lead: Option<String> = conn
@@ -157,23 +153,10 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         .query_row([turn], |r| r.get::<_, Option<String>>(0))
         .optional()?
         .flatten();
-    let names = |body: &str, agent: &str| {
-        let named = crate::team::mentioned(&team, body);
-        named.iter().any(|m| m.agent == agent)
-    };
-    let all: Vec<&str> = said.iter().map(|(_, body)| body.as_str()).collect();
-    for member in crate::team::mentioned(&team, &all.join("\n\n")) {
+    for member in crate::team::mentioned(&team, &words) {
         if member.agent == from || lead.as_deref() == Some(member.agent.as_str()) {
             continue;
         }
-        let naming: Vec<&(String, String)> = said
-            .iter()
-            .filter(|(_, b)| names(b, &member.agent))
-            .collect();
-        let Some((message, _)) = naming.first() else {
-            continue;
-        };
-        let words: Vec<&str> = naming.iter().map(|(_, body)| body.as_str()).collect();
         let counted = record(conn, &chat, &from, &member.agent)?;
         if let Some(limit) = counted.over {
             crate::pauses::pause(conn, "chat", &chat, false, trace)?;
@@ -190,7 +173,7 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         }
         woke.named.push(Named {
             to: member.agent.clone(),
-            told: format!("{}: {}", sender.name, words.join("\n\n")),
+            told: format!("{}: {words}", sender.name),
             message: message.clone(),
             depth: counted.depth,
         });

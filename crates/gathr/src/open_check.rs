@@ -10,6 +10,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
+use crate::room::{SAID, last_words};
 use crate::store::Start;
 use crate::team::Role;
 use crate::words::Opened;
@@ -85,48 +86,6 @@ pub fn answer_of(conn: &Connection, turn: &str) -> Result<String, Error> {
         })
 }
 
-/// Gathr's calls that only report or place: words followed by nothing else are still the message.
-const NOT_A_STEP: [&str; 1] = ["mcp__gathr__react"];
-
-/// A turn's message, as the window draws it (0082, `ui/src/chat/fold.ts`): the words it wrote after
-/// its last step, else its last words. Words before a later step are narration, which no agent hears.
-fn message_of(tx: &Transaction, turn: &str) -> Result<Option<String>, Error> {
-    let mut stmt = tx.prepare_cached(
-        "SELECT kind, body FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND to_agent IS NULL
-         ORDER BY ts, rowid",
-    )?;
-    let rows = stmt.query_map([turn], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-    })?;
-    let mut said: Vec<String> = Vec::new();
-    let mut last = None;
-    for row in rows {
-        let (kind, body) = row?;
-        let fields = || serde_json::from_str::<serde_json::Value>(&body).unwrap_or_default();
-        let step = match kind.as_str() {
-            "text" if !body.trim().is_empty() => {
-                said.push(body.trim().to_string());
-                false
-            }
-            "tool" => !NOT_A_STEP.contains(&fields()["tool"].as_str().unwrap_or_default()),
-            // A thought under a second isn't drawn, so it is no step either.
-            "thinking" => {
-                let f = fields();
-                f["status"] == "running" || f["duration_ms"].as_i64().unwrap_or(0) >= 1000
-            }
-            _ => false,
-        };
-        if step {
-            last = said.pop().or(last);
-            said.clear();
-        }
-    }
-    Ok(match said.is_empty() {
-        true => last,
-        false => Some(said.join("\n\n")),
-    })
-}
-
 fn under_way(tx: &Transaction, chat: &str) -> Result<Vec<Round>, Error> {
     let mut stmt = tx.prepare_cached(
         "SELECT id, asked, answer, answer_turn, last_word FROM open_checks
@@ -182,11 +141,13 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
         [&asked_turn],
         |r| r.get(0),
     )?;
-    // A turn that replied in a thread answered a teammate, not the person: its words aren't checked.
+    // A turn whose last words replied in a thread answered a teammate, not the person: they aren't
+    // checked.
     let sql = format!(
         "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2
            AND (opened_by IS NULL OR opened_by NOT IN {NOT_AN_ANSWER}) AND created_ts >= ?3
-           AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.turn_id = turns.id AND m.role = 'assistant' AND m.reply_to IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.turn_id = turns.id AND m.role = 'assistant'
+                           AND m.kind = 'text' AND m.reply_to IS NOT NULL AND {SAID})
          ORDER BY created_ts DESC, rowid DESC LIMIT 1"
     );
     let newest: Option<(String, String)> = tx
@@ -198,7 +159,7 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
     let Some((answer_turn, "done")) = newest.as_ref().map(|(t, s)| (t.clone(), s.as_str())) else {
         return Ok(None);
     };
-    let Some(answer) = answer_in(tx, &answer_turn)? else {
+    let Some((answer, _)) = last_words(tx, &answer_turn)? else {
         return Ok(None);
     };
     let sql = format!(
@@ -229,16 +190,6 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
 /// debug build): rounds still end, with no turns of their own.
 fn nobody_checks() -> bool {
     cfg!(debug_assertions) && std::env::var_os("GATHR_OPEN_CHECK").is_some_and(|v| v == "off")
-}
-
-/// The message of `turn` that is its answer: its last words.
-fn answer_in(tx: &Transaction, turn: &str) -> Result<Option<String>, Error> {
-    let sql = "SELECT id FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND kind = 'text'
-                 AND trim(body) != '' ORDER BY ts DESC, rowid DESC LIMIT 1";
-    Ok(tx
-        .prepare_cached(sql)?
-        .query_row([turn], |r| r.get(0))
-        .optional()?)
 }
 
 /// Records the round and queues each checker's turn, answering the answer's turn so it sits in its
@@ -302,9 +253,9 @@ fn advance(tx: &Transaction, chat: &str, round: &Round, trace: &str) -> Result<V
         ..Counts::default()
     };
     for (agent, _, agreed, turn) in checks {
-        match (agreed, message_of(tx, &turn)?) {
+        match (agreed, last_words(tx, &turn)?) {
             (true, _) => counts.agreed += 1,
-            (false, Some(said)) => counts.objected.push((agent, said)),
+            (false, Some((_, said))) => counts.objected.push((agent, said.trim().to_string())),
             (false, None) => counts.silent += 1,
         }
     }
