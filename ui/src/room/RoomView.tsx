@@ -74,7 +74,10 @@ export function RoomView(props: Props) {
   const running = Object.values(state.turns).some((t) => t.status === 'running');
 
   const send = (text: string, agent?: string, named?: PickedName[], again?: Unsent) => {
-    if (fresh) return props.onStart(text, agent, named);
+    if (fresh) {
+      if (again) onUnsent((list) => list.filter((f) => f.id !== again.id));
+      return props.onStart(text, agent, named);
+    }
     const first = state.messages.length === 0;
     api.send(chat.id, text, agent, named).then(
       () => {
