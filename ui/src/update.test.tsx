@@ -45,6 +45,7 @@ function service(app: AppState) {
     }
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
+    if (path.endsWith('/board')) return json({ lines: [], agents: 1 });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     return json(path.startsWith('/api/chats') ? [] : {});

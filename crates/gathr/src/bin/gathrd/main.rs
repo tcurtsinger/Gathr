@@ -8,6 +8,7 @@ mod agents;
 mod api;
 mod app_update;
 mod archive;
+mod board;
 mod changes;
 mod chat_state;
 mod chats;

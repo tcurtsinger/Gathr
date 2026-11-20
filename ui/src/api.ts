@@ -512,6 +512,15 @@ export interface Chat {
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';
 
+/** A piece of work on a chat's board, set by its agents. `owner` is an agent's id, `name` its name. */
+export interface BoardLine {
+  id: number;
+  owner: string;
+  name: string;
+  text: string;
+  state: 'to_do' | 'doing' | 'in_review' | 'done';
+}
+
 /** A chat whose title holds the query (0035). `time` is its last activity. */
 export interface ChatHit {
   chat: string;
@@ -714,6 +723,7 @@ export const api = {
   caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
+  board: (chat: string) => call<{ lines: BoardLine[]; agents: number }>('GET', `/api/chats/${chat}/board`),
   tasks: (chat: string) =>
     call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[]; caught: string[] }>(
       'GET',

@@ -11,6 +11,7 @@ import {
   type Project,
   type Task,
 } from './api';
+import { Board } from './Board';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
@@ -494,6 +495,7 @@ export function App() {
           <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
         </>
       )}
+      {chat?.id && <Board key={`board-${chat.id}`} chat={chat.id} onFailure={setFailure} />}
       <NewProject
         open={newProject}
         agents={agents}

@@ -1,6 +1,7 @@
 import type {
   AppState,
   Ask,
+  BoardLine,
   ChatMark,
   Context,
   Member,
@@ -27,6 +28,8 @@ export type LiveEvent =
   | { type: 'tool'; chat: string; message: string; body: ToolBody | ThinkingBody }
   // A new thumbs-up, an agent's or the person's like; a repeat sends nothing. `removed`: the person took theirs back.
   | { type: 'reaction'; chat: string; reaction: Reaction; removed?: boolean }
+  // An agent set a line of the chat's board: the board, whole.
+  | { type: 'board'; chat: string; lines: BoardLine[] }
   // Where the person left off changed, in this window or another (0077): each thread's row as kept.
   | { type: 'reads'; chat: string; reads: Read[] }
   // `agent`: the agent the turn was sent to, null for none.
