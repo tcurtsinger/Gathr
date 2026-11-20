@@ -278,56 +278,40 @@ test('Delete asks with what the service counts, then deletes the agent', async (
   expect(sent).toEqual([{ method: 'DELETE', path: '/api/agents/x', body: undefined }]);
 });
 
-test('a face never set shows what its seed picked; a gender or a tone chosen redraws it and is saved', async () => {
-  // Ann's seed picks a woman of tone 5 (the faces mock-up's generator).
+test('a face never set shows what its seed picked; a tone chosen redraws it and is saved', async () => {
+  // Ann's seed picks tone 3.
   service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const face = screen.getByRole('img', { name: 'Ann' });
-  const gender = screen.getByRole('combobox', { name: 'Gender' });
-  await expect.element(gender).toHaveValue('woman');
   await expect
-    .element(screen.getByRole('button', { name: 'Skin tone 5' }))
+    .element(screen.getByRole('button', { name: 'Skin tone 3' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
   const before = face.element().innerHTML;
-  await gender.selectOptions('Man');
-  expect(face.element().innerHTML).not.toBe(before);
-  const man = face.element().innerHTML;
   await screen.getByRole('button', { name: 'Skin tone 2' }).click();
   await expect
     .element(screen.getByRole('button', { name: 'Skin tone 2' }))
     .toHaveAttribute('aria-pressed', 'true');
-  expect(face.element().innerHTML).not.toBe(man);
+  expect(face.element().innerHTML).not.toBe(before);
 
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect
     .poll(() => sent.at(-1)?.body)
-    .toEqual({
-      name: 'Ann',
-      account: 'a',
-      model: null,
-      effort: null,
-      approvals: 'auto',
-      gender: 'man',
-      skin: 2,
-    });
+    .toEqual({ name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', skin: 2 });
 });
 
-test('Shuffle draws a new face from a new seed and keeps the gender and tone shown, saving them', async () => {
-  // Nothing set: Ann's seed picks a woman of tone 5, and the form shows them.
+test('Shuffle draws a new face from a new seed and keeps the tone shown, saving it', async () => {
+  // Nothing set: Ann's seed picks tone 3, and the form shows it.
   service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const face = screen.getByRole('img', { name: 'Ann' });
-  const gender = screen.getByRole('combobox', { name: 'Gender' });
-  await expect.element(gender).toHaveValue('woman');
+  const tone = screen.getByRole('button', { name: 'Skin tone 3' });
+  await expect.element(tone).toHaveAttribute('aria-pressed', 'true');
   const before = face.element().innerHTML;
   await screen.getByRole('button', { name: 'Shuffle' }).click();
   expect(face.element().innerHTML).not.toBe(before);
-  await expect.element(gender).toHaveValue('woman');
-  await expect
-    .element(screen.getByRole('button', { name: 'Skin tone 5' }))
-    .toHaveAttribute('aria-pressed', 'true');
+  await expect.element(tone).toHaveAttribute('aria-pressed', 'true');
 
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => sent.length).toBe(1);
@@ -335,7 +319,7 @@ test('Shuffle draws a new face from a new seed and keeps the gender and tone sho
   expect([typeof face_seed, face_seed === 'Ann', rest]).toEqual([
     'string',
     false,
-    { name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', gender: 'woman', skin: 5 },
+    { name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', skin: 3 },
   ]);
 });
 

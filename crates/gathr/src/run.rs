@@ -44,6 +44,38 @@ pub async fn run(
     started(program, args, dir, env, limit, false).await
 }
 
+/// The person's environment now (G23), as engines and git get it.
+pub async fn fresh() -> Vars {
+    tokio::task::spawn_blocking(|| crate::platform::env::fresh(std::env::vars_os().collect()).vars)
+        .await
+        .unwrap_or_else(|_| std::env::vars_os().collect())
+}
+
+/// Asks GitHub through `gh` in `dir`, with the person's environment now, but never its debug output:
+/// `GH_DEBUG` prints the HTTP traffic, headers and all, into what an error can show an agent (0046).
+pub async fn github(args: &[&str], dir: &Path) -> Result<String, String> {
+    let mut vars = fresh().await;
+    vars.retain(|(name, _)| !name.eq_ignore_ascii_case("GH_DEBUG"));
+    gh(args, dir, &vars).await
+}
+
+/// Runs `gh`, once more if it fails (G5): what it printed, or why it failed.
+pub async fn gh(args: &[&str], dir: &Path, vars: &Vars) -> Result<String, String> {
+    // GitHub's `gh`, or what `GATHR_GH_PATH` names in its place, in dev and tests only (the
+    // replay harness's `fake_gh`).
+    let program = std::env::var_os("GATHR_GH_PATH").unwrap_or_else(|| "gh".into());
+    let (program, limit) = (Path::new(&program), Duration::from_secs(60));
+    let mut why = String::new();
+    for _ in 0..2 {
+        match run(program, args, dir, vars, limit).await {
+            Ok(ran) if ran.code == Some(0) => return Ok(ran.out),
+            Ok(ran) => why = format!("gh {} failed: {}", args[0], ran.reason()),
+            Err(e) => why = e,
+        }
+    }
+    Err(why)
+}
+
 /// Runs `script` in `shell` as `run` does, with the shell kept until what it printed is read. A
 /// script dropped before then (Archive, cancel, its limit) takes everything it started with it,
 /// even what it left running after its own shell ended (1216).

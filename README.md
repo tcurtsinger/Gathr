@@ -53,3 +53,5 @@ Licensed under either of
 at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+Agents' pictures are DiceBear's Dylan style (MIT), from [Dylan! The Avatar Generator](https://www.figma.com/community/file/1356575240759683500) by Natalia Spivak, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), changed.

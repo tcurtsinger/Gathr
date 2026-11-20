@@ -30,6 +30,7 @@ mod reads;
 mod routes;
 mod search;
 mod serve;
+mod settings;
 mod sign_in;
 mod startup;
 mod team;

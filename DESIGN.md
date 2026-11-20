@@ -812,7 +812,7 @@ General starts with Theme for This computer: System (default, follows the system
 setting), Light or Dark, applied at once without a reload. Then Open at login for
 This computer, applied immediately with Switch. The window keeps the theme and the
 navigation and workspace widths across restarts. General ends with the version and, under it, the faces'
-credit (0074): "Faces", then "Avatar Illustration System by Micah Lanier, CC BY 4.0, changed", the work
+credit: "Faces", then "Dylan! The Avatar Generator by Natalia Spivak, CC BY 4.0, changed", the work
 and the licence linked.
 
 Agent folder follows Open at login: the current path, Change and shared ? Help.
@@ -827,13 +827,14 @@ stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Face, Gender, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
-56px face and Shuffle, which draws it from a new seed and keeps the gender and tone shown; Gender is Man or Woman; Skin tone is six swatches,
+one shared editor: Face, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
+56px face (DiceBear's Dylan; the seed picks hair, hair colour, mood and facial hair) and Shuffle, which draws it
+from a new seed and keeps the tone shown; Skin tone is six swatches,
 light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
 for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
 row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
 not among the twelve shows on the +, pressed, and stays on it, not pressed, while a ready colour is picked. Escape or a click outside closes the picker, not Settings. Each
-redraws the face at once and is saved with Save. A gender or tone never set shows what the face's seed picked;
+redraws the face at once and is saved with Save. A tone never set shows what the face's seed picked;
 a background never set is the grey, with no swatch pressed (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,

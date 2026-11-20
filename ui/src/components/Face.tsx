@@ -1,19 +1,39 @@
+import { createAvatar } from '@dicebear/core';
+import * as dylan from '@dicebear/dylan';
 import { createContext, memo, useCallback, useContext, useMemo, useRef } from 'react';
-import { drawnOn } from '../faces/backgrounds';
-import { Drawing } from '../faces/Drawing';
-import { faceOptions, type Gender } from '../faces/options';
+import { drawnOn } from './backgrounds';
 import { useCards } from './FaceCard';
 import type { Card, Mark } from './marks';
 import { StateMark } from './StateMark';
 import './face.css';
 
-/** What a face is drawn from: its seed, gender, skin tone and background when known. */
+/** Six skin tones, light to deep (skin tone 1 to 6). */
+export const SKIN = ['FFE1CC', 'EDC1A7', 'D8A184', 'C28266', 'AA654B', '904A34'];
+/** Dylan's moods but angry, sad and confused: no agent looks upset for good. */
+const MOODS: dylan.Options['mood'] = ['happy', 'neutral', 'superHappy', 'hopeful'];
+
+/**
+ * DiceBear's Dylan for a seed, with no background, and its skin tone: the person's, or the seed's pick. The seed
+ * picks everything else.
+ */
+export function drawFace(seed: string, skin: number | null) {
+  const made = createAvatar(dylan, {
+    seed,
+    mood: MOODS,
+    skinColor: skin ? [SKIN[skin - 1]] : SKIN,
+    backgroundColor: [],
+    clip: false,
+  });
+  const picked = String(made.toJson().extra.skinColor).slice(1).toUpperCase();
+  return { src: made.toDataUri(), skin: SKIN.indexOf(picked) + 1 };
+}
+
+/** What a face is drawn from: its seed, skin tone and background when known. */
 export interface FaceOf {
   id: string;
   name: string;
   /** Its name when it was made, until Shuffle; a face with none is drawn from the name. */
   face_seed?: string;
-  gender?: Gender | null;
   skin?: number | null;
   /** #RRGGBB as the person picked it; none is a grey. */
   background?: string | null;
@@ -60,7 +80,7 @@ export function Face({ agent, size, mark, label }: Props) {
       style={{ background: drawnOn(shown.background) }}
       {...named}
     >
-      <Drawn seed={shown.face_seed ?? shown.name} gender={shown.gender ?? null} skin={shown.skin ?? null} />
+      <Drawn seed={shown.face_seed ?? shown.name} skin={shown.skin ?? null} />
       {mark?.state && size >= 20 && size <= 36 && (
         <StateMark state={mark.state} size={size} spin={mark.spin} />
       )}
@@ -105,17 +125,9 @@ function useCard(card?: Card) {
  * Drawn again only when what it is drawn from changes: a streamed token, a new message or a background dragged in
  * the picker never redraws one.
  */
-const Drawn = memo(function Drawn({
-  seed,
-  gender,
-  skin,
-}: {
-  seed: string;
-  gender: Gender | null;
-  skin: number | null;
-}) {
-  const options = useMemo(() => faceOptions(seed, { gender, skin }), [seed, gender, skin]);
-  return <Drawing options={options} />;
+const Drawn = memo(function Drawn({ seed, skin }: { seed: string; skin: number | null }) {
+  const src = useMemo(() => drawFace(seed, skin).src, [seed, skin]);
+  return <img src={src} alt="" draggable={false} />;
 });
 
 /** Gathr's own face: three dots come together, never an initial, so it never reads as an agent's. */

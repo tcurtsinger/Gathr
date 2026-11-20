@@ -522,6 +522,65 @@ pub fn set_turn(
     .map_err(Error::from)
 }
 
+/// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
+/// works on. It's saved, queued with Gathr's message as its ask, in the transaction of the change
+/// that calls for it: a stop right after that commit loses nothing, as the next start takes it over.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Start {
+    pub chat: String,
+    pub agent: String,
+    pub task: Option<i64>,
+    /// The turn it answers: the one that gave its task, or that left its wait.
+    pub answers: Option<String>,
+    pub text: String,
+    pub turn: String,
+    pub trace: String,
+    /// Gathr's message, as the live socket sends it.
+    pub message: Value,
+    /// It's a hear-back: what became of the tasks its agent gave (`held::hear_backs`), which a
+    /// merge doesn't send the agent that merged (G159).
+    pub hear_back: bool,
+}
+
+impl Start {
+    pub fn queue(
+        conn: &Connection,
+        (chat, agent): (&str, &str),
+        (task, answers): (Option<i64>, Option<&str>),
+        opened: crate::words::Opened,
+        text: String,
+    ) -> Result<Start, Error> {
+        let saved = Self::save(conn, (chat, Some(agent)), (task, answers), opened, &text)?;
+        let (turn, trace, message) = saved;
+        Ok(Start {
+            chat: chat.to_string(),
+            agent: agent.to_string(),
+            task,
+            answers: answers.map(String::from),
+            text,
+            turn,
+            trace,
+            message,
+            hear_back: false,
+        })
+    }
+
+    /// Saves the turn and its ask, for an agent or (in a chat sent to no agent) none: its id, trace
+    /// and message.
+    pub fn save(
+        conn: &Connection,
+        (chat, agent): (&str, Option<&str>),
+        (task, answers): (Option<i64>, Option<&str>),
+        opened: crate::words::Opened,
+        text: &str,
+    ) -> Result<(String, String, Value), Error> {
+        let (turn, trace) = (ulid(now_us()), crate::ids::trace_id());
+        add_turn(conn, chat, &turn, &trace, (agent, task, answers), opened)?;
+        let message = add_message(conn, chat, &turn, "gathr", "text", text)?;
+        Ok((turn, trace, message))
+    }
+}
+
 /// A turn's place in its chat (none until it starts), when it was made, the ask it is the result
 /// of, the words that opened it and when it ended, as history shows them.
 pub type TurnPlace = (

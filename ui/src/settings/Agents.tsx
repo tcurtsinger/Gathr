@@ -5,7 +5,6 @@ import { danger } from '../components/Confirm';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
-import type { Gender } from '../faces/options';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
@@ -131,7 +130,6 @@ type Fields = {
   approvals: Approvals;
   /** Undefined for a new agent until Shuffle: its face comes from its name. */
   face_seed?: string;
-  gender: Gender | null;
   skin: number | null;
   background: string | null;
   /** Background's last colour not among the twelve, while the form is open: never sent. */
@@ -162,11 +160,10 @@ function AgentForm(props: FormProps) {
     model: undefined,
     effort: null,
     approvals: 'auto',
-    gender: null,
     skin: null,
     background: null,
   };
-  const { name, account, model, effort, approvals, face_seed, gender, skin, background }: Fields = {
+  const { name, account, model, effort, approvals, face_seed, skin, background }: Fields = {
     ...(agent ?? blank),
     ...edits,
   };
@@ -191,7 +188,6 @@ function AgentForm(props: FormProps) {
   // A face field goes with the save only when it changed, so Save never writes an untouched one back.
   const face = {
     ...(seed !== (agent?.face_seed ?? name.trim()) && { face_seed: seed }),
-    ...(gender !== (agent?.gender ?? null) && { gender }),
     ...(skin !== (agent?.skin ?? null) && { skin }),
     ...(background !== (agent?.background ?? null) && { background }),
   };
@@ -254,7 +250,6 @@ function AgentForm(props: FormProps) {
         id={agent?.id ?? ''}
         name={name.trim()}
         seed={seed}
-        gender={gender}
         skin={skin}
         background={background}
         remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}

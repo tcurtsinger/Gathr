@@ -11,7 +11,7 @@ use gathr::event::Event;
 use gathr::ids::{now_us, span_id, ulid};
 use gathr::pauses::{self, Pause};
 use gathr::store;
-use gathr::tasks::Start;
+use gathr::store::Start;
 use serde_json::json;
 
 use super::{Ids, Running, Task};

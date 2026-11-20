@@ -84,7 +84,7 @@ async fn run(chats: &Arc<Chats>, chat: Option<&str>, paths: Option<Vec<PathBuf>>
         }
         None => return Vec::new(),
     };
-    let env = crate::coord::fresh().await;
+    let env = gathr::run::fresh().await;
     let mut left = match paths {
         Some(_) => Vec::new(),
         None => prs::sweep(chats, &env, chat).await,

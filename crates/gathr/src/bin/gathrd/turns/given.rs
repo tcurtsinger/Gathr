@@ -4,7 +4,7 @@
 //! called for them.
 
 use gathr::event::Event;
-use gathr::tasks::Start;
+use gathr::store::Start;
 use serde_json::json;
 
 use super::{Ids, Queued, Task};
