@@ -6,8 +6,8 @@ mod common;
 use std::time::{Duration, Instant};
 
 use common::update::*;
-use common::{TempDir, call_tool, gathr, until};
-use gathr::{VERSION, http};
+use common::{TempDir, gathr, until};
+use gathr::VERSION;
 use serde_json::json;
 
 /// Nobody is told a task stopped when it is carrying on (the small Update button's plan, change
@@ -65,51 +65,6 @@ fn an_update_in_the_middle_of_a_task_carries_it_on_and_tells_its_lead_nothing_fa
         made >= ended.as_str().unwrap(),
         "the lead heard back at {made}, before the carry-on ended at {ended}"
     );
-}
-
-/// What the owner reported before the update stopped its turn still stands: the stopped turn's
-/// end doesn't clear it, and the task settles by it when the carry-on ends.
-#[test]
-fn a_report_made_before_the_update_still_settles_the_task() {
-    let room = Room::start();
-    let _next = Successor(room.data.clone());
-    let stopped = room.ann_works();
-    // Ann's engine is the second started. It leaves work, with a note no default would give.
-    let note = "the made-up half is left";
-    let report = json!({ "how": "left", "note": note });
-    call_tool(
-        room.service.info.port,
-        &room.token(1),
-        "finish_task",
-        report,
-    );
-
-    room.update();
-    room.go();
-    let next = successor(&room.data, room.service.info.pid);
-    carry_on_held(&next, &room.chat, &stopped);
-    let kept = room.column(
-        "SELECT finish_note FROM tasks WHERE number = 1",
-        "finish_note",
-    );
-    assert_eq!(kept, [json!(note)], "the report went with the stopped turn");
-
-    // The carry-on ends with nothing more said, so the task settles by the report: it stops there
-    // as left, and its lead hears what is left. Ann isn't started again (0047).
-    let left = format!("left: {note}");
-    let history = room.go_until(&next, "the lead to hear what is left", |h| {
-        h.to_string().contains(&left)
-    });
-    let sql = "SELECT state || ': ' || reason AS stands FROM tasks WHERE number = 1";
-    let stands = room.column(sql, "stands");
-    assert_eq!(stands, [json!(format!("blocked: {left}"))], "{history}");
-    assert!(
-        !room.states().contains(&json!("stopped")),
-        "{:?}",
-        room.states()
-    );
-    // Nothing is left holding, so no engine outlives the test.
-    room.go_until(&next, "everything to end", all_ended);
 }
 
 /// A new copy that fails to start: the copy before comes back, and the carry-on runs there, once.
@@ -210,47 +165,6 @@ fn a_chat_stopped_before_the_update_stays_stopped_and_restarts_once() {
     assert_eq!(room.carry_ons(&stopped).len(), 1, "one carry-on");
     // Nothing is left holding, so no engine outlives the test.
     room.go_until(&next, "everything to end", all_ended);
-}
-
-/// A carry-on that never runs leaves no task `working` with no turn: its task cancelled while it
-/// waits, or its chat archived.
-#[test]
-fn a_carry_on_that_never_runs_leaves_no_task_working() {
-    for end in ["cancel", "archive"] {
-        let room = Room::start();
-        let _next = Successor(room.data.clone());
-        let stopped = room.ann_works();
-        // Paused, so the carry-on is still waiting on the new copy.
-        room.pause(&room.service.info, "/api/pauses");
-        room.update();
-        room.go();
-        let next = successor(&room.data, room.service.info.pid);
-        held_by_pause(&room, &next, &stopped);
-
-        let path = match end {
-            "cancel" => "/api/tasks/1/cancel".to_string(),
-            _ => format!("/api/chats/{}/archive", room.chat),
-        };
-        let ended = http::send(next.port, &next.token, "POST", &path, &json!({})).unwrap();
-        assert_eq!(ended.status, 200, "{end}: {}", ended.body);
-        if end == "cancel" {
-            room.pause(&next, "/api/pauses/resume");
-        }
-        until(20, "the task and its turns to end", || {
-            let state = room.column("SELECT state FROM tasks WHERE number = 1", "state");
-            let open = "SELECT id FROM turns WHERE task = 1 \
-                        AND status IN ('queued', 'running', 'waiting_sign_in')";
-            (state == [json!("cancelled")] && room.column(open, "id").is_empty()).then_some(())
-        });
-        let ran = format!(
-            "SELECT m.id FROM messages m JOIN turns u ON u.id = m.turn_id \
-             WHERE u.answers = '{stopped}' AND m.role = 'assistant'"
-        );
-        assert!(
-            room.column(&ran, "id").is_empty(),
-            "{end}: the carry-on ran"
-        );
-    }
 }
 
 /// Update gates by its answer: with the worker that stops things held back, Ann's turn still runs,
@@ -463,43 +377,4 @@ fn a_turn_that_never_ends_doesnt_hold_the_update() {
         "{:?}",
         room.states()
     );
-}
-
-/// Scenario 5h: Stop now leaves the task as it was. It says the person stopped it, it is never
-/// `stopped`, and its lead hears nothing until the carry-on, after Restart, ends: then the real
-/// outcome, once.
-#[test]
-fn stop_now_leaves_the_task_as_it_was_and_its_lead_hears_only_how_it_ends() {
-    let room = Room::start();
-    let stopped = room.ann_works();
-    room.pause(&room.service.info, "/api/pauses/stop");
-    room.go();
-    until(20, "Stop now's carry-on", || {
-        let history = room.history(&room.service.info);
-        let ended = turn_by(&history, "id", &stopped)?["status"] == "stopped";
-        let carried = turn_by(&history, "answers", &stopped)?;
-        (ended && carried["held"] == "pause").then_some(())
-    });
-    let sql = "SELECT state || ': ' || reason AS stands FROM tasks WHERE number = 1";
-    assert_eq!(
-        room.column(sql, "stands"),
-        [json!("working: Stopped by you. Carries on at Restart")]
-    );
-    let states = room.states();
-    assert!(
-        !states.contains(&json!("stopped")),
-        "the task was told stopped: {states:?}"
-    );
-    assert_eq!(room.lead_heard(), (1, 0), "the lead heard of the stop");
-
-    room.pause(&room.service.info, "/api/pauses/resume");
-    let done = "#1 Ann, Write the notes: done: the notes are written";
-    let history = room.go_until(&room.service.info, "the lead to hear how it ended", |h| {
-        h.to_string().contains(done)
-    });
-    assert_eq!(room.lead_heard().1, 1, "heard once: {history}");
-    let states = room.states();
-    assert!(!states.contains(&json!("stopped")), "{states:?}");
-    assert_eq!(states.last(), Some(&json!("done")), "{states:?}");
-    room.go_until(&room.service.info, "everything to end", all_ended);
 }

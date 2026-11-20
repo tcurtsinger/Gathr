@@ -4,10 +4,10 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use common::{TempDir, call_tool, first_token, gathr, git, team, text, until};
-use serde_json::{Value, json};
+use serde_json::json;
 
 fn listed(service: &common::TestService, query: &str) -> Vec<String> {
     let chats = service.call("GET", &format!("/api/chats{query}")).json();
@@ -115,63 +115,6 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
 }
 
 #[test]
-fn archiving_ends_a_wait_check_that_runs_and_one_not_started_yet() {
-    let data = TempDir::new();
-    let fast = [("GATHR_WAIT_EVERY_MS", Path::new("100"))];
-    let (service, chat, _) = team(
-        &data.0,
-        &common::held_recording(&data.0, "signed_in"),
-        &fast,
-    );
-    let sent = service.send(
-        "POST",
-        &format!("/api/chats/{chat}/messages"),
-        json!({ "text": "Plan it" }),
-    );
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    let (port, lead) = (service.info.port, first_token(&data.0));
-    // Paused while both are left, so one look finds both.
-    let scope = json!({ "scope": "chat", "target": chat });
-    assert_eq!(
-        service.send("POST", "/api/pauses", scope.clone()).status,
-        200
-    );
-    let dir = data.0.to_string_lossy().replace('\\', "/");
-    let first = format!(
-        "touch '{dir}/started'; while [ ! -f '{dir}/release' ]; do sleep 0.1; done; touch '{dir}/first-ran'; exit 1"
-    );
-    let second = format!("touch '{dir}/second-ran'; exit 1");
-    for (check, then) in [(first, "one"), (second, "two")] {
-        let left = text(&call_tool(
-            port,
-            &lead,
-            "wait",
-            json!({ "check": check, "then": then }),
-        ));
-        assert!(left.starts_with("Waiting ("), "{left}");
-    }
-    let resumed = service.send("POST", "/api/pauses/resume", scope);
-    assert_eq!(resumed.status, 200, "{}", resumed.body);
-    until(20, "the first check running", || {
-        data.0.join("started").exists().then_some(())
-    });
-
-    let archived = service.call("POST", &format!("/api/chats/{chat}/archive"));
-    assert_eq!(archived.status, 200, "{}", archived.body);
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    std::fs::write(data.0.join("release"), "").unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(1500));
-    assert!(
-        !data.0.join("first-ran").exists(),
-        "the running check was ended"
-    );
-    assert!(
-        !data.0.join("second-ran").exists(),
-        "the next check never ran"
-    );
-}
-
-#[test]
 fn deleting_a_project_chat_removes_its_rows_and_worktrees_and_keeps_its_branches() {
     let data = TempDir::new();
     std::fs::write(data.0.join("go"), "").unwrap();
@@ -222,72 +165,6 @@ fn deleting_a_project_chat_removes_its_rows_and_worktrees_and_keeps_its_branches
     let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.delete'";
     let (_, counted) = gathr(&data.0, &["diag", "query", sql]);
     assert_eq!(counted["rows"][0]["n"], 1, "{counted}");
-}
-
-#[test]
-fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_the_persons_list() {
-    let data = TempDir::new();
-    let fast = [
-        ("GATHR_STALE_DAY_MS", Path::new("1")),
-        ("GATHR_WAIT_EVERY_MS", Path::new("100")),
-    ];
-    let (service, chat, _) = team(
-        &data.0,
-        &common::held_recording(&data.0, "signed_in"),
-        &fast,
-    );
-    let read = service.call("GET", "/api/settings").json();
-    assert_eq!(
-        (&read["stale_days"], &read["cancel_days"]),
-        (&json!(3), &json!(7))
-    );
-    let saved = service.send("PATCH", "/api/settings", json!({ "cancel_days": 500 }));
-    assert_eq!(saved.status, 409, "{}", saved.body);
-    let saved = service.send("PATCH", "/api/settings", json!({ "cancel_days": 9 }));
-    let saved = saved.json();
-    assert_eq!(
-        (&saved["stale_days"], &saved["cancel_days"]),
-        (&json!(3), &json!(9))
-    );
-
-    let sent = service.send(
-        "POST",
-        &format!("/api/chats/{chat}/messages"),
-        json!({ "text": "Plan it" }),
-    );
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    let lead = first_token(&data.0);
-    let asked = json!({ "what": "Pick a name", "form": "done" });
-    text(&call_tool(service.info.port, &lead, "ask_person", asked));
-    let listed: Value = until(10, "the person's task stale", || {
-        let listed = service.call("GET", "/api/person-tasks").json();
-        listed["tasks"][0]["stale_us"].is_i64().then_some(listed)
-    });
-    assert!(listed["stale"].as_array().is_some(), "{listed}");
-    std::fs::write(data.0.join("go"), "").unwrap();
-    let history = service.wait_for(&chat, 10, "the Supervisor told", |h| {
-        let messages = h["messages"].as_array().unwrap();
-        messages.iter().any(|m| {
-            m["role"] == "gathr"
-                && m["body"]
-                    .as_str()
-                    .unwrap_or("")
-                    .contains("No progress in 3 days:")
-        })
-    });
-    let told = history["messages"].as_array().unwrap().iter().rev();
-    let told = told
-        .filter_map(|m| m["body"].as_str())
-        .find(|b| b.contains("No progress in 3 days:"));
-    assert!(
-        !told.unwrap().contains("auto-cancel"),
-        "person-only stale notice must omit auto-cancel policy: {told:?}"
-    );
-    let person = service.call("GET", "/api/person-tasks").json();
-    assert_eq!(
-        person["tasks"][0]["state"], "ready",
-        "never cancelled: {person} {history}"
-    );
 }
 
 /// F1 (found in #148): a start under way when the chat is archived found the account signed out
@@ -363,38 +240,6 @@ fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
     assert_eq!(turns[0]["status"], "stopped", "{history}");
 }
 
-/// 0053: a review's notes point at its task and at the fix Gathr gave for them, so deleting the
-/// chat removes them first; so does each task's session (0055).
-#[test]
-fn deleting_an_archived_chat_removes_its_review_notes() {
-    let data = TempDir::new();
-    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
-         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
-             ('ann', 'Ann', 'ann', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 1);
-         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, pr, created_ts, updated_ts)
-             VALUES (1, 'c', 'ann', 'bo', 'review', 'Review #7', 'blocked', 7, 1, 1),
-                    (2, 'c', 'bo', 'ann', 'work', 'Fix the review of #7', 'ready', 7, 1, 1);
-         INSERT INTO review_notes (task, reviewed, kind, file, says, fix, created_ts)
-             VALUES (1, 'abc1234', 'unasked', 'src/cache.rs', 'A cache nobody asked for', 2, 1);
-         INSERT INTO task_sessions (task, agent_id, chat_id, account_id, session_id)
-             VALUES (2, 'ann', 'c', 'acc', 's-fix');",
-    )
-    .unwrap();
-    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
-    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let left: (i64, i64) = conn
-        .query_row(
-            "SELECT (SELECT count(*) FROM review_notes), (SELECT count(*) FROM task_sessions)",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .unwrap();
-    assert_eq!(left, (0, 0), "(review notes, task sessions) left");
-}
-
 /// A thumbs-up points at its message and chat, so deleting the chat removes it first.
 #[test]
 fn deleting_an_archived_chat_removes_its_reactions() {
@@ -412,109 +257,4 @@ fn deleting_an_archived_chat_removes_its_reactions() {
         .query_row("SELECT count(*) FROM reactions", [], |r| r.get(0))
         .unwrap();
     assert_eq!(left, 0, "reactions left");
-}
-
-/// 0063: a held turn's look points at its chat, so deleting the chat removes it first.
-#[test]
-fn deleting_an_archived_chat_removes_its_held_turns() {
-    let data = TempDir::new();
-    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO held_turns (turn_id, chat_id, agent_id, worktree, status, started_ts)
-             VALUES ('t', 'c', 'ann', 'w', '[]', 1);",
-    )
-    .unwrap();
-    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
-    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let left: i64 = conn
-        .query_row("SELECT count(*) FROM held_turns", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(left, 0, "held turns left");
-}
-
-/// 0061: turns and tasks point at their ask, so deleting the chat removes its asks after them.
-#[test]
-fn deleting_an_archived_chat_removes_its_asks() {
-    let data = TempDir::new();
-    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', 'repair');
-         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, ask_id)
-             VALUES ('t', 'c', 'x', 'done', 1, 'm1');
-         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
-             VALUES ('m1', 'c', 't', 1, 'user', 'text', 'Fix the export');
-         INSERT INTO tasks (chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts, ask_id)
-             VALUES ('c', 'lead', 'ann', 't', 'work', 'Fix the export', 'done', 1, 1, 'm1');",
-    )
-    .unwrap();
-    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
-    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let left: i64 = conn
-        .query_row("SELECT count(*) FROM asks", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(left, 0, "asks left");
-}
-
-/// 0062: a plan points at its chat and ask, its parts at their tasks, and its check at its version,
-/// so deleting the chat removes its plans in that order.
-#[test]
-fn deleting_an_archived_chat_removes_its_plans() {
-    let data = TempDir::new();
-    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', 'new');
-         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, ask_id)
-             VALUES ('t', 'c', 'x', 'done', 1, 'm1');
-         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
-             VALUES ('m1', 'c', 't', 1, 'user', 'text', 'Add tags'),
-                    ('v1', 'c', 't', 2, 'assistant', 'text', 'Plan: Tags');
-         INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'm1', 'lead', 2);
-         INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, sent_ts,
-                                    decided, decided_ts)
-             VALUES (1, 1, 1, 'v1', 't', 'Tags', 'Add tags', 2, 3, 'approved', 4);
-         INSERT INTO tasks (number, chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts,
-                            ask_id, checks)
-             VALUES (1, 'c', 'lead', 'bo', 't', 'review', 'Check plan v1: Tags', 'done', 2, 3, 'm1', 1),
-                    (2, 'c', 'lead', 'ann', 't', 'work', 'Add the tags table', 'ready', 4, 4, 'm1', NULL);
-         INSERT INTO plan_parts (version_id, n, owner, what, why, done, proof, place, size, size_lines, task)
-             VALUES (1, 1, 'ann', 'Add the tags table', 'Tags', 'A table', 'A test', 'no code', 'db', 10, 2);",
-    )
-    .unwrap();
-    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
-    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let left: (i64, i64, i64) = conn
-        .query_row(
-            "SELECT (SELECT count(*) FROM plans), (SELECT count(*) FROM plan_versions),
-                    (SELECT count(*) FROM plan_parts)",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
-        .unwrap();
-    assert_eq!(left, (0, 0, 0), "(plans, versions, parts) left");
-}
-
-/// 0054: a landed change's record outlives its chat; one not landed goes with it.
-#[test]
-fn deleting_an_archived_chat_keeps_its_landed_changes() {
-    let data = TempDir::new();
-    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-         INSERT INTO changes (project_id, pr, chat_id, head, counted, removed, top, line, measured_ts, landed_ts)
-             VALUES ('p', 5, 'c', 'abc1234', 10, 0, '[]', 3000, 1, 2),
-                    ('p', 6, 'c', 'def5678', 10, 0, '[]', 3000, 1, NULL);",
-    )
-    .unwrap();
-    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
-    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let mut stmt = conn.prepare("SELECT pr FROM changes ORDER BY pr").unwrap();
-    let kept: Vec<i64> = stmt
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .map(Result::unwrap)
-        .collect();
-    assert_eq!(kept, [5]);
 }

@@ -73,6 +73,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0063_summed_sessions.sql"),
     include_str!("../migrations/0064_board_lines.sql"),
     include_str!("../migrations/0065_chat_room.sql"),
+    include_str!("../migrations/0066_agent_picture.sql"),
 ];
 
 /// The schema version this build writes.
@@ -721,6 +722,40 @@ mod tests {
         };
         let tried = ["#7FB5A8", "#7fb5a8", "#7FB5A", "7FB5A8F", "#7FB5AG"].map(set);
         assert_eq!(tried, [true, false, false, false, false]);
+    }
+
+    /// 0066: an agent from before has no picture, and removing an agent drops its picture. The last migration
+    /// is held back by position, so the test stays right when an earlier number lands beside it.
+    #[test]
+    fn an_agent_from_before_has_no_picture_and_removing_drops_one() {
+        let path = temp_db("picture");
+        let conn = Connection::open(&path).unwrap();
+        let before = MIGRATIONS.len() - 1;
+        for sql in &MIGRATIONS[..before] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", before as i64)
+            .unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 2);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let pictures = || -> Vec<Option<String>> {
+            let mut stmt = conn
+                .prepare("SELECT picture FROM agents ORDER BY id")
+                .unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        assert_eq!(pictures(), [None, None]);
+        let set = "UPDATE agents SET picture = 'data:image/png;base64,AA'";
+        conn.execute(set, []).unwrap();
+        crate::agents::mark_removed(&conn, "bo").unwrap();
+        assert_eq!(pictures(), [None, Some("data:image/png;base64,AA".into())]);
     }
 
     /// 0053: a turn a restart cut before reads stopped, as one cut now does; a turn that failed stays failed.

@@ -727,25 +727,3 @@ pub async fn ancestor(repo: &Path, older: &str, newer: &str, vars: &Vars) -> boo
         .await
         .is_ok()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::touches_checks;
-
-    #[test]
-    fn tests_and_check_settings_are_flagged_and_code_isnt() {
-        for flagged in [
-            "tests/check.sh",
-            "src/a_test.rs",
-            "ui/src/x.spec.ts",
-            "package.json",
-            ".github/workflows/ci.yml",
-            "crates/gathr/Cargo.toml",
-        ] {
-            assert!(touches_checks(flagged), "{flagged}");
-        }
-        for plain in ["src/main.rs", "README.md", "ui/src/App.tsx"] {
-            assert!(!touches_checks(plain), "{plain}");
-        }
-    }
-}

@@ -576,11 +576,13 @@ export interface Agent {
   skin: number | null;
   /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
   background: string | null;
+  /** A picture the person uploaded, as a data URL; shown instead of the drawn face. */
+  picture?: string | null;
 }
 
 /** An agent as Settings saves it: a face field is sent only when it changed. */
-export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin' | 'background'> &
-  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin' | 'background'>>;
+export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin' | 'background' | 'picture'> &
+  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin' | 'background' | 'picture'>>;
 
 /** A removed agent: its old messages still say who wrote them, with its face (0069, 0074). */
 export type Named = Pick<Agent, 'id' | 'name' | 'face_seed' | 'gender' | 'skin' | 'background'>;

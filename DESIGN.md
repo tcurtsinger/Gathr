@@ -829,7 +829,8 @@ Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
 one shared editor: Face, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
 56px face (DiceBear's Dylan; the seed picks hair, hair colour, mood and facial hair) and Shuffle, which draws it
-from a new seed and keeps the tone shown; Skin tone is six swatches,
+from a new seed and keeps the tone shown, Upload, which shows a picture from the computer in its place, cut to its
+middle square, and Remove, which brings the drawn face back; Skin tone is six swatches,
 light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
 for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
 row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour

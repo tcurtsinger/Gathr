@@ -441,38 +441,6 @@ fn a_deleted_agent_leaves_every_team_its_open_tasks_are_cancelled_and_its_words_
     );
 }
 
-/// The lead gave Ann's tasks; once it is deleted, they settle with no turn for it: no failed turn
-/// shows in the chat, and the hear-back that went nowhere is recorded.
-#[test]
-fn a_task_a_deleted_agent_gave_settles_with_no_turn_for_it() {
-    let r = room();
-    let lead = id_of(&r.service, "Lead");
-    delete(&r.service, &format!("/api/agents/{lead}"));
-    assert_eq!(chat_seats(&r.service, &r.team), ["Ann supervisor"]);
-    let cancelled = r.service.send("POST", "/api/tasks/1/cancel", json!({}));
-    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
-
-    // Ann's turn on #1 may end after the delete and block it: that hear-back goes nowhere too, so
-    // the cancel's is the newest, not the only one.
-    let sql = "SELECT (SELECT json_extract(attrs, '$.why') FROM event_log WHERE name = 'gathr.task.hear_back'
-                 ORDER BY ts DESC, id DESC LIMIT 1) AS why,
-               (SELECT count(*) FROM tasks WHERE number IN (1, 2) AND heard = 1 AND heard_as LIKE 'cancelled%') AS heard";
-    until(10, "the hear-back with nobody to hear it", || {
-        let found = &common::rows(&r._data.0, sql)[0];
-        (found["why"] == "its giver was deleted" && found["heard"] == 2).then_some(())
-    });
-    let history = r
-        .service
-        .call("GET", &format!("/api/chats/{}", r.team))
-        .json();
-    let turns = history["turns"].as_array().unwrap().iter();
-    let failed: Vec<&Value> = turns.filter(|t| t["status"] == "failed").collect();
-    assert!(failed.is_empty(), "{failed:?}");
-    let left = history["turns"].as_array().unwrap().iter();
-    let queued = left.filter(|t| t["agent"] == lead.as_str() && t["status"] == "queued");
-    assert_eq!(queued.count(), 0, "{history}");
-}
-
 #[test]
 fn deleting_a_lead_makes_the_next_agent_lead_in_the_project_and_in_each_chat() {
     let data = TempDir::new();

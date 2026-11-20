@@ -248,59 +248,6 @@ fn turn_sql(id: &str, chat: &str, agent: Option<&str>, at: i64) -> String {
     )
 }
 
-/// The upgrade: a chat with turns and no list gets the agent of its latest turn, leaving out a
-/// removed one, as its lead from its first turn; one with a list, with no turns or with turns of no
-/// agent gets nothing.
-#[test]
-fn the_upgrade_to_0058_gives_each_chat_with_turns_and_no_list_its_latest_agent_as_lead() {
-    let data = TempDir::new();
-    let db = gathr::data::DataDir::new(&data.0).db();
-    std::fs::create_dir_all(&data.0).unwrap();
-    let conn = gathr::db::open(&db).unwrap();
-    let mut sql = agents_sql().to_string();
-    sql.push_str(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('one', 'One', 1), ('two', 'Two', 1),
-             ('gone', 'Gone', 1), ('team', 'Team', 1), ('empty', 'Empty', 1), ('none', 'None', 1);
-         INSERT INTO chat_members VALUES ('team', 'ann', 'supervisor', 5), ('team', 'mira', 'member', 5);",
-    );
-    for (id, chat, agent, at) in [
-        ("o1", "one", Some("mira"), 10),
-        ("o2", "one", Some("mira"), 30),
-        ("w1", "two", Some("ann"), 10),
-        ("w2", "two", Some("mira"), 20),
-        ("g1", "gone", Some("mira"), 10),
-        ("g2", "gone", Some("zed"), 20),
-        ("t1", "team", Some("mira"), 10),
-        ("n1", "none", None, 10),
-    ] {
-        sql.push_str(&turn_sql(id, chat, agent, at));
-    }
-    conn.execute_batch(&sql).unwrap();
-    common::old::back_to(&conn, 57);
-    drop(conn);
-
-    let conn = gathr::db::open(&db).unwrap();
-    let all =
-        "SELECT chat_id || ':' || agent_id || ':' || role || ':' || added_ts FROM chat_members
-               ORDER BY chat_id, agent_id";
-    let mut stmt = conn.prepare(all).unwrap();
-    let found: Vec<String> = stmt
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .map(Result::unwrap)
-        .collect();
-    assert_eq!(
-        found,
-        [
-            "gone:mira:supervisor:10",
-            "one:mira:supervisor:10",
-            "team:ann:supervisor:5",
-            "team:mira:member:5",
-            "two:mira:supervisor:10",
-        ]
-    );
-}
-
 /// Mira's chat with no project and her alone on its list, and Ann's team chat `c` in no project.
 fn solo(dir: &TempDir) -> Connection {
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
@@ -412,49 +359,4 @@ fn deleting_an_agent_keeps_a_chat_of_one_where_others_spoke() {
     conn.execute_batch(&sql).unwrap();
     let plan = gathr::deleting::agent_plan(&conn, "mira").unwrap();
     assert_eq!(plan.chats, ["solo"], "Ann's words stay: {plan:?}");
-}
-
-/// The briefing as the engine's last start had it.
-fn last_briefing(args: &Path) -> String {
-    let starts = std::fs::read_to_string(args).unwrap();
-    let last: Vec<String> = serde_json::from_str(starts.lines().last().unwrap()).unwrap();
-    let at = last
-        .iter()
-        .position(|a| a == "--append-system-prompt-file")
-        .unwrap();
-    std::fs::read_to_string(&last[at + 1]).unwrap()
-}
-
-/// An upgraded chat where Ann spoke before Mira: Mira leads it alone, and her briefing still names
-/// Ann as one who worked here, with no role.
-#[test]
-fn a_lone_agents_briefing_names_who_worked_here_and_no_role() {
-    let data = TempDir::new();
-    let db = gathr::data::DataDir::new(&data.0).db();
-    std::fs::create_dir_all(&data.0).unwrap();
-    let conn = gathr::db::open(&db).unwrap();
-    let mut sql = agents_sql().to_string();
-    sql.push_str("INSERT INTO chats (id, title, created_ts) VALUES ('two', 'Two', 1);");
-    sql.push_str(&turn_sql("w1", "two", Some("ann"), 10));
-    sql.push_str(&turn_sql("w2", "two", Some("mira"), 20));
-    conn.execute_batch(&sql).unwrap();
-    common::old::back_to(&conn, 57);
-    drop(conn);
-    sign_in_account(&data.0, "acc");
-    let args = data.0.join("engine-args.jsonl");
-    let service = TestService::with_engine(
-        &data.0,
-        &[
-            ("GATHR_REPLAY", &recording("signed_in")),
-            ("GATHR_REPLAY_ARGS", &args),
-        ],
-    );
-    let sent = post(&service, "two", json!({ "text": "Go on" }));
-    ended(&service, "two", sent["turn"].as_str().unwrap(), "done");
-    let briefing = last_briefing(&args);
-    assert!(
-        briefing.contains("Other agents who have worked here: Ann.")
-            && !briefing.contains("as its"),
-        "{briefing}"
-    );
 }

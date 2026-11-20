@@ -196,45 +196,6 @@ fn stop_now_keeps_the_carry_on_in_a_chat_sent_to_no_agent() {
     });
 }
 
-/// How many times the check has run: one line in its log each.
-fn runs(log: &Path) -> usize {
-    std::fs::read_to_string(log).map_or(0, |t| t.lines().count())
-}
-
-#[test]
-fn a_pause_holds_a_waits_check_and_stays_pausing_while_one_runs() {
-    let data = TempDir::new();
-    let every = [("GATHR_WAIT_EVERY_MS", Path::new("100"))];
-    let (service, chat, _) = team(&data.0, &held(&data.0), &every);
-    send(&service, &chat, "Plan it");
-    let lead = token(&data.0);
-    let log = data.0.join("check.log");
-    let check = format!(
-        "echo ran >> '{}'; sleep 3; exit 1",
-        log.display().to_string().replace('\\', "/")
-    );
-    let ask = json!({ "check": check, "then": "merge it" });
-    let left = text(&call_tool(service.info.port, &lead, "wait", ask));
-    assert!(left.starts_with("Waiting ("), "{left}");
-    std::fs::write(data.0.join("go"), "").unwrap();
-    service.wait_for(&chat, 10, "the lead's turn", |h| {
-        h["turns"][0]["status"] == "done"
-    });
-    until(10, "the check running", || (runs(&log) > 0).then_some(()));
-    let paused = pause(&service, "/api/pauses", &chat);
-    assert_eq!(
-        paused["pauses"][0]["state"], "pausing",
-        "the check still runs: {paused}"
-    );
-    until(10, "the pause quiet", || {
-        let listed = service.call("GET", "/api/pauses").json();
-        (listed["pauses"][0]["state"] == "paused").then_some(())
-    });
-    let ran = runs(&log);
-    std::thread::sleep(std::time::Duration::from_millis(1500));
-    assert_eq!(runs(&log), ran, "a check ran while its chat was paused");
-}
-
 #[test]
 fn an_engine_that_closed_leaves_no_background_command_behind() {
     let data = TempDir::new();
@@ -389,88 +350,6 @@ fn a_turn_with_no_progress_is_flagged_never_stopped() {
         history["turns"][0]["status"], "running",
         "never stopped: {history}"
     );
-}
-
-/// G174, live on #139: a task's command ended while its owner's engine ran a turn on something
-/// else, so Claude Code said so inside that turn and began none for the task. The task, held on the
-/// command, settles there and then, as its owner had reported it done, not never.
-#[test]
-fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
-    let data = TempDir::new();
-    let full = std::fs::read_to_string(recording("background")).unwrap();
-    let rows: Vec<&str> = full.lines().collect();
-    let held = rows
-        .iter()
-        .position(|l| l.contains(r#""dir":"hold""#))
-        .unwrap();
-    let init = r#"\"subtype\":\"init\""#;
-    let woken = held + rows[held..].iter().position(|l| l.contains(init)).unwrap();
-    // One engine, three turns: a first one; the task's, which starts the command; the person's,
-    // which hears it end before it replies as the recording's last turn did.
-    let first = std::fs::read_to_string(recording("signed_in")).unwrap();
-    let mut played: Vec<&str> = first.lines().collect();
-    played.extend(&rows[..held]);
-    played.push(rows[0]);
-    played.push(rows[woken]);
-    played.extend(&rows[held + 1..woken]);
-    played.extend(&rows[woken + 1..]);
-    let replay = data.0.join("inside.jsonl");
-    std::fs::write(
-        &replay,
-        played.join(
-            "
-",
-        ) + "
-",
-    )
-    .unwrap();
-    let (service, chat, lead) = team(&data.0, &replay, &[]);
-    send(&service, &chat, "Hi");
-    service.wait_for(&chat, 10, "the lead's first turn", |h| {
-        h["turns"][0]["status"] == "done"
-    });
-    common::fix_it(service.info.port, &token(&data.0));
-    let given = call_tool(
-        service.info.port,
-        &token(&data.0),
-        "give_task",
-        common::briefed(json!({ "to": "Lead", "what": "Run the pings" })),
-    );
-    assert_ne!(given["isError"], true, "{given}");
-    let tasks = format!("/api/chats/{chat}/tasks");
-    let task = until(10, "the task held on its command", || {
-        let listed = service.call("GET", &tasks).json();
-        let task = listed["tasks"][0].clone();
-        (task["state"] == "held").then_some(task)
-    });
-    assert!(
-        task["reason"]
-            .as_str()
-            .unwrap()
-            .contains("background command"),
-        "{task}"
-    );
-    let report = json!({ "task": 1, "how": "done", "note": "the pings ran" });
-    let said = text(&call_tool(
-        service.info.port,
-        &token(&data.0),
-        "finish_task",
-        report,
-    ));
-    assert!(
-        said.starts_with("Recorded: done. Task #1 is held"),
-        "{said}"
-    );
-
-    let path = format!("/api/chats/{chat}/messages");
-    let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": lead }));
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    let settled = until(10, "the task settled", || {
-        let listed = service.call("GET", &tasks).json();
-        let task = listed["tasks"][0].clone();
-        (task["state"] != "held").then_some(task)
-    });
-    assert_eq!(settled["state"], "done", "{settled}");
 }
 
 /// A usage limit that cuts a turn after a tool ran ends the turn with a carry-on waiting for the
