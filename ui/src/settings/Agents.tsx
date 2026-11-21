@@ -5,11 +5,11 @@ import { danger } from '../components/Confirm';
 import { Dropdown } from '../components/Dropdown';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
+import { shuffled } from '../components/pictures';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
-import { isCustom } from './BackgroundField';
 import { FaceFields } from './FaceFields';
 import { choices, chosen, efforts, firstChoice } from './models';
 import './agents.css';
@@ -134,13 +134,9 @@ type Fields = {
   model: string | null | undefined;
   effort: string | null;
   approvals: Approvals;
-  /** Undefined for a new agent until Shuffle: its face comes from its name. */
-  face_seed?: string;
-  skin: number | null;
-  background: string | null;
-  picture?: string | null;
-  /** Background's last colour not among the twelve, while the form is open: never sent. */
-  custom?: string;
+  shape: string | null;
+  eyes: string | null;
+  colour: string | null;
 };
 
 const modes: [Approvals, string, string][] = [
@@ -161,31 +157,19 @@ function AgentForm(props: FormProps) {
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const edit = (fields: Partial<Fields>) => setEdits((e) => ({ ...e, ...fields }));
-  const blank: Fields = {
+  // A new agent starts with three choices picked as Shuffle picks them, saved with it: its picture shows before it is.
+  const [blank] = useState<Fields>(() => ({
     name: '',
     account: accounts[0].id,
     model: undefined,
     effort: null,
     approvals: 'auto',
-    skin: null,
-    background: null,
-  };
-  const {
-    name,
-    description,
-    account,
-    model,
-    effort,
-    approvals,
-    face_seed,
-    skin,
-    background,
-    picture = null,
-  }: Fields = {
+    ...shuffled(),
+  }));
+  const { name, description, account, model, effort, approvals, shape, eyes, colour }: Fields = {
     ...(agent ?? blank),
     ...edits,
   };
-  const seed = face_seed ?? name.trim();
   const [busy, setBusy] = useState(false);
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
@@ -202,12 +186,11 @@ function AgentForm(props: FormProps) {
     if (model === undefined && first) setEdits((e) => ({ ...e, model: first }));
   }, [model, models.list]);
 
-  // A face field goes with the save only when it changed, so Save never writes an untouched one back.
+  // A picture field goes with the save only when it changed, so Save never writes an untouched one back.
   const face = {
-    ...(seed !== (agent?.face_seed ?? name.trim()) && { face_seed: seed }),
-    ...(skin !== (agent?.skin ?? null) && { skin }),
-    ...(background !== (agent?.background ?? null) && { background }),
-    ...(picture !== (agent?.picture ?? null) && { picture }),
+    ...(shape !== (agent?.shape ?? null) && { shape }),
+    ...(eyes !== (agent?.eyes ?? null) && { eyes }),
+    ...(colour !== (agent?.colour ?? null) && { colour }),
   };
   // The description too: sent only when it changed.
   const about = description?.trim() || null;
@@ -282,16 +265,7 @@ function AgentForm(props: FormProps) {
           onChange={(e) => edit({ description: e.target.value })}
         />
       </label>
-      <FaceFields
-        id={agent?.id ?? ''}
-        name={name.trim()}
-        seed={seed}
-        skin={skin}
-        background={background}
-        picture={picture}
-        remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}
-        onChange={edit}
-      />
+      <FaceFields id={agent?.id ?? ''} name={name.trim()} picked={{ shape, eyes, colour }} onChange={edit} />
       <div className="agent-field">
         <label htmlFor={`${title}account`}>Account</label>
         <Dropdown

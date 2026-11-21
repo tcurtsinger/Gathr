@@ -2,7 +2,7 @@ import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
-import { Face, type FaceMark, type FaceOf } from '../components/Face';
+import { Face, type FaceOf } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { parts, split } from '../components/files';
 import { IconButton } from '../components/IconButton';
@@ -187,13 +187,13 @@ function Picked({ message, words: text }: { message: Message; words: string }) {
   return <span className="room-words">{out}</span>;
 }
 
-/** An agent's main message: its picture with its state in the margin, the card, then its replies folded. */
+/** An agent's main message: its picture in the margin, the card, then its replies folded. */
 function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) {
   const agent = card.turn.agent as string;
   return (
     <div className="room-item room-turn">
       <span className="room-who">
-        <Face agent={ctx.people.face(agent)} size={28} mark={markOf(card)} />
+        <Face agent={ctx.people.face(agent)} size={28} />
       </span>
       {joined && <span className="room-rule" aria-hidden="true" />}
       <article
@@ -217,20 +217,6 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
       {card.replies.length > 0 && <Thread replies={card.replies} ctx={ctx} />}
     </div>
   );
-}
-
-function markOf(card: Card): FaceMark {
-  switch (card.turn.status) {
-    case 'running':
-    case 'queued':
-      return { state: 'working', spin: true };
-    case 'done':
-      return { state: 'free' };
-    case 'stopped':
-      return { state: 'stopped' };
-    default:
-      return { state: 'cant' };
-  }
 }
 
 /** At the head's right: "Working · 2m" while it runs, a check and how long it took once done. */

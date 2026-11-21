@@ -16,10 +16,10 @@ import '../app.css';
 // A made-up chat, as in the mock-up: Mira leads, Ann and Bo build, Rev reviews. Times count back from now. Bo's turn
 // waits for an approval, and the person liked Ann's message. Ann asked the person a question, answered; Mira asks one.
 const agents: FaceOf[] = [
-  { id: 'mira', name: 'Mira', face_seed: 'Mira', background: '#619eff' },
-  { id: 'ann', name: 'Ann', face_seed: 'Ann', background: '#ffd166' },
-  { id: 'bo', name: 'Bo', face_seed: 'Bo', background: '#9be3b4' },
-  { id: 'rev', name: 'Rev', face_seed: 'Rev', background: '#f4a6c6' },
+  { id: 'mira', name: 'Mira', shape: 'cloud', eyes: 'glance', colour: 'orange' },
+  { id: 'ann', name: 'Ann', shape: 'flower', eyes: 'happy', colour: 'pink' },
+  { id: 'bo', name: 'Bo', shape: 'tile', eyes: 'dots', colour: 'teal' },
+  { id: 'rev', name: 'Rev', shape: 'hexagon', eyes: 'calm', colour: 'violet' },
 ];
 const members: Member[] = [
   { agent: 'mira', name: 'Mira', role: 'supervisor' },
