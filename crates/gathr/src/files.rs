@@ -232,7 +232,7 @@ pub struct Entry {
     pub name: String,
     pub path: PathBuf,
     pub folder: bool,
-    /// When it last changed, in milliseconds since 1970: the Design tab lists the newest first.
+    /// When it last changed, in milliseconds since 1970: the Designs tab lists the newest first.
     pub modified: Option<u64>,
 }
 

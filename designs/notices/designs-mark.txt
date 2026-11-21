@@ -1,0 +1,10 @@
+The Designs mark (ui/src/components/DesignsMark.tsx)
+
+"Design Education Painting" by Abderraouf Omara, from the collection "Education And School Vectors" on SVG Repo:
+https://www.svgrepo.com/svg/421877/design-education-painting
+
+Licence: Creative Commons Attribution (CC BY), as that page states it. The page names no version of the licence;
+SVG Repo's own description is at https://www.svgrepo.com/page/licensing/#CC%20Attribution and the licence family
+is at https://creativecommons.org/licenses/by/4.0/.
+
+Changes: none to the drawing. It is shown in the window's own text colour and scaled to the size of an icon.

@@ -1,6 +1,7 @@
-import { File as FileIcon, Files, Filter, House, Palette, Search, X } from 'lucide-react';
+import { File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type FileTree } from '../api';
+import { DesignsMark } from '../components/DesignsMark';
 import { pathSteps as steps, onWindows as windows } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -129,12 +130,12 @@ function Panel({ chat, room }: { chat: string; room: RoomState }) {
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
           {tab(HOME, <House aria-hidden="true" />, 'Home', false)}
           {tabs.files && tab(FILES, <Files aria-hidden="true" />, 'Files')}
-          {tabs.design && tab(DESIGN, <Palette aria-hidden="true" />, 'Design')}
+          {tabs.design && tab(DESIGN, <DesignsMark />, 'Designs')}
           <div className="workspace-files">
             {tabs.open.map((f) =>
               tab(
                 f.path,
-                f.design ? <Palette aria-hidden="true" /> : <FileIcon aria-hidden="true" />,
+                f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />,
                 f.crumbs.at(-1) ?? f.path,
               ),
             )}
@@ -165,8 +166,8 @@ function Panel({ chat, room }: { chat: string; room: RoomState }) {
                 className="home-tile"
                 onClick={() => change(chat, { ...tabs, design: true, at: DESIGN })}
               >
-                <Palette aria-hidden="true" />
-                Design
+                <DesignsMark />
+                Designs
               </button>
             </div>
             <h2>Board</h2>
