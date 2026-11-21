@@ -50,6 +50,12 @@ pub fn put_in_project(
 const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
     AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
 
+/// Whether a turn of chat `c` will start by itself soon: queued behind its agent's work elsewhere, or
+/// for an engine download or an update. One held for usage or by a pause isn't: that chat has stopped.
+const QUEUED: &str = "EXISTS (SELECT 1 FROM turns s
+    WHERE s.status IN ('queued', 'waiting_sign_in') AND s.status = 'queued' AND s.chat_id = c.id
+      AND coalesce(s.held, '') NOT IN ('usage', 'pause'))";
+
 /// Whether chat `c` waits on the person, as far as the database knows: a turn waits for a sign-in,
 /// or a question to them is open. An approval waiting is the service's to add (it's in no table).
 const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
@@ -106,13 +112,14 @@ impl ChatState {
     }
 }
 
-/// The chats in the list, newest first, each with whether it's `working`, `needs` the person and
-/// its `mark`; with `archived`, the archived ones, last archived first, which carry none of them.
+/// The chats in the list, newest first, each with whether it's `working`, has a turn `queued`,
+/// `needs` the person and its `mark`; with `archived`, the archived ones, last archived first,
+/// which carry none of them.
 pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}, {QUEUED}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
          ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
     ))?;
@@ -131,6 +138,7 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
         if !archived {
             let state = ChatState::read(r, 8)?;
             chat["working"] = state.working.into();
+            chat["queued"] = r.get::<_, bool>(12)?.into();
             chat["needs"] = state.needs.into();
             chat["mark"] = state.mark.into();
         }
