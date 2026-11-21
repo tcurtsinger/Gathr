@@ -12,8 +12,8 @@ use crate::approvals::GATHR_ASKS;
 /// How often the window reads the service.
 pub const EVERY: Duration = Duration::from_secs(5);
 
-/// The chats that need the person and those a turn of runs, each with its title; the chats a
-/// pause of their own holds; and whether the whole app is paused.
+/// The chats that need the person and those a turn of runs or waits to start, each with its title;
+/// the chats a pause of their own holds; and whether the whole app is paused.
 #[derive(Debug)]
 pub struct Read {
     pub needs: BTreeMap<String, String>,
@@ -30,8 +30,9 @@ pub fn read(chats: Option<&Value>, pauses: Option<&Value>) -> Option<Read> {
     let held = pauses["pauses"].as_array().into_iter().flatten();
     let held = held.filter(|p| p["scope"] == "chat");
     Some(Read {
-        needs: titled(chats, "needs"),
-        working: titled(chats, "working"),
+        needs: titled(chats, |c| c["needs"] == true),
+        // A teammate's turn queued behind its agent's work elsewhere is work still to come.
+        working: titled(chats, |c| c["working"] == true || c["queued"] == true),
         held: held
             .filter_map(|p| Some(p["target"].as_str()?.to_string()))
             .collect(),
@@ -39,9 +40,9 @@ pub fn read(chats: Option<&Value>, pauses: Option<&Value>) -> Option<Read> {
     })
 }
 
-/// The chats whose `key` is true, each with its title.
-fn titled(chats: &[Value], key: &str) -> BTreeMap<String, String> {
-    let chats = chats.iter().filter(|c| c[key] == true);
+/// The chats `pick` takes, each with its title.
+fn titled(chats: &[Value], pick: impl Fn(&Value) -> bool) -> BTreeMap<String, String> {
+    let chats = chats.iter().filter(|c| pick(c));
     let chats = chats.filter_map(|c| {
         let title = c["title"].as_str().unwrap_or_default().to_string();
         Some((c["id"].as_str()?.to_string(), title))
@@ -294,6 +295,14 @@ mod tests {
     }
 
     const NONE: [usize; 0] = [];
+
+    #[test]
+    fn a_chat_with_a_turn_waiting_to_start_reads_as_working() {
+        let chats =
+            serde_json::json!([{ "id": "c", "title": "Plan", "working": false, "queued": true }]);
+        let now = super::read(Some(&chats), Some(&serde_json::json!({ "pauses": [] })));
+        assert!(now.expect("both answered").working.contains_key("c"));
+    }
 
     #[test]
     fn a_chat_that_stops_working_is_told_once_at_the_second_read_that_finds_it_stopped() {
