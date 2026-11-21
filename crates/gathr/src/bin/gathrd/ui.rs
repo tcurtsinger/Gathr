@@ -124,6 +124,7 @@ pub fn content_type(file: &Path) -> &'static str {
         "gif" => "image/gif",
         "avif" => "image/avif",
         "pdf" => "application/pdf",
+        // PDF.js's worker is a module, and a worker runs only as JavaScript.
         "js" | "mjs" => "text/javascript",
         "css" => "text/css",
         "svg" => "image/svg+xml",

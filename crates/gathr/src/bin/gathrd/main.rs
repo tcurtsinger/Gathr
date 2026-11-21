@@ -14,6 +14,7 @@ mod chats;
 mod cleanup;
 mod copies;
 mod deletes;
+mod documents;
 mod files;
 mod github;
 mod likes;

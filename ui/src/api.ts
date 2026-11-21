@@ -458,19 +458,44 @@ function refusal(
   return new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
 }
 
-/** A file's words, or why they aren't shown. */
-async function words(chat: string, file: string): Promise<{ text: string } | { unshown: Unshown }> {
-  const path = `/api/chats/${chat}/file?path=${encodeURIComponent(file)}`;
+/** The service's answer for a file's tab, at `/api/chats/<chat>/<what>`, or why the file isn't shown. */
+async function shown(chat: string, what: string, file: string): Promise<Response | { unshown: Unshown }> {
+  const path = `/api/chats/${chat}/${what}?path=${encodeURIComponent(file)}`;
   let response: Response;
   try {
     response = await fetch(path);
   } catch {
     throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
   }
-  if (response.ok) return { text: await response.text() };
+  if (response.ok) return response;
   const unshown = UNSHOWN[response.status];
   if (unshown) return { unshown };
   throw refusal(path, response, await response.json().catch(() => null));
+}
+
+/** A file's words, or why they aren't shown. */
+async function words(chat: string, file: string): Promise<{ text: string } | { unshown: Unshown }> {
+  const got = await shown(chat, 'file', file);
+  return got instanceof Response ? { text: await got.text() } : got;
+}
+
+/** A PDF's bytes, or why they aren't shown. */
+async function pdf(chat: string, file: string): Promise<{ bytes: ArrayBuffer } | { unshown: Unshown }> {
+  const got = await shown(chat, 'pdf', file);
+  return got instanceof Response ? { bytes: await got.arrayBuffer() } : got;
+}
+
+/** A workbook's sheet: its first rows (the heading row and the 2,000 a table draws) and how many it has in all. */
+export interface Sheet {
+  name: string;
+  rows: string[][];
+  total: number;
+}
+
+/** A workbook's visible sheets, or why they aren't shown. */
+async function sheets(chat: string, file: string): Promise<{ sheets: Sheet[] } | { unshown: Unshown }> {
+  const got = await shown(chat, 'sheets', file);
+  return got instanceof Response ? ((await got.json()) as { sheets: Sheet[] }) : got;
 }
 
 /** Saves each file in the chat's folder, in order: their saved names. */
@@ -511,6 +536,8 @@ export const api = {
       `/api/chats/${chat}/files?find=${encodeURIComponent(words)}`,
     ).then((f) => f.found),
   words,
+  pdf,
+  sheets,
   /** A view of an HTML page in the chat's folders: the address its sealed frame loads it and the files beside it at. */
   view: (chat: string, path: string) =>
     call<{ address: string }>('POST', `/api/chats/${chat}/view?path=${encodeURIComponent(path)}`).then(

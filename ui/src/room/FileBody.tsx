@@ -86,9 +86,11 @@ const NUMBER = /^[-+]?[\d,]*\.?\d+%?$/;
 /** Past this many rows a table held the window for seconds (4 s for 49,000 rows); the rest are in Source. */
 const ROWS = 2000;
 
-/** The first row as the heading row, a column of numbers set to the right. */
-function Table({ rows }: { rows: string[][] }) {
+/** The first row as the heading row, a column of numbers set to the right. `total` counts every row when fewer were
+ * sent (a workbook's sheet). */
+export function Table({ rows, total = rows.length }: { rows: string[][]; total?: number }) {
   const [head, ...body] = rows;
+  const more = total - 1 - ROWS;
   const right = head.map(
     (_, c) => body.some((r) => r[c]) && body.every((r) => !r[c] || NUMBER.test(r[c].trim())),
   );
@@ -120,9 +122,7 @@ function Table({ rows }: { rows: string[][] }) {
           ))}
         </tbody>
       </table>
-      {body.length > ROWS && (
-        <p className="filebody-more">{(body.length - ROWS).toLocaleString()} more rows</p>
-      )}
+      {more > 0 && <p className="filebody-more">{more.toLocaleString()} more rows</p>}
     </div>
   );
 }
