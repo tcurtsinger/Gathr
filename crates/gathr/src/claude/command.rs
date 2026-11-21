@@ -212,8 +212,10 @@ pub fn given(url: &str, briefing: &Path, tools: &[String]) -> Vec<String> {
         .map(|name| format!("mcp__gathr__{name}"))
         .collect();
     let auth = format!("Bearer ${{{TOKEN_VAR}}}");
+    // `alwaysLoad` puts the tools in context from the start, not behind ToolSearch, whatever
+    // ENABLE_TOOL_SEARCH says (Claude Code's MCP docs, "Exempt a server from deferral").
     let servers = serde_json::json!({ "mcpServers": { "gathr": {
-        "type": "http", "url": url, "headers": { "Authorization": auth } } } });
+        "type": "http", "url": url, "headers": { "Authorization": auth }, "alwaysLoad": true } } });
     vec![
         "--mcp-config".into(),
         servers.to_string(),
@@ -253,11 +255,15 @@ pub fn env(
 }
 
 /// Drops every `ANTHROPIC_*` and `CLAUDE*` variable (selectors, keys, tokens, base URLs, and a
-/// parent Claude Code's own session) and Bedrock's bearer token.
+/// parent Claude Code's own session) and Bedrock's bearer token. Also the person's tuning of
+/// Claude Code's MCP client, `MCP_*` and `MAX_MCP_OUTPUT_TOKENS`: its timeouts, cache and output
+/// limit would reach Gathr's server, the agent's only one.
 fn keep(name: &OsString) -> bool {
     let name = name.to_string_lossy().to_ascii_uppercase();
     !(name.starts_with("ANTHROPIC_")
         || name.starts_with("CLAUDE")
+        || name.starts_with("MCP_")
+        || name == "MAX_MCP_OUTPUT_TOKENS"
         || name == "AWS_BEARER_TOKEN_BEDROCK")
 }
 
@@ -448,6 +454,8 @@ mod tests {
             "CLAUDE_CODE_SESSION_ID",
             "CLAUDECODE",
             "AWS_BEARER_TOKEN_BEDROCK",
+            "MCP_TIMEOUT",
+            "MAX_MCP_OUTPUT_TOKENS",
             "PATH",
             "USERPROFILE",
         ]
