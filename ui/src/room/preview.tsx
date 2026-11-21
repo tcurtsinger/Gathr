@@ -257,7 +257,7 @@ function Preview() {
           />
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat="preview" />}
+      {sidebar && <RoomSidebar chat="preview" room={state} />}
     </div>
   );
 }

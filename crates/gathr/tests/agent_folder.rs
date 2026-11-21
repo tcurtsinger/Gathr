@@ -97,7 +97,7 @@ fn removal_traced(data: &Path, reference: &str) {
 }
 
 /// A project chat's first turn for an agent whose names no disk takes as they are: the engine's
-/// start (`env.jsonl`), its arguments, and the agent's own folder and Shared.
+/// start (`env.jsonl`), its arguments, and the agent's own folder, Shared and its project's Designs.
 struct Started {
     service: TestService,
     data: TempDir,
@@ -108,6 +108,7 @@ struct Started {
     args: Vec<Value>,
     own: PathBuf,
     shared: PathBuf,
+    designs: PathBuf,
 }
 
 fn started() -> Started {
@@ -123,6 +124,7 @@ fn started() -> Started {
     Started {
         own: project_folder.join("Pia- UI"),
         shared: project_folder.join("Shared"),
+        designs: real(&beside(&data.0)).join("Designs").join("CON_"),
         service,
         data,
         chat,
@@ -149,7 +151,8 @@ fn a_project_chats_worktree_and_temp_files_land_in_the_agents_own_folder() {
         "{}",
         s.started
     );
-    for folder in [&s.own, &s.shared] {
+    assert!(s.designs.is_dir(), "its project's Designs, made");
+    for folder in [&s.own, &s.shared, &s.designs] {
         let add = format!("--add-dir={}", folder.display());
         assert!(s.args.iter().any(|a| a == &add), "{add} in {:?}", s.args);
     }
@@ -162,7 +165,7 @@ fn a_project_chats_worktree_and_temp_files_land_in_the_agents_own_folder() {
 }
 
 #[test]
-fn an_agent_writes_in_its_own_folder_and_shared_without_asking_and_is_asked_elsewhere() {
+fn an_agent_writes_in_its_own_folder_shared_and_designs_without_asking_and_is_asked_elsewhere() {
     let s = started();
     let token = s.started["GATHR_AGENT_TOKEN"].as_str().unwrap();
     let port = s.service.info.port;
@@ -173,7 +176,11 @@ fn an_agent_writes_in_its_own_folder_and_shared_without_asking_and_is_asked_else
     };
     assert_eq!(write(s.own.join("notes.md")), Value::Null, "its own folder");
     assert_eq!(write(s.shared.join("plan.md")), Value::Null, "Shared");
+    let page = s.designs.join("export").join("a.html");
+    assert_eq!(write(page), Value::Null, "its project's Designs");
     let root = s.own.parent().unwrap().parent().unwrap();
+    let other = root.join("Designs").join("Larder").join("a.html");
+    assert_eq!(write(other), "ask", "another project's designs");
     assert_eq!(write(root.join("other.md")), "ask", "beside the project");
     assert_eq!(
         write(s.data.0.join("gathr.db")),
@@ -416,7 +423,8 @@ fn a_shared_folder_that_leads_into_the_data_folder_is_never_written_through() {
         .filter(|a| a.starts_with("--add-dir="))
         .collect();
     let own = format!("--add-dir={}", s.own.display());
-    assert_eq!(added, [own.as_str()], "only its own folder");
+    let designs = format!("--add-dir={}", s.designs.display());
+    assert_eq!(added, [own.as_str(), designs.as_str()], "all but Shared");
     let sql = "SELECT ref FROM event_log WHERE name = 'gathr.folder.refused'";
     let reference = until(20, "the refusal recorded", || {
         let (ok, found) = gathr(&s.data.0, &["diag", "query", sql]);

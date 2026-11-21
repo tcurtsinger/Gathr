@@ -22,6 +22,8 @@ pub struct Facts {
     worktree: Option<(PathBuf, String)>,
     /// The agent's own folder and its project's Shared (0034).
     own: Option<(PathBuf, PathBuf)>,
+    /// Its project's part of Designs, where a design for the person goes.
+    designs: Option<PathBuf>,
     /// In a project chat, the project's folder in the agent folder and the project's own.
     read: Vec<PathBuf>,
     /// What the person asked to be called.
@@ -34,10 +36,12 @@ pub struct Facts {
     skills: Option<(PathBuf, Vec<(String, String)>)>,
 }
 
-/// The agent's worktree, its own folder and Shared, what it may read, and the Skills folder.
+/// The agent's worktree, its own folder and Shared, its Designs, what it may read, and the Skills
+/// folder.
 type Folders = (
     Option<(PathBuf, String)>,
     Option<(PathBuf, PathBuf)>,
+    Option<PathBuf>,
     Vec<PathBuf>,
     Option<PathBuf>,
 );
@@ -46,7 +50,7 @@ pub fn facts(
     conn: &Connection,
     chat: &str,
     agent: Option<&str>,
-    (worktree, own, read, skills): Folders,
+    (worktree, own, designs, read, skills): Folders,
 ) -> Result<Facts, gathr::Error> {
     let title: String = conn
         .query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
@@ -116,6 +120,7 @@ pub fn facts(
         team: !members.is_empty(),
         worktree,
         own,
+        designs,
         read,
         person: gathr::assistant::person_name(conn)?,
         assistant: plain && agent.is_some() && assistant.as_deref() == agent,
@@ -269,10 +274,18 @@ pub fn text(facts: &Facts) -> String {
             shared.display()
         ));
     }
+    if let Some(designs) = &facts.designs {
+        lines.push(format!(
+            "Your project's designs folder is \"{}\": a design for the person to look at goes \
+             there under <name>/, one HTML page per option, and opens in their Design tab.",
+            designs.display()
+        ));
+    }
     if let [team, checkout] = &facts.read[..] {
         lines.push(format!(
             "You can read the whole project: your teammates' folders and worktrees in \"{}\", and \
-             the person's checkout \"{}\". Write only in your worktree, your own folder and Shared.",
+             the person's checkout \"{}\". Write only in your worktree, your own folder, Shared and \
+             your designs folder.",
             team.display(),
             checkout.display()
         ));

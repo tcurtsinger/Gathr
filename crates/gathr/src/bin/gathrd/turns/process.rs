@@ -16,6 +16,15 @@ use serde_json::json;
 use super::{Assignment, Task};
 use crate::tools::{Pass, Place, briefing};
 
+/// What the briefing names beside the engine's folder: what it may read, the Skills folder, its own
+/// folder and Shared, and its project's Designs.
+type Briefed = (
+    Vec<PathBuf>,
+    Option<PathBuf>,
+    Option<(PathBuf, PathBuf)>,
+    Option<PathBuf>,
+);
+
 /// How long an engine gets at shutdown to exit on its own before it's killed (0001).
 pub const CLOSE_GRACE: Duration = Duration::from_secs(10);
 const HOLD_AFTER: Duration = Duration::from_secs(30);
@@ -147,8 +156,13 @@ impl Task {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
-        // Beside the folder it runs in: its own folder and Shared, where it writes without asking.
+        // Beside the folder it runs in: its own folder, Shared and Designs, where it writes without asking.
         let beside = place.beside;
+        // What the briefing names: only folders the engine is given.
+        let kept = |p: &PathBuf| beside.contains(p).then(|| p.clone());
+        let ours = place.place.as_ref();
+        let own = ours.and_then(|p| Some((kept(&p.agent)?, kept(&p.shared)?)));
+        let designs = ours.and_then(|p| kept(&p.designs));
         let worktree = place.project.map(|project| (cwd.clone(), project));
         let given = Place {
             cwd: cwd.clone(),
@@ -161,7 +175,7 @@ impl Task {
                 &assigned,
                 worktree,
                 given,
-                (place.read.clone(), place.skills),
+                (place.read.clone(), place.skills, own, designs),
                 trace,
             )
             .await?;
@@ -301,19 +315,15 @@ impl Task {
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
         place: Place,
-        (read, skills): (Vec<PathBuf>, Option<PathBuf>),
+        (read, skills, own, designs): Briefed,
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
-        let own = place
-            .folders
-            .get(1..3)
-            .map(|f| (f[0].clone(), f[1].clone()));
         let facts = self
             .chats
             .writer
             .call(move |conn| {
-                let folders = (worktree, own, read, skills);
+                let folders = (worktree, own, designs, read, skills);
                 briefing::facts(conn, &chat, agent.as_deref(), folders)
             })
             .await;

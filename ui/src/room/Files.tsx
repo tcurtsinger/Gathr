@@ -15,9 +15,11 @@ import { SheetBody } from './SheetBody';
 export interface Opened {
   path: string;
   crumbs: string[];
+  /** A design's folder, shown as a design rather than as a file. */
+  design?: boolean;
 }
 
-/** The Files tab: the project's folder, then Shared and each agent's folder for this chat. */
+/** The Files tab: the project's folder, then Shared, the project's Designs and each agent's folder for this chat. */
 export function Tree({ chat, onOpen }: { chat: string; onOpen: (file: Opened) => void }) {
   const [tree, setTree] = useState<FileTree>();
   const [failure, setFailure] = useState<Failure>();
@@ -37,7 +39,7 @@ export function Tree({ chat, onOpen }: { chat: string; onOpen: (file: Opened) =>
       onOpen={onOpen}
     />
   );
-  const agents = [...(tree.shared ? [tree.shared] : []), ...tree.agents];
+  const agents = [tree.shared, tree.designs, ...tree.agents].flatMap((p) => (p ? [p] : []));
   return (
     <div className="tree">
       {tree.project && <h3>Project</h3>}

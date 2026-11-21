@@ -39,6 +39,17 @@ const LOCAL = /^(?:[A-Za-z]:[\\/]|\/(?!\/))/;
 const IMAGE = /!\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^)\n]+?))\s*\)/g;
 
 export const isPicture = (name: string) => PICTURE.test(name);
+/** A Windows path, `C:\…` or `C:/…`: its case is ignored. */
+export const onWindows = (path: string) => /^[A-Za-z]:/.test(path);
+/** The path's parts, `.` and `..` followed. */
+export function pathSteps(path: string) {
+  const out: string[] = [];
+  for (const s of path.split(/[\\/]/).filter(Boolean)) {
+    if (s === '..') out.pop();
+    else if (s !== '.') out.push(s);
+  }
+  return out;
+}
 export const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
 /** A message's words in order: words, and runs of files where they stand. */

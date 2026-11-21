@@ -1,0 +1,51 @@
+/* The Design tab's list, and a design's bar. */
+.design-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-size: 13.5px;
+}
+.design-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.design-row:hover {
+  background: var(--hover-tint);
+}
+.design-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.design-name {
+  display: block;
+  overflow: hidden;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.design-bar > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-right: 2px;
+  stroke-width: 1.6;
+  color: var(--foreground);
+}
+.filetab-path > .design-writing {
+  flex: none;
+  margin: 0 6px 0 8px;
+}
+.design-options button {
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+}

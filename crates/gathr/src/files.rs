@@ -106,10 +106,14 @@ pub fn with_lines(words: &str, lines: &str) -> String {
 }
 
 /// The folders a picture of `chat` may be shown from, anywhere in its project: the project's folder
-/// in the agent folder, which holds Shared and every agent's folders, and the project's own folder.
+/// in the agent folder, which holds Shared and every agent's folders, its part of Designs, and the
+/// project's own folder.
 pub fn roots(conn: &Connection, data: &Path, chat: &str) -> Result<Vec<PathBuf>, Error> {
     let shared = folders::shared_of(conn, data, chat)?;
-    let mut roots = vec![shared.parent().unwrap_or(&shared).to_path_buf()];
+    let mut roots = vec![
+        shared.parent().unwrap_or(&shared).to_path_buf(),
+        folders::designs_of(conn, data, chat)?,
+    ];
     let own: Option<String> = conn
         .query_row(
             "SELECT p.folder FROM chats c JOIN projects p ON p.id = c.project_id WHERE c.id = ?1",
@@ -162,19 +166,25 @@ pub struct Part {
     pub agent: Option<String>,
 }
 
-/// The folders of one chat the window shows: the project's own, Shared, and each of its agents'
-/// folder for this chat, those that are on the disk. Never another chat's.
+/// The folders of one chat the window shows: the project's own, Shared, its project's part of
+/// Designs, and each of its agents' folder for this chat, those that are on the disk. Never another
+/// chat's, nor another project's designs.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Tree {
     pub project: Option<Part>,
     pub shared: Option<Part>,
+    pub designs: Option<Part>,
     pub agents: Vec<Part>,
 }
 
 impl Tree {
+    fn parts(&self) -> impl Iterator<Item = &Part> {
+        let tops = self.project.iter().chain(&self.shared);
+        tops.chain(&self.designs).chain(&self.agents)
+    }
+
     pub fn roots(&self) -> Vec<PathBuf> {
-        let tops = self.project.iter().chain(&self.shared).chain(&self.agents);
-        tops.map(|p| p.path.clone()).collect()
+        self.parts().map(|p| p.path.clone()).collect()
     }
 }
 
@@ -207,6 +217,11 @@ pub fn tree(conn: &Connection, data: &Path, chat: &str) -> Result<Tree, Error> {
     Ok(Tree {
         project: own.and_then(|own| part(PathBuf::from(own), None, None)),
         shared: part(shared, Some(folders::SHARED.into()), None),
+        designs: part(
+            folders::designs_of(conn, data, chat)?,
+            Some(folders::DESIGNS.into()),
+            None,
+        ),
         agents,
     })
 }
@@ -217,6 +232,8 @@ pub struct Entry {
     pub name: String,
     pub path: PathBuf,
     pub folder: bool,
+    /// When it last changed, in milliseconds since 1970: the Design tab lists the newest first.
+    pub modified: Option<u64>,
 }
 
 /// The folder at `path` inside one of `roots`, folders first and then files, each by name, `.git`
@@ -226,10 +243,18 @@ pub fn listing(roots: &[PathBuf], path: &str) -> Option<Vec<Entry>> {
     let mut entries: Vec<Entry> = std::fs::read_dir(&found)
         .ok()?
         .flatten()
-        .map(|e| Entry {
-            name: e.file_name().to_string_lossy().into(),
-            folder: e.path().is_dir(),
-            path: e.path(),
+        .map(|e| {
+            let about = std::fs::metadata(e.path()).ok();
+            let since = |t: std::time::SystemTime| t.duration_since(std::time::UNIX_EPOCH).ok();
+            Entry {
+                name: e.file_name().to_string_lossy().into(),
+                folder: about.as_ref().is_some_and(std::fs::Metadata::is_dir),
+                modified: about
+                    .and_then(|m| m.modified().ok())
+                    .and_then(since)
+                    .map(|d| d.as_millis() as u64),
+                path: e.path(),
+            }
         })
         .filter(|e| e.name != ".git")
         .collect();
@@ -257,12 +282,7 @@ pub async fn find(tree: &Tree, words: &str) -> Vec<Found> {
     if words.is_empty() {
         return Vec::new();
     }
-    let parts: Vec<&Part> = tree
-        .project
-        .iter()
-        .chain(&tree.shared)
-        .chain(&tree.agents)
-        .collect();
+    let parts: Vec<&Part> = tree.parts().collect();
     let mut reads = tokio::task::JoinSet::new();
     for (i, part) in parts.iter().enumerate() {
         let (root, words) = (part.path.clone(), words.clone());
@@ -450,6 +470,48 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
+    #[test]
+    fn a_chats_tree_holds_its_own_projects_designs_and_never_anothers() {
+        let base = std::env::temp_dir().join(format!("gathr-designs-{}", crate::ids::span_id()));
+        let root = base.join("agents");
+        let (shop, larder) = (base.join("shop"), base.join("larder"));
+        for dir in [&shop, &larder] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let conn = crate::db::open(&base.join("gathr.db")).unwrap();
+        let sql = format!(
+            "INSERT INTO settings (key, value) VALUES ('{}', '{}');
+             INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES
+                 ('p1', 'Shop', 'shop', '{}', 0), ('p2', 'Larder', 'larder', '{}', 0);
+             INSERT INTO chats (id, title, created_ts, project_id) VALUES ('c1', 'Export', 0, 'p1'),
+                 ('c2', 'Stock', 0, 'p2');",
+            folders::SETTING,
+            root.display(),
+            shop.display(),
+            larder.display()
+        );
+        conn.execute_batch(&sql).unwrap();
+        let ours = folders::designs_of(&conn, &base, "c1").unwrap();
+        let theirs = folders::designs_of(&conn, &base, "c2").unwrap();
+        assert_eq!(ours, folders::real(&root).join("Designs").join("Shop"));
+        for (dir, page) in [(&ours, "a.html"), (&theirs, "b.html")] {
+            std::fs::create_dir_all(dir.join("export")).unwrap();
+            std::fs::write(dir.join("export").join(page), "<p>made up</p>").unwrap();
+        }
+        let tree = tree(&conn, &base, "c1").unwrap();
+        let designs = tree.designs.as_ref().unwrap();
+        assert_eq!((designs.name.as_str(), &designs.path), ("Designs", &ours));
+        let roots = tree.roots();
+        let at = |p: PathBuf| p.to_string_lossy().into_owned();
+        assert!(inside(&roots, &at(ours.join("export").join("a.html"))).is_some());
+        let out = theirs.join("export").join("b.html");
+        assert!(inside(&roots, &at(out)).is_none(), "another project's");
+        let up = ours.join("..").join("Larder").join("export").join("b.html");
+        assert!(inside(&roots, &at(up)).is_none(), "'..'");
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     #[tokio::test]
     async fn a_search_finds_files_by_name_only_in_the_chats_folders() {
         let base = std::env::temp_dir().join(format!("gathr-find-{}", crate::ids::span_id()));
@@ -499,6 +561,7 @@ mod tests {
         let tree = Tree {
             project: Some(part(&project, "shop")),
             shared: Some(part(&shared, "Shared")),
+            designs: None,
             agents: Vec::new(),
         };
         let found = find(&tree, " Export").await;
