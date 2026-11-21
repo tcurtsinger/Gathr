@@ -71,48 +71,66 @@
   color: var(--muted);
   opacity: 1;
 }
-/* Face: the face and Shuffle; Skin tone and Background: swatches, the chosen one ringed (0074). Background's last
-   swatch is + for any colour: dashed with a plus, or the colour picked there. */
+/* Picture: the picture and Shuffle. Shape, Eyes and Colour: the twelve choices in the agent's colour, the chosen one
+   ringed. */
 .face-pick {
   display: flex;
   align-items: center;
   gap: 14px;
 }
-.swatches {
+.picks {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 4px;
+  color: var(--ink);
+}
+html.light .picks {
+  color: var(--ink-l);
+}
+.picks .pk {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+}
+.pk > svg {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+}
+.pk[data-part="eyes"] > svg {
+  width: 34px;
+  height: 34px;
+}
+.pk[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--foreground);
+}
+.picks.colours {
   gap: 10px;
   padding: 4px 0;
 }
-.swatches .swatch {
-  display: grid;
-  place-items: center;
+.picks .swatch {
   width: 26px;
   height: 26px;
   min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px #0003;
+  background: var(--ink);
 }
-.swatches .swatch[aria-pressed="true"] {
+html.light .picks .swatch {
+  background: var(--ink-l);
+}
+.picks .swatch[aria-pressed="true"] {
   outline: 2px solid var(--foreground);
   outline-offset: 2px;
-}
-.swatches .swatch-custom {
-  box-shadow: inset 0 0 0 1.5px var(--muted-foreground);
-}
-.swatches .swatch-custom:not([style]) {
-  background: transparent;
-  box-shadow: none;
-  border: 1.5px dashed var(--muted-foreground);
-}
-.swatch-custom svg {
-  width: 16px;
-  height: 16px;
-  color: var(--muted-foreground);
-  stroke-width: 2;
 }
 .agent-actions {
   display: flex;

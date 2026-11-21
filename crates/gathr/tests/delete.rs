@@ -282,7 +282,7 @@ fn a_removed_agents_name_is_free_and_it_is_in_no_list() {
     assert_eq!(shown, [(&json!(new), &json!("ann"))], "{listed}");
     assert_eq!(
         listed["removed"],
-        json!([{ "id": old, "name": "Ann", "face_seed": "Ann", "gender": null, "skin": null, "background": null }])
+        json!([{ "id": old, "name": "Ann", "shape": null, "eyes": null, "colour": null }])
     );
     let path = format!("/api/agents/{old}");
     assert_eq!(

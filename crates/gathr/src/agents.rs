@@ -18,17 +18,11 @@ pub struct Agent {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub approvals: Approvals,
-    /// What its face is drawn from (0074): its name when it was made, a new one at each Shuffle. A rename
-    /// keeps it.
-    pub face_seed: String,
-    /// `man` or `woman` once the person sets it; until then the seed picks.
-    pub gender: Option<String>,
-    /// Skin tone 1 to 6 once the person sets it; until then the seed picks.
-    pub skin: Option<i64>,
-    /// The background the person picked, `#RRGGBB`; until then a grey.
-    pub background: Option<String>,
-    /// A picture the person gave it, as a data URL the window made; shown instead of the drawn face.
-    pub picture: Option<String>,
+    /// Its picture's shape, eyes and line colour, by name, once picked; none picked, the window works
+    /// each out from the id.
+    pub shape: Option<String>,
+    pub eyes: Option<String>,
+    pub colour: Option<String>,
     /// One line on what it does, shown in the @ list and told to the other agents.
     pub description: Option<String>,
 }
@@ -77,12 +71,9 @@ pub struct Change {
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
     pub approvals: Option<Approvals>,
-    pub face_seed: Option<String>,
-    pub gender: Option<Option<String>>,
-    pub skin: Option<Option<i64>>,
-    /// `#rrggbb` in either case: kept in upper case.
-    pub background: Option<Option<String>>,
-    pub picture: Option<Option<String>>,
+    pub shape: Option<Option<String>>,
+    pub eyes: Option<Option<String>>,
+    pub colour: Option<Option<String>>,
     pub description: Option<Option<String>>,
 }
 
@@ -100,12 +91,9 @@ impl Agent {
         next.model = change.model.unwrap_or(next.model);
         next.effort = change.effort.unwrap_or(next.effort);
         next.approvals = change.approvals.unwrap_or(next.approvals);
-        next.face_seed = change.face_seed.unwrap_or(next.face_seed);
-        next.gender = change.gender.unwrap_or(next.gender);
-        next.skin = change.skin.unwrap_or(next.skin);
-        let background = change.background.map(|b| b.map(|b| b.to_ascii_uppercase()));
-        next.background = background.unwrap_or(next.background);
-        next.picture = change.picture.unwrap_or(next.picture);
+        next.shape = change.shape.unwrap_or(next.shape);
+        next.eyes = change.eyes.unwrap_or(next.eyes);
+        next.colour = change.colour.unwrap_or(next.colour);
         let description = change.description.map(|d| {
             let d = d.map(|d| d.trim().to_string());
             d.filter(|d| !d.is_empty())
@@ -128,10 +116,7 @@ pub enum Refused {
     Pushes,
     /// The account, model or effort it was checked with changed before it was saved.
     Moved,
-    Seed,
-    Gender,
-    Skin,
-    Background,
+    Picture,
     Description,
 }
 
@@ -146,10 +131,7 @@ impl Refused {
             Refused::Moved => {
                 "The agent's account, model or effort changed while it was checked. Try again."
             }
-            Refused::Seed => "the face seed is blank",
-            Refused::Gender => "Choose Man or Woman",
-            Refused::Skin => "Choose a skin tone from 1 to 6",
-            Refused::Background => "Choose a background as #RRGGBB",
+            Refused::Picture => "Choose a shape, eyes and colour from the lists",
             Refused::Description => "A description is one line of up to 80 characters",
             Refused::Pushes => {
                 "Full approvals decide which pushes ask, which only the person changes"
@@ -160,11 +142,9 @@ impl Refused {
 
 pub type Saved = Result<Result<Agent, Refused>, Error>;
 
-/// The agents that aren't removed (0069): a removed one is in no list and refused everywhere. A row written
-/// without a face seed (by hand, or by a test) is drawn from its name.
-const COLUMNS: &str =
-    "SELECT id, name, account_id, model, effort, approvals, coalesce(face_seed, name), gender, skin,
-                         background, picture, description FROM agents WHERE removed_ts IS NULL";
+/// The agents that aren't removed (0069): a removed one is in no list and refused everywhere.
+const COLUMNS: &str = "SELECT id, name, account_id, model, effort, approvals, shape, eyes, colour,
+                         description FROM agents WHERE removed_ts IS NULL";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -174,12 +154,10 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
         model: r.get(3)?,
         effort: r.get(4)?,
         approvals: Approvals::parse(&r.get::<_, String>(5)?),
-        face_seed: r.get(6)?,
-        gender: r.get(7)?,
-        skin: r.get(8)?,
-        background: r.get(9)?,
-        picture: r.get(10)?,
-        description: r.get(11)?,
+        shape: r.get(6)?,
+        eyes: r.get(7)?,
+        colour: r.get(8)?,
+        description: r.get(9)?,
     })
 }
 
@@ -221,22 +199,18 @@ pub fn on_account(conn: &Connection, account: &str) -> Result<Vec<String>, Error
 /// Adds `agent` under a new id. `removing` holds the accounts being removed, checked in the same
 /// call as the write, so a removal that has looked for agents never misses this one.
 pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Saved {
-    let mut agent = Agent {
+    let agent = Agent {
         id: ids::span_id(),
         ..agent.clone()
     };
-    // A new agent's face comes from its name unless a seed came with it (0074).
-    if agent.face_seed.is_empty() {
-        agent.face_seed = agent.name.trim().to_string();
-    }
     let name = match checked(conn, &agent, removing)? {
         Ok(name) => name,
         Err(refused) => return Ok(Err(refused)),
     };
     let added = conn.execute(
         "INSERT INTO agents (id, name, name_key, account_id, model, effort, approvals, created_ts,
-                             face_seed, gender, skin, background, picture, description)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                             shape, eyes, colour, description)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             agent.id,
             name,
@@ -246,11 +220,9 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
             agent.effort,
             agent.approvals.as_str(),
             ids::now_us(),
-            agent.face_seed,
-            agent.gender,
-            agent.skin,
-            agent.background,
-            agent.picture,
+            agent.shape,
+            agent.eyes,
+            agent.colour,
             agent.description
         ],
     );
@@ -291,8 +263,8 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     };
     let updated = conn.execute(
         "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
-         approvals = ?7, face_seed = ?8, gender = ?9, skin = ?10,
-         background = ?11, picture = ?12, description = ?13 WHERE id = ?1 AND removed_ts IS NULL",
+         approvals = ?7, shape = ?8, eyes = ?9, colour = ?10, description = ?11
+         WHERE id = ?1 AND removed_ts IS NULL",
         params![
             agent.id,
             name,
@@ -301,11 +273,9 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
             agent.model,
             agent.effort,
             agent.approvals.as_str(),
-            agent.face_seed,
-            agent.gender,
-            agent.skin,
-            agent.background,
-            agent.picture,
+            agent.shape,
+            agent.eyes,
+            agent.colour,
             agent.description
         ],
     );
@@ -323,21 +293,20 @@ pub fn name(conn: &Connection, id: &str) -> Result<Option<String>, Error> {
     Ok(conn.query_row(sql, [id], |r| r.get(0)).optional()?)
 }
 
-/// A removed agent, as the window names its old messages and draws its face on them.
+/// A removed agent, as the window names its old messages and draws its picture on them.
 #[derive(Debug, Clone, Serialize)]
 pub struct Removed {
     pub id: String,
     pub name: String,
-    pub face_seed: String,
-    pub gender: Option<String>,
-    pub skin: Option<i64>,
-    pub background: Option<String>,
+    pub shape: Option<String>,
+    pub eyes: Option<String>,
+    pub colour: Option<String>,
 }
 
 /// The removed agents, oldest first.
 pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
     let mut statement = conn.prepare(
-        "SELECT id, name, coalesce(face_seed, name), gender, skin, background FROM agents
+        "SELECT id, name, shape, eyes, colour FROM agents
          WHERE removed_ts IS NOT NULL
          ORDER BY created_ts, id",
     )?;
@@ -345,20 +314,18 @@ pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
         Ok(Removed {
             id: r.get(0)?,
             name: r.get(1)?,
-            face_seed: r.get(2)?,
-            gender: r.get(3)?,
-            skin: r.get(4)?,
-            background: r.get(5)?,
+            shape: r.get(2)?,
+            eyes: r.get(3)?,
+            colour: r.get(4)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// Marks the agent removed, lets go of its account and drops its picture, once: a second call
-/// keeps the first time.
+/// Marks the agent removed and lets go of its account, once: a second call keeps the first time.
 pub fn mark_removed(conn: &Connection, id: &str) -> Result<(), Error> {
     conn.execute(
-        "UPDATE agents SET removed_ts = ?2, account_id = NULL, picture = NULL
+        "UPDATE agents SET removed_ts = ?2, account_id = NULL
          WHERE id = ?1 AND removed_ts IS NULL",
         params![id, ids::now_us()],
     )?;
@@ -375,25 +342,14 @@ fn checked(
         Ok(name) => name.to_string(),
         Err(refused) => return Ok(Err(Refused::Name(refused))),
     };
-    if agent.face_seed.trim().is_empty() {
-        return Ok(Err(Refused::Seed));
-    }
-    if agent
-        .gender
-        .as_deref()
-        .is_some_and(|g| g != "man" && g != "woman")
+    let known = |picked: &Option<String>, names: &[&str]| {
+        picked.as_deref().is_none_or(|p| names.contains(&p))
+    };
+    if !known(&agent.shape, &SHAPES)
+        || !known(&agent.eyes, &EYES)
+        || !known(&agent.colour, &COLOURS)
     {
-        return Ok(Err(Refused::Gender));
-    }
-    if agent.skin.is_some_and(|s| !(1..=6).contains(&s)) {
-        return Ok(Err(Refused::Skin));
-    }
-    if agent
-        .background
-        .as_deref()
-        .is_some_and(|b| !is_background(b))
-    {
-        return Ok(Err(Refused::Background));
+        return Ok(Err(Refused::Picture));
     }
     if agent
         .description
@@ -414,12 +370,19 @@ fn checked(
 /// The longest description an agent can have.
 pub const DESCRIPTION_MOST: usize = 80;
 
-/// `#RRGGBB`, upper case: what the database's check holds too.
-fn is_background(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    let hex = |c: &u8| c.is_ascii_digit() || (b'A'..=b'F').contains(c);
-    bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(hex)
-}
+/// The names the window draws a picture from (ui/src/components/marks.ts).
+const SHAPES: [&str; 12] = [
+    "circle", "tile", "cloud", "flower", "hexagon", "pebble", "shield", "drop", "star", "diamond",
+    "bubble", "leaf",
+];
+const EYES: [&str; 12] = [
+    "lines", "glance", "side", "squint", "dots", "rings", "ovals", "happy", "rest", "wink", "calm",
+    "quirk",
+];
+const COLOURS: [&str; 12] = [
+    "red", "orange", "amber", "lime", "green", "teal", "sky", "blue", "violet", "plum", "pink",
+    "grey",
+];
 
 fn saved<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
     Ok(accounts::taken_or(done)?.map_err(|_| Refused::Taken))
@@ -445,11 +408,9 @@ mod tests {
             model: Some("opus".into()),
             effort: Some("high".into()),
             approvals: Approvals::Auto,
-            face_seed: name.into(),
-            gender: None,
-            skin: None,
-            background: None,
-            picture: None,
+            shape: None,
+            eyes: None,
+            colour: None,
             description: None,
         }
     }

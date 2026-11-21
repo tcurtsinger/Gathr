@@ -16,10 +16,9 @@ const agent = (id: string, name: string): Agent => ({
   model: null,
   effort: null,
   approvals: 'auto',
-  face_seed: 'Made-up',
-  gender: null,
-  skin: null,
-  background: null,
+  shape: null,
+  eyes: null,
+  colour: null,
 });
 const project: Project = {
   id: 'p',

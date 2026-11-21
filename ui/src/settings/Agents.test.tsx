@@ -1,6 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Agent, Model } from '../api';
 import type { LiveEvent } from '../live';
@@ -67,7 +67,7 @@ function service(agents: Agent[], models: (account: string) => Response | Promis
     if (method === 'DELETE') return answer({ ...counts, deleted: true, left: [] });
     if (path === '/api/agents') {
       const made = JSON.parse(String(init?.body));
-      return answer({ id: 'new', face_seed: made.name, gender: null, skin: null, background: null, ...made });
+      return answer({ id: 'new', shape: null, eyes: null, colour: null, ...made });
     }
     if (path === '/api/accounts')
       return answer({ accounts: [account('a', 'Made-up one'), account('b', 'Made-up two')] });
@@ -94,10 +94,9 @@ const agent = (over: Partial<Agent>): Agent => ({
   model: null,
   effort: null,
   approvals: 'auto',
-  face_seed: 'Made-up agent',
-  gender: null,
-  skin: null,
-  background: null,
+  shape: null,
+  eyes: null,
+  colour: null,
   ...over,
 });
 
@@ -200,7 +199,7 @@ test('a new agent takes the exact model its account’s engine default means and
   await expect.element(screen.getByRole('combobox', { name: 'Model' })).toHaveTextContent('Opus 5.5');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.element(screen.getByText('Saved')).toBeVisible();
-  expect(sent).toEqual([
+  expect(sent).toMatchObject([
     {
       method: 'POST',
       path: '/api/agents',
@@ -241,144 +240,4 @@ test('Delete asks with what the service counts, then deletes the agent', async (
   await expect.element(confirm).not.toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Mira' })).not.toBeInTheDocument();
   expect(sent).toEqual([{ method: 'DELETE', path: '/api/agents/x', body: undefined }]);
-});
-
-test('a face never set shows what its seed picked; a tone chosen redraws it and is saved', async () => {
-  // Ann's seed picks tone 3.
-  service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const face = screen.getByRole('img', { name: 'Ann' });
-  await expect
-    .element(screen.getByRole('button', { name: 'Skin tone 3' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-
-  const before = face.element().innerHTML;
-  await screen.getByRole('button', { name: 'Skin tone 2' }).click();
-  await expect
-    .element(screen.getByRole('button', { name: 'Skin tone 2' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  expect(face.element().innerHTML).not.toBe(before);
-
-  await screen.getByRole('button', { name: 'Save' }).click();
-  await expect
-    .poll(() => sent.at(-1)?.body)
-    .toEqual({ name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', skin: 2 });
-});
-
-test('Shuffle draws a new face from a new seed and keeps the tone shown, saving it', async () => {
-  // Nothing set: Ann's seed picks tone 3, and the form shows it.
-  service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const face = screen.getByRole('img', { name: 'Ann' });
-  const tone = screen.getByRole('button', { name: 'Skin tone 3' });
-  await expect.element(tone).toHaveAttribute('aria-pressed', 'true');
-  const before = face.element().innerHTML;
-  await screen.getByRole('button', { name: 'Shuffle' }).click();
-  expect(face.element().innerHTML).not.toBe(before);
-  await expect.element(tone).toHaveAttribute('aria-pressed', 'true');
-
-  await screen.getByRole('button', { name: 'Save' }).click();
-  await expect.poll(() => sent.length).toBe(1);
-  const { face_seed, ...rest } = sent[0].body as Record<string, unknown>;
-  expect([typeof face_seed, face_seed === 'Ann', rest]).toEqual([
-    'string',
-    false,
-    { name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', skin: 3 },
-  ]);
-});
-
-/** The colour a face is drawn on, as the browser computed it. */
-const drawnOn = (face: { element: () => Element }) => getComputedStyle(face.element()).backgroundColor;
-
-test('a face with no background is grey; a ready colour pressed redraws it, Save sends it and Cancel drops it', async () => {
-  service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const face = screen.getByRole('img', { name: 'Ann' });
-  await expect.poll(() => drawnOn(face)).toBe('rgb(206, 206, 206)');
-  const mint = screen.getByRole('button', { name: 'Mint' });
-  await expect.element(mint).toHaveAttribute('aria-pressed', 'false');
-
-  await mint.click();
-  await expect.element(mint).toHaveAttribute('aria-pressed', 'true');
-  expect(drawnOn(face)).toBe('rgb(108, 213, 179)');
-  await screen.getByRole('button', { name: 'Cancel' }).click();
-  await expect.element(mint).toHaveAttribute('aria-pressed', 'false');
-  expect(drawnOn(face)).toBe('rgb(206, 206, 206)');
-
-  await screen.getByRole('button', { name: 'Rose' }).click();
-  await screen.getByRole('button', { name: 'Save' }).click();
-  await expect
-    .poll(() => sent.at(-1)?.body)
-    .toEqual({
-      name: 'Ann',
-      account: 'a',
-      model: null,
-      effort: null,
-      approvals: 'auto',
-      background: '#FCA0A7',
-    });
-});
-
-test('the + opens the picker under the row; a colour picked there shows on the face and the + and is saved', async () => {
-  service([agent({ name: 'Ann', face_seed: 'Ann', background: '#90D192' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const face = screen.getByRole('img', { name: 'Ann' });
-  const custom = screen.getByRole('button', { name: 'Custom' });
-  await expect.element(screen.getByRole('button', { name: 'Leaf' })).toHaveAttribute('aria-pressed', 'true');
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'false');
-
-  await custom.click();
-  await expect.element(custom).toHaveAttribute('aria-expanded', 'true');
-  const hex = screen.getByRole('textbox', { name: 'Hex' });
-  await expect.element(hex).toHaveValue('90D192');
-  await hex.fill('7fb5a8');
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
-  await expect.element(screen.getByRole('button', { name: 'Leaf' })).toHaveAttribute('aria-pressed', 'false');
-  expect(drawnOn(face)).toBe('rgb(127, 181, 168)');
-
-  screen.getByRole('slider', { name: 'Hue' }).element().focus();
-  await userEvent.keyboard('{Escape}');
-  await expect.element(custom).toHaveAttribute('aria-expanded', 'false');
-  await screen.getByRole('button', { name: 'Save' }).click();
-  await expect.poll(() => sent.at(-1)?.body).toMatchObject({ background: '#7FB5A8' });
-});
-
-test('a saved colour that is not one of the twelve shows pressed on the +', async () => {
-  service([agent({ name: 'Ann', face_seed: 'Ann', background: '#7FB5A8' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const custom = screen.getByRole('button', { name: 'Custom' });
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
-  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(127, 181, 168)');
-  const pressed = screen.getByRole('group', { name: 'Background' }).getByRole('button', { pressed: true });
-  expect(pressed.elements().map((b) => b.getAttribute('aria-label'))).toEqual(['Custom']);
-  await expect.poll(() => drawnOn(screen.getByRole('img', { name: 'Ann' }))).toBe('rgb(127, 181, 168)');
-});
-
-test('the + keeps a custom colour after a ready one is pressed, and pressing it picks that colour again', async () => {
-  service([agent({ name: 'Ann', face_seed: 'Ann', background: '#7FB5A8' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const face = screen.getByRole('img', { name: 'Ann' });
-  const custom = screen.getByRole('button', { name: 'Custom' });
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
-
-  await screen.getByRole('button', { name: 'Sky' }).click();
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'false');
-  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(127, 181, 168)');
-  expect(drawnOn(face)).toBe('rgb(107, 203, 247)');
-
-  await custom.click();
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
-  await expect.element(custom).toHaveAttribute('aria-expanded', 'true');
-  await expect.element(screen.getByRole('textbox', { name: 'Hex' })).toHaveValue('7FB5A8');
-  expect(drawnOn(face)).toBe('rgb(127, 181, 168)');
-
-  // Dialled in here, then a ready colour: Cancel forgets the dialled one with the rest of the edits.
-  await screen.getByRole('textbox', { name: 'Hex' }).fill('e6a4e1');
-  await userEvent.keyboard('{Escape}');
-  await screen.getByRole('button', { name: 'Rose' }).click();
-  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(230, 164, 225)');
-  await screen.getByRole('button', { name: 'Cancel' }).click();
-  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
-  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(127, 181, 168)');
 });

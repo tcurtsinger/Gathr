@@ -67,8 +67,8 @@
   font-weight: 550;
 }
 /*
- * Several agents (0028): their faces overlap, each ringed in the box's own colour. The sign stays inside the box at
- * every width: the faces keep their place and the names end in "…" where there is no room.
+ * Several agents (0028): their pictures side by side, see-through lines never overlapped. The sign stays inside the
+ * box at every width: the pictures keep their place and the names end in "…" where there is no room.
  */
 .composer [data-slot="composer-actions"],
 .composer-to {
@@ -77,13 +77,7 @@
 .composer-faces {
   display: inline-flex;
   flex: none;
-}
-.composer-faces .face + .face {
-  margin-left: -5px;
-  box-shadow: 0 0 0 1.5px var(--popover);
-}
-:root.light .composer-faces .face + .face {
-  box-shadow: 0 0 0 1.5px var(--background);
+  gap: 2px;
 }
 .composer-who {
   min-width: 0;

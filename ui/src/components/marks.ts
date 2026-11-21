@@ -1,4 +1,4 @@
-/** An agent's state, as the mark on its face (0071), most pressing first. */
+/** An agent's state, as its mark (0071), most pressing first. */
 const MARKS = ['needs', 'cant', 'working', 'stopped', 'blocked', 'waiting', 'free'] as const;
 export type Mark = (typeof MARKS)[number];
 

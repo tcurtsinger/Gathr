@@ -1,106 +1,106 @@
-import { useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { drawFace, Face, SKIN } from '../components/Face';
-import { BackgroundField } from './BackgroundField';
-
-export interface FaceChange {
-  face_seed?: string;
-  skin?: number;
-  background?: string;
-  picture?: string | null;
-  /** Background's last colour not among the twelve, kept with the form's edits only. */
-  custom?: string;
-}
+import { Face } from '../components/Face';
+import { type Chosen, COLOURS, EYES, lookOf, SHAPES, shuffled } from '../components/pictures';
 
 interface Props {
-  /** The agent's id; empty for a new one. */
+  /** The agent's id; for a new one, the id its picture is worked out from until it is saved. */
   id: string;
   name: string;
-  seed: string;
-  skin: number | null;
-  background: string | null;
-  picture: string | null;
-  remembered: string | null;
-  onChange: (change: FaceChange) => void;
+  picked: Chosen;
+  onChange: (change: Chosen) => void;
 }
 
 /**
- * Settings > Agents' Face, Skin tone and Background (0074), saved with the form. A tone never set shows what the
- * seed picked, and choosing one keeps it from then on. Shuffle picks a new seed and keeps the tone shown, which sets
- * it, so a face never changes tone that way. Upload puts a picture from the computer in place of the drawn face, and
- * Remove brings the drawn one back.
+ * Settings > Agents' Picture, Shape, Eyes and Colour, saved with the form. Each row shows the twelve choices, only
+ * what it picks, in the agent's colour, the one shown ringed. Shuffle picks all three anew.
  */
-export function FaceFields({ id, name, seed, skin, background, picture, remembered, onChange }: Props) {
-  const picked = drawFace(seed, skin).skin;
-  const file = useRef<HTMLInputElement>(null);
+export function FaceFields({ id, name, picked, onChange }: Props) {
+  const look = lookOf(id, picked);
+  const ink = { '--ink': look.colour.dark, '--ink-l': look.colour.light } as CSSProperties;
   return (
     <>
       <fieldset className="agent-field">
-        <legend>Face</legend>
+        <legend>Picture</legend>
         <span className="face-pick">
-          <Face
-            agent={{ id, name, face_seed: seed, skin, background, picture }}
-            size={56}
-            label={name || undefined}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onChange({ face_seed: Math.random().toString(36).slice(2, 10), skin: picked })}
-          >
+          <Face agent={{ id, name, ...picked }} size={56} label={name || undefined} />
+          <Button type="button" variant="outline" onClick={() => onChange(shuffled())}>
             Shuffle
           </Button>
-          <Button type="button" variant="outline" onClick={() => file.current?.click()}>
-            Upload
-          </Button>
-          {picture && (
-            <Button type="button" variant="outline" onClick={() => onChange({ picture: null })}>
-              Remove
-            </Button>
-          )}
-          <input
-            ref={file}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              const chosen = e.target.files?.[0];
-              e.target.value = '';
-              if (chosen) shrink(chosen).then((p) => onChange({ picture: p }));
-            }}
-          />
         </span>
       </fieldset>
       <fieldset className="agent-field">
-        <legend>Skin tone</legend>
-        <span className="swatches">
-          {SKIN.map((colour, i) => (
+        <legend>Shape</legend>
+        <span className="picks" style={ink}>
+          {SHAPES.map((s) => (
+            <Pick
+              key={s.key}
+              part="shape"
+              name={s.name}
+              on={s === look.shape}
+              onClick={() => onChange({ shape: s.key })}
+            >
+              <path d={s.d} strokeWidth={3} />
+            </Pick>
+          ))}
+        </span>
+      </fieldset>
+      <fieldset className="agent-field">
+        <legend>Eyes</legend>
+        <span className="picks" style={ink}>
+          {EYES.map((e) => (
+            <Pick
+              key={e.key}
+              part="eyes"
+              name={e.name}
+              on={e === look.eyes}
+              onClick={() => onChange({ eyes: e.key })}
+            >
+              <g transform="translate(24 24) scale(1.45)" strokeWidth={3 / 1.45}>
+                {e.d.map((d) => (
+                  <path key={d} d={d} />
+                ))}
+              </g>
+            </Pick>
+          ))}
+        </span>
+      </fieldset>
+      <fieldset className="agent-field">
+        <legend>Colour</legend>
+        <span className="picks colours">
+          {COLOURS.map((c) => (
             <button
               type="button"
-              key={colour}
+              key={c.key}
               className="swatch"
-              style={{ background: `#${colour}` }}
-              aria-label={`Skin tone ${i + 1}`}
-              aria-pressed={picked === i + 1}
-              onClick={() => onChange({ skin: i + 1 })}
+              style={{ '--ink': c.dark, '--ink-l': c.light } as CSSProperties}
+              aria-label={c.name}
+              aria-pressed={c === look.colour}
+              onClick={() => onChange({ colour: c.key })}
             />
           ))}
         </span>
       </fieldset>
-      <BackgroundField background={background} remembered={remembered} onChange={onChange} />
     </>
   );
 }
 
-/** The picture's middle square at 256 px, so what the service keeps stays small. */
-async function shrink(file: File) {
-  const image = await createImageBitmap(file);
-  const side = Math.min(image.width, image.height);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const x = (image.width - side) / 2;
-  const y = (image.height - side) / 2;
-  canvas.getContext('2d')?.drawImage(image, x, y, side, side, 0, 0, 256, 256);
-  return canvas.toDataURL('image/webp', 0.9);
+/** One choice of a shape or eyes: drawn alone in the box. */
+function Pick(props: { part: string; name: string; on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="pk"
+      data-part={props.part}
+      aria-label={props.name}
+      aria-pressed={props.on}
+      onClick={props.onClick}
+    >
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+          {props.children}
+        </g>
+      </svg>
+    </button>
+  );
 }

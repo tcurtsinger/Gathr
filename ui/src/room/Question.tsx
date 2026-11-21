@@ -39,7 +39,7 @@ export function QuestionCard(props: {
   return (
     <div className="room-item room-turn">
       <span className="room-who">
-        <Face agent={people.face(q.agent)} size={28} mark={{ state: open ? 'needs' : 'free' }} />
+        <Face agent={people.face(q.agent)} size={28} />
       </span>
       {joined && <span className="room-rule" aria-hidden="true" />}
       <article className="room-card room-question" data-open={open || undefined} aria-label={q.name}>

@@ -21,7 +21,7 @@ const CUT: Partial<Record<Mark, { big: string; small: string }>> = {
 };
 const HAND = { big: 'M6 3.1V6l2.1 1.3', small: 'M6 2.9V6.1h2.6' };
 
-/** The mark alone: on a face, a chat's row, or a card. `size` is the face's, or the mark's own where it has none. */
+/** The mark alone: on a chat's row or a card's head, at `size`. */
 export function StateMark({ state, size, spin }: { state: Mark; size: number; spin?: boolean }) {
   const small = size <= 20;
   return (

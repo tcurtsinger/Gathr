@@ -27,9 +27,8 @@ pub fn routes() -> Router<Arc<State>> {
 }
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
-/// falls back to the engine's own default, or a face's gender or skin tone, which the seed then
-/// picks, or its background, which is then a grey, or its picture, which brings the drawn face back,
-/// or its description.
+/// falls back to the engine's own default, or a picture's shape, eyes or colour, which the id then
+/// picks, or its description.
 #[derive(Deserialize)]
 struct Body {
     name: Option<String>,
@@ -39,15 +38,12 @@ struct Body {
     #[serde(default, deserialize_with = "present")]
     effort: Option<Option<String>>,
     approvals: Option<Approvals>,
-    face_seed: Option<String>,
     #[serde(default, deserialize_with = "present")]
-    gender: Option<Option<String>>,
+    shape: Option<Option<String>>,
     #[serde(default, deserialize_with = "present")]
-    skin: Option<Option<i64>>,
+    eyes: Option<Option<String>>,
     #[serde(default, deserialize_with = "present")]
-    background: Option<Option<String>>,
-    #[serde(default, deserialize_with = "present")]
-    picture: Option<Option<String>>,
+    colour: Option<Option<String>>,
     #[serde(default, deserialize_with = "present")]
     description: Option<Option<String>>,
 }
@@ -67,11 +63,9 @@ impl Body {
             model: self.model,
             effort: self.effort,
             approvals: self.approvals,
-            face_seed: self.face_seed,
-            gender: self.gender,
-            skin: self.skin,
-            background: self.background,
-            picture: self.picture,
+            shape: self.shape,
+            eyes: self.eyes,
+            colour: self.colour,
             description: self.description,
         }
     }
@@ -151,12 +145,9 @@ async fn add(
         model: None,
         effort: None,
         approvals: Approvals::default(),
-        // Empty: the name gives the seed (agents::add).
-        face_seed: String::new(),
-        gender: None,
-        skin: None,
-        background: None,
-        picture: None,
+        shape: None,
+        eyes: None,
+        colour: None,
         description: None,
     };
     let agent = blank.changed(body.change());

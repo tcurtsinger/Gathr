@@ -100,20 +100,6 @@ export function General({ onReference }: { onReference: (ref: string) => void })
       <HandoffLimit onReference={onReference} />
       <AutoCompact onReference={onReference} />
       <AppVersion onReference={onReference} />
-      {/* The faces' drawings ask for their author, the work, the licence and that they were changed. */}
-      <div className="settingrow">
-        <span>Faces</span>
-        <span className="muted settings-credit">
-          <a href="https://www.figma.com/community/file/1356575240759683500" target="_blank" rel="noreferrer">
-            Dylan! The Avatar Generator
-          </a>{' '}
-          by Natalia Spivak,{' '}
-          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">
-            CC BY 4.0
-          </a>
-          , changed
-        </span>
-      </div>
     </section>
   );
 }
