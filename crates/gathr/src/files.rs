@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::Error;
 use crate::folders::{self, Made};
@@ -89,18 +89,19 @@ pub fn with_lines(words: &str, lines: &str) -> String {
     }
 }
 
-/// The folders a picture of `chat` may be shown from: its project's Shared, which holds its files
-/// folder, and the folders and worktrees recorded for its agents.
+/// The folders a picture of `chat` may be shown from, anywhere in its project: the project's folder
+/// in the agent folder, which holds Shared and every agent's folders, and the project's own folder.
 pub fn roots(conn: &Connection, data: &Path, chat: &str) -> Result<Vec<PathBuf>, Error> {
-    let mut stmt = conn.prepare(
-        "SELECT path FROM agent_folders
-         WHERE chat_id = ?1 AND kind IN ('worktree', 'folder') AND removed_ts IS NULL",
-    )?;
-    let mut roots: Vec<PathBuf> = stmt
-        .query_map([chat], |r| r.get::<_, String>(0))?
-        .map(|p| p.map(PathBuf::from))
-        .collect::<Result<_, _>>()?;
-    roots.push(folders::shared_of(conn, data, chat)?);
+    let shared = folders::shared_of(conn, data, chat)?;
+    let mut roots = vec![shared.parent().unwrap_or(&shared).to_path_buf()];
+    let own: Option<String> = conn
+        .query_row(
+            "SELECT p.folder FROM chats c JOIN projects p ON p.id = c.project_id WHERE c.id = ?1",
+            [chat],
+            |r| r.get(0),
+        )
+        .optional()?;
+    roots.extend(own.map(PathBuf::from));
     Ok(roots.iter().map(|r| folders::real(r)).collect())
 }
 
