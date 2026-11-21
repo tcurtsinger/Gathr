@@ -303,8 +303,9 @@ export function App() {
       reference,
       opener: s?.opener ?? (document.activeElement as HTMLElement),
     }));
-  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed.
-  const notice = failure && (
+  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed. All the
+  // app itself does is load and reload: a service that's away (an update's hand-over) shows nothing.
+  const notice = failure && !failure.away && (
     <div className="reading app-failure">
       <FailureNotice
         failure={failure}
