@@ -22,6 +22,8 @@ pub struct Facts {
     worktree: Option<(PathBuf, String)>,
     /// The agent's own folder and its project's Shared (0034).
     own: Option<(PathBuf, PathBuf)>,
+    /// In a project chat, the project's folder in the agent folder and the project's own.
+    read: Vec<PathBuf>,
 }
 
 pub fn facts(
@@ -30,6 +32,7 @@ pub fn facts(
     agent: Option<&str>,
     worktree: Option<(PathBuf, String)>,
     own: Option<(PathBuf, PathBuf)>,
+    read: Vec<PathBuf>,
 ) -> Result<Facts, gathr::Error> {
     let title: String = conn
         .query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
@@ -71,6 +74,7 @@ pub fn facts(
         team: !members.is_empty(),
         worktree,
         own,
+        read,
     })
 }
 
@@ -170,6 +174,14 @@ pub fn text(facts: &Facts) -> String {
              a worktree once the chat is archived, keeping its branch and anything not committed.",
             own.display(),
             shared.display()
+        ));
+    }
+    if let [team, checkout] = &facts.read[..] {
+        lines.push(format!(
+            "You can read the whole project: your teammates' folders and worktrees in \"{}\", and \
+             the person's checkout \"{}\". Write only in your worktree, your own folder and Shared.",
+            team.display(),
+            checkout.display()
         ));
     }
     lines.extend([

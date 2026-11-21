@@ -82,13 +82,14 @@ pub enum Session<'a> {
     Resume(&'a str),
 }
 
-/// The agent's model and effort (0026), `None` leaving each to Claude Code's own default, and
-/// what it may do without asking (0029).
+/// The agent's model and effort (0026), `None` leaving each to Claude Code's own default, what it
+/// may do without asking (0029), and the folders it may read anywhere in (its project's).
 #[derive(Clone, Copy, Default)]
 pub struct Assigned<'a> {
     pub model: Option<&'a str>,
     pub effort: Option<&'a str>,
     pub approvals: Approvals,
+    pub read: &'a [PathBuf],
 }
 
 impl Assigned<'_> {
@@ -113,9 +114,14 @@ pub fn mode(approvals: Approvals) -> &'static str {
 
 /// `SETTINGS`, plus Gathr's hook at `hook`, if there is one, before each file write and command
 /// (0029). It asks with the engine's own token, and a hook that fails blocks the call, so a Gathr
-/// that can't answer never lets a push through. Full never asks, so it has no hook.
-fn settings(approvals: Approvals, hook: Option<&str>) -> String {
+/// that can't answer never lets a push through. Full never asks, so it has no hook. Each folder in
+/// `read` is allowed for reading only: `--add-dir` would allow writing there too.
+fn settings(approvals: Approvals, hook: Option<&str>, read: &[PathBuf]) -> String {
     let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
+    if !read.is_empty() {
+        let allow: Vec<String> = read.iter().map(|dir| read_rule(dir)).collect();
+        settings["permissions"] = serde_json::json!({ "allow": allow });
+    }
     if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
         let auth = format!("Bearer ${TOKEN_VAR}");
         let entry = serde_json::json!({ "type": "http", "url": hook, "timeout": 30,
@@ -125,6 +131,20 @@ fn settings(approvals: Approvals, hook: Option<&str>) -> String {
             "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell", "hooks": [entry] }] });
     }
     settings.to_string()
+}
+
+/// `Read(//…/**)` for everything in `dir`: `//` starts a path at the disk's root, and Windows paths
+/// are matched in POSIX form, `C:\x` as `/c/x` (Claude Code's permissions docs, 2026-11-20).
+fn read_rule(dir: &Path) -> String {
+    let text = dir.display().to_string().replace('\\', "/");
+    let text = text.trim_end_matches('/');
+    let posix = match text.as_bytes() {
+        [drive, b':', ..] if drive.is_ascii_alphabetic() => {
+            format!("/{}{}", drive.to_ascii_lowercase() as char, &text[2..])
+        }
+        _ => text.to_string(),
+    };
+    format!("Read(/{posix}/**)")
 }
 
 /// Claude Code's arguments, with Gathr's hook at `hook` for an engine that runs turns (0029).
@@ -155,7 +175,10 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
     .map(String::from)
     .into();
     args.push(denied.join(","));
-    args.extend(["--settings".into(), settings(assigned.approvals, hook)]);
+    args.extend([
+        "--settings".into(),
+        settings(assigned.approvals, hook, assigned.read),
+    ]);
     args.push(format!("--permission-mode={}", mode(assigned.approvals)));
     match session {
         Session::New(id) => args.extend(["--session-id".into(), id.into()]),

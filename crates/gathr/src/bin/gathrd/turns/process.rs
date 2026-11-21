@@ -121,10 +121,14 @@ impl Task {
     ) -> Result<(), String> {
         let session = self.resumes(&assigned).await;
         let new_id = gathr::ids::uuid();
+        let folder = assigned.folder.as_path();
+        let making = crate::cleanup::hold().await;
+        let place = self.workspace(&assigned, trace).await?;
         let given = command::Assigned {
             model: assigned.model.as_deref(),
             effort: assigned.effort.as_deref(),
             approvals: assigned.approvals,
+            read: &place.read,
         };
         let hook = format!(
             "http://127.0.0.1:{}{}",
@@ -136,9 +140,6 @@ impl Task {
             Some(id) => command::args(Session::Resume(id), given, Some(&hook)),
             None => command::args(Session::New(&new_id), given, Some(&hook)),
         };
-        let folder = assigned.folder.as_path();
-        let making = crate::cleanup::hold().await;
-        let place = self.workspace(&assigned, trace).await?;
         let cwd = place.cwd;
         for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
@@ -153,7 +154,9 @@ impl Task {
             scratch: place.scratch.clone(),
             from_before: place.from_before,
         };
-        let pass = self.pass_for(&assigned, worktree, given, trace).await?;
+        let pass = self
+            .pass_for(&assigned, worktree, given, place.read.clone(), trace)
+            .await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         let point = self.compact_at(&assigned).await;
@@ -278,6 +281,7 @@ impl Task {
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
         place: Place,
+        read: Vec<PathBuf>,
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
@@ -288,7 +292,7 @@ impl Task {
         let facts = self
             .chats
             .writer
-            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree, own))
+            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree, own, read))
             .await;
         let facts = match facts {
             Some(read) => read.map_err(|e| e.to_string()),
