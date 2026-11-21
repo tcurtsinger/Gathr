@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight, PanelLeft } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { IconButton } from './components/IconButton';
 import { desktop, type Ipc } from './desktop';
@@ -8,7 +9,7 @@ import './topline.css';
  * The window's top line (0070): the band of shell above the frame, which the app's grid puts there. The desktop
  * window has no system title bar, so the line moves it: a press on any part that isn't a control drags, a double
  * click maximizes ("deep", Tauri's drag.js). On Windows it holds the window's three buttons at its right; the
- * Mac draws its own at its left, over the rail, where the line holds nothing. A browser gets neither.
+ * Mac draws its own at its left, over the rail, before NavButtons. A browser gets neither.
  */
 export function TopLine({ children }: { children?: ReactNode }) {
   const ipc = desktop();
@@ -34,6 +35,44 @@ export function WindowBand() {
   return (
     <div className="window-band" data-tauri-drag-region="deep">
       {onWindows() && <WindowButtons ipc={ipc} tabIndex={-1} />}
+    </div>
+  );
+}
+
+interface NavProps {
+  /** Whether the sidebar is open. */
+  open: boolean;
+  onToggle: () => void;
+  /** None when there is nowhere to go: the arrow is dim. */
+  onBack?: () => void;
+  onForward?: () => void;
+}
+
+/**
+ * The sidebar's button, Back and Forward at the top line's left end, as Codex has them. Over the line, not in
+ * it: the gaps between them still move the window. On a Mac they start after the system's three buttons.
+ */
+export function NavButtons({ open, onToggle, onBack, onForward }: NavProps) {
+  const ipc = desktop();
+  return (
+    <div
+      className={ipc && !onWindows() ? 'nav-buttons mac' : 'nav-buttons'}
+      data-tauri-drag-region={ipc ? '' : undefined}
+    >
+      <IconButton
+        aria-label={open ? 'Hide chats' : 'Show chats'}
+        aria-expanded={open}
+        className="head-button"
+        onClick={onToggle}
+      >
+        <PanelLeft aria-hidden="true" />
+      </IconButton>
+      <IconButton aria-label="Back" className="head-button" disabled={!onBack} onClick={onBack}>
+        <ChevronLeft aria-hidden="true" />
+      </IconButton>
+      <IconButton aria-label="Forward" className="head-button" disabled={!onForward} onClick={onForward}>
+        <ChevronRight aria-hidden="true" />
+      </IconButton>
     </div>
   );
 }

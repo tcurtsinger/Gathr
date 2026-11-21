@@ -15,6 +15,7 @@ import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
 import { FailureNotice } from './components/Notice';
 import { DeleteConfirm } from './DeleteConfirm';
+import { kept, keep as remember } from './kept';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
@@ -25,7 +26,7 @@ import { RoomView, type Unsent } from './room/RoomView';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
-import { TopLine } from './TopLine';
+import { NavButtons, TopLine } from './TopLine';
 import { readyVersion, useAppUpdate } from './update';
 import './app.css';
 
@@ -62,6 +63,12 @@ export function App() {
   const [sidebars, setSidebars] = useState<Record<string, boolean>>({});
   // The message a search hit opened its chat at.
   const [found, setFound] = useState<Found>();
+  // The chat list's column, closed or open as the person left it on this computer.
+  const [nav, setNav] = useState(() => kept('gathr.nav') !== 'closed');
+  const showNav = (open: boolean) => {
+    setNav(open);
+    remember('gathr.nav', open ? undefined : 'closed');
+  };
 
   // A chat's state told while a list loads may be newer than that list: it is put back on top of it.
   const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs' | 'mark'>>[]>([]);
@@ -204,6 +211,26 @@ export function App() {
     setSelected(id);
     setFresh(null);
   };
+  // What the main area showed this run, a chat's id or '' for New, for Back and Forward. Opening something
+  // after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
+  const [trail, setTrail] = useState<{ list: string[]; at: number }>({ list: [], at: -1 });
+  const shown = selected ?? (fresh ? '' : null);
+  useEffect(() => {
+    if (shown === null) return;
+    setTrail((t) =>
+      t.list[t.at] === shown ? t : { list: [...t.list.slice(0, t.at + 1), shown], at: t.at + 1 },
+    );
+  }, [shown]);
+  const there = (key: string) =>
+    key !== shown && (key === '' || [...chats, ...archived].some((c) => c.id === key));
+  const back = trail.list.findLastIndex((key, i) => i < trail.at && there(key));
+  const ahead = trail.list.findIndex((key, i) => i > trail.at && there(key));
+  const go = (at: number) => {
+    setTrail((t) => ({ ...t, at }));
+    const key = trail.list[at];
+    if (key) choose(key);
+    else newChat();
+  };
   // A click on a system notification opens its chat: the desktop app calls this (0058).
   const chooseNow = useRef(choose);
   chooseNow.current = choose;
@@ -321,7 +348,13 @@ export function App() {
   };
 
   const app = (
-    <div className="app">
+    <div className={nav ? 'app' : 'app nav-closed'}>
+      <NavButtons
+        open={nav}
+        onToggle={() => showNav(!nav)}
+        onBack={back < 0 ? undefined : () => go(back)}
+        onForward={ahead < 0 ? undefined : () => go(ahead)}
+      />
       <Rail
         onSettings={(opener) => openSettings('engines', undefined, opener)}
         update={{
@@ -353,6 +386,7 @@ export function App() {
           <SearchFlyout
             name={name}
             onReference={openReference}
+            onShortcut={() => showNav(true)}
             onOpen={(hit) => {
               setFound('message' in hit ? { chat: hit.chat, message: hit.message } : undefined);
               openChat(hit.chat);

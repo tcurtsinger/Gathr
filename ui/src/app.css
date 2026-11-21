@@ -64,6 +64,18 @@ body:has(.app) {
 .app > .workspace > .workspace-view {
   border-top-right-radius: 0;
 }
+/* The chat list's column closed: the chat takes its width, round on its left. The rail stays. */
+.app.nav-closed,
+.app.nav-closed:has(> .workspace) {
+  --nav: 0px;
+}
+.app.nav-closed > .sidebar {
+  display: none;
+}
+.app.nav-closed > .chat {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
 .app > .chat .reading {
   width: 100%;
   max-width: 52rem;
