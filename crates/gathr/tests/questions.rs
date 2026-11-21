@@ -4,7 +4,10 @@
 
 mod common;
 
-use common::{TempDir, TestService, call_tool, first_token, held_recording, sign_in_account};
+use common::replay::{LetGo, read_in, turns};
+use common::{
+    TempDir, TestService, call_tool, first_token, held_recording, sign_in_account, team, until,
+};
 use serde_json::{Value, json};
 
 #[test]
@@ -102,4 +105,56 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
         .iter()
         .find(|c| c["id"] == chat.as_str());
     assert_eq!(row.unwrap()["needs"], false, "{listed}");
+}
+
+/// The lead's question and the person's answer reach a member whose turn opens after.
+#[test]
+fn a_member_hears_the_leads_question_and_the_answer() {
+    let data = TempDir::new();
+    let _go = LetGo(data.0.join("go"));
+    let (service, chat, lead) = team(&data.0, &turns(&data.0, &[0], 3), &[]);
+    let members = service.call("GET", &format!("/api/chats/{chat}")).json()["members"].clone();
+    let members = members.as_array().unwrap().iter();
+    let ann = members.into_iter().find(|m| m["name"] == "Ann").unwrap()["agent"].clone();
+    let say = |agent: &str, text: &str| {
+        let path = format!("/api/chats/{chat}/messages");
+        let sent = service.send("POST", &path, json!({ "text": text, "agent": agent }));
+        assert_eq!(sent.status, 200, "{}", sent.body);
+        sent.json()["turn"].clone()
+    };
+    let ended = |turn: &Value| {
+        service.wait_for(&chat, 30, "the turn to end", |h| {
+            let turns = h["turns"].as_array().cloned().unwrap_or_default();
+            turns
+                .iter()
+                .any(|t| t["id"] == *turn && t["status"] == "done")
+        });
+    };
+    let first = say(&lead, "Name the walk");
+    let ask =
+        json!({ "what": "Which name?", "choices": [{ "label": "Ridge" }, { "label": "Brook" }] });
+    let asked = call_tool(service.info.port, &first_token(&data.0), "ask_person", ask);
+    assert_eq!(asked["isError"], false, "{asked}");
+    std::fs::write(data.0.join("go"), "").unwrap();
+    ended(&first);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let path = format!("/api/questions/{}/answer", history["questions"][0]["id"]);
+    let answered = service.send("POST", &path, json!({ "pick": "Brook", "words": "Go." }));
+    assert_eq!(answered.status, 200, "{}", answered.body);
+    let answer = answered.json()["turn"].clone();
+    ended(&answer);
+    let lead_read = read_in(&data.0, answer.as_str().unwrap());
+    assert!(
+        !lead_read.contains("asked the person"),
+        "the asker heard it twice: {lead_read}"
+    );
+
+    let turn = say(ann.as_str().unwrap(), "Your view?");
+    let turn = turn.as_str().unwrap();
+    let read = until(30, "Ann's turn to read", || {
+        let read = read_in(&data.0, turn);
+        read.contains("Your view?").then_some(read)
+    });
+    let line = "Gathr: Lead asked the person \\\"Which name?\\\". They answered: Picked: Brook. Their words: Go.";
+    assert_eq!(read.matches(line).count(), 1, "{read}");
 }
