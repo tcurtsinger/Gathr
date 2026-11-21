@@ -44,6 +44,10 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+/* Hidden, not gone: still a tab to a screen reader and the keyboard. */
+.workspace-tab[data-whole="false"] {
+  opacity: 0;
+}
 .workspace-tab[data-selected="true"] {
   border-color: var(--border);
   background: var(--background);
@@ -83,7 +87,8 @@
   flex: none;
   stroke-width: 1.5;
 }
-/* The file tabs after Home and Files, which stay put: they scroll sideways, to the open one. */
+/* The file tabs after Home and Files, which stay put: they scroll sideways, to the open one. A tab partly out of
+   sight isn't drawn (Sidebar.tsx). */
 .workspace-files {
   display: flex;
   flex: 1;

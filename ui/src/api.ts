@@ -504,6 +504,12 @@ export const api = {
     call<{ entries: FileEntry[] }>('GET', `/api/chats/${chat}/files?path=${encodeURIComponent(path)}`).then(
       (f) => f.entries,
     ),
+  /** The chat's files whose name holds the words, best first: each with its place from the top folder down. */
+  find: (chat: string, words: string) =>
+    call<{ found: { path: string; crumbs: string[] }[] }>(
+      'GET',
+      `/api/chats/${chat}/files?find=${encodeURIComponent(words)}`,
+    ).then((f) => f.found),
   words,
   search: (q: string) =>
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),

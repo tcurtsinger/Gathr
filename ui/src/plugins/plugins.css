@@ -21,31 +21,7 @@
   background: var(--muted-foreground);
 }
 .plugins-search {
-  display: flex;
   flex: 0 1 300px;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--input);
-  border-radius: 8px;
-}
-.plugins-search svg {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  color: var(--muted-foreground);
-}
-.plugins-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: 14px;
-  outline: none;
-  box-shadow: none;
 }
 .plugin-tile {
   display: grid;

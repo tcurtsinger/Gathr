@@ -288,7 +288,7 @@ export function Plugins() {
             <div className="screen-bar">
               {!nothing && (
                 <>
-                  <label className="plugins-search">
+                  <label className="search-box plugins-search">
                     <Search aria-hidden="true" />
                     <input
                       ref={search}

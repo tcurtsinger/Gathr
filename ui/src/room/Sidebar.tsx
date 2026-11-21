@@ -1,11 +1,12 @@
-import { File as FileIcon, Files, House, X } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
+import { File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type FileTree } from '../api';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
 import { FileTab, type Opened, Tree } from './Files';
+import { Find } from './Find';
 import './panel.css';
 
 /** A chat's open tabs, and the one shown: Home, Files, or a file's path. */
@@ -132,20 +133,38 @@ function Panel({ chat }: { chat: string }) {
       {view(
         HOME,
         <div className="home">
-          <h2>Open</h2>
-          <button
-            type="button"
-            className="home-tile"
-            onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
+          <Find
+            chat={chat}
+            icon={<Search aria-hidden="true" />}
+            label="Find a file"
+            onOpen={(f) => show(chat, f)}
           >
-            <Files aria-hidden="true" />
-            Files
-          </button>
-          <h2>Board</h2>
-          <Board chat={chat} />
+            <h2>Open</h2>
+            <button
+              type="button"
+              className="home-tile"
+              onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
+            >
+              <Files aria-hidden="true" />
+              Files
+            </button>
+            <h2>Board</h2>
+            <Board chat={chat} />
+          </Find>
         </div>,
       )}
-      {tabs.files && view(FILES, <Tree chat={chat} onOpen={(file) => show(chat, file)} />)}
+      {tabs.files &&
+        view(
+          FILES,
+          <Find
+            chat={chat}
+            icon={<Filter aria-hidden="true" />}
+            label="Filter files"
+            onOpen={(f) => show(chat, f)}
+          >
+            <Tree chat={chat} onOpen={(file) => show(chat, file)} />
+          </Find>,
+        )}
       {tabs.open.map((f) => view(f.path, <FileTab chat={chat} file={f} />))}
     </>
   );
@@ -160,14 +179,28 @@ interface TabProps {
   onClose?: () => void;
 }
 
-/** One tab: the open one scrolls into sight. */
+/**
+ * One tab: the open one scrolls into sight. A tab scrolled partly out of sight isn't drawn, so the row never shows
+ * a sliver of one, such as its bare close mark.
+ */
 function Tab({ id, selected, icon, name, onSelect, onClose }: TabProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [whole, setWhole] = useState(true);
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selected]);
+  useEffect(() => {
+    const tab = ref.current;
+    if (!tab?.parentElement) return;
+    const seen = new IntersectionObserver(([e]) => setWhole(e.intersectionRatio > 0.99), {
+      root: tab.parentElement,
+      threshold: [0.99, 1],
+    });
+    seen.observe(tab);
+    return () => seen.disconnect();
+  }, []);
   return (
-    <div ref={ref} className="workspace-tab" data-selected={selected}>
+    <div ref={ref} className="workspace-tab" data-selected={selected} data-whole={whole}>
       <button
         type="button"
         role="tab"
