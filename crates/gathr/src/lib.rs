@@ -21,6 +21,7 @@ pub mod ends;
 pub mod error;
 pub mod event;
 pub mod fetch;
+pub mod files;
 pub mod folders;
 pub mod friction;
 pub mod handoffs;

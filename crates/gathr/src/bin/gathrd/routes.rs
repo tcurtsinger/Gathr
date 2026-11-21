@@ -128,6 +128,9 @@ struct NewMessage {
     agent: Option<String>,
     #[serde(default)]
     picks: Vec<gathr::picks::Pick>,
+    /// The chat's files it carries, by their saved names (`POST /api/chats/{chat}/files`).
+    #[serde(default)]
+    files: Vec<String>,
     /// A reply under a message (0076): the message it answers.
     #[serde(flatten)]
     target: gathr::replies::Target,
@@ -140,7 +143,7 @@ async fn send(
     Json(body): Json<NewMessage>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    if body.text.trim().is_empty() {
+    if body.text.trim().is_empty() && body.files.is_empty() {
         return Err(fail(
             StatusCode::BAD_REQUEST,
             "Send failed",
@@ -158,6 +161,8 @@ async fn send(
         gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
     })
     .await?;
+    let lines = crate::files::lines(&s, &t, &chat, &body.files, "Send failed").await?;
+    let text = gathr::files::with_lines(&body.text, &lines);
     let target = replying(&s, &t, &chat, body.target).await?;
     let (agent, others) = addressee(&s, &t, &chat, body.agent, chosen).await?;
     let opened = match target.is_reply() {
@@ -168,7 +173,7 @@ async fn send(
     let task = s.chats.task(&chat, agent.as_deref());
     let command = Cmd::Send {
         chat: chat.clone(),
-        text: body.text,
+        text,
         agent: agent.clone(),
         agents: 1 + others.len(),
         picks,

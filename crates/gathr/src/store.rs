@@ -267,9 +267,12 @@ pub fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
 /// A new chat's name until its first message names it.
 pub const UNTITLED: &str = "New chat";
 
-/// A chat's name from its first message: the first line with text, up to 60 characters.
+/// A chat's name from its first message: the first line with text, up to 60 characters. The lines
+/// naming its files don't count.
 pub(crate) fn title_from(text: &str) -> Option<String> {
-    Some(crate::text::cut(crate::text::first_line(text)?, 60, false))
+    let words = text.lines().map(str::trim).filter(|line| !line.is_empty());
+    let mut words = words.filter(|line| !line.starts_with(crate::files::ATTACHED));
+    Some(crate::text::cut(words.next()?, 60, false))
 }
 
 pub fn add_message(

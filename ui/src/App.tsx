@@ -44,7 +44,7 @@ export function App() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
   // Each chat's draft and the names picked in it, kept while another chat is open.
-  const drafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
+  const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
   const [, redraw] = useState(0);
   const pauses = usePauses(setFailure);
@@ -153,8 +153,8 @@ export function App() {
     setSelected(null);
   }, []);
   const keep = (chat: string, f: Unsent) => setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
-  const start = (text: string, agent?: string, picks?: PickedName[]) => {
-    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, picks, failure: e });
+  const start = (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => {
+    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, picks, files, failure: e });
     const draft = fresh;
     api.createChat(draft?.project).then(
       (made) => {
@@ -165,7 +165,7 @@ export function App() {
           setFresh(null);
           setSelected(made.id);
         }
-        api.send(made.id, text, agent, picks).then(
+        api.send(made.id, text, agent, picks, undefined, files).then(
           () => loadChats().then(setChats, setFailure),
           (e: Failure) => keep(made.id, failed(e)),
         );
@@ -272,7 +272,12 @@ export function App() {
     draft: drafts.current.get(chat.id)?.text ?? '',
     picks: drafts.current.get(chat.id)?.picks,
     onDraft: (text: string, picks: Picked[] = []) => {
-      drafts.current.set(chat.id, { text, picks });
+      drafts.current.set(chat.id, { ...drafts.current.get(chat.id), text, picks });
+      redraw((n) => n + 1);
+    },
+    files: drafts.current.get(chat.id)?.files,
+    onFiles: (files: File[]) => {
+      drafts.current.set(chat.id, { text: '', picks: [], ...drafts.current.get(chat.id), files });
       redraw((n) => n + 1);
     },
     unsent: unsent[chat.id] ?? [],

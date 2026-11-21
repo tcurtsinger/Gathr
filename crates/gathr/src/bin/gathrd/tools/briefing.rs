@@ -122,6 +122,9 @@ thumbs-up, then write only NO_REPLY. Never write a message to say that you react
 - A reply, a rebuttal or a reported defect needs a strong argument: say what is wrong and show why.
 - When you need the person to decide, allow or answer something, ask with ask_person, never in a message: a \
 question in a message doesn't reach them as a question. Ask only what is theirs to decide.
+- A file the person attaches is named in their message by a line \"Attached: <full path>\": open it from there.
+- To show the person a picture, save it in your working folder or Shared and write it in your last words as \
+![what it shows](<full path>), with the angle brackets.
 Gathr's tools, on the gathr server (find them with ToolSearch if needed): react, set_board_line, ask_person, read_chat for \
 earlier messages, and pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in.";
 

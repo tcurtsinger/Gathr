@@ -202,7 +202,7 @@ function Preview() {
   const [sidebar, setSidebar] = useState(true);
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
   const everyone = people(members, agents);
-  const answer = async (id: number, pick?: string, words?: string) =>
+  const answer = async ({ id }: { id: number }, pick?: string, words?: string) =>
     setState((s) => ({
       ...s,
       questions: s.questions.map((q) =>
@@ -248,7 +248,7 @@ function Preview() {
         </div>
       </TopLine>
       <main className="chat room" aria-label="Orders export">
-        <Room state={state} people={everyone} acts={acts}>
+        <Room chat="preview" state={state} people={everyone} acts={acts}>
           <Composer
             draft={draft.text}
             picks={draft.picks}

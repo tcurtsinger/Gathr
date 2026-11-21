@@ -90,6 +90,35 @@
 .room-words {
   white-space: pre-wrap;
 }
+/* The person's files: their tiles under the words in the bubble; alone, at the right with the time under them. */
+.room-you .file-tiles {
+  margin: 8px 0 2px;
+}
+.room-you-files {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-end;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 76%;
+}
+.room-you-files .file-tiles {
+  justify-content: flex-end;
+}
+.room-reply .file-tiles,
+.room-answer .file-tiles {
+  margin-top: 6px;
+}
+/* An agent's words with files: each run of tiles where it stands, the words around it. */
+.room-pieces {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* A file dragged over the chat shows its drop state over the column. */
+.chat.room {
+  position: relative;
+}
 .room-item .mention {
   color: var(--attention);
   font-weight: 550;
