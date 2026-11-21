@@ -40,8 +40,9 @@ export function WindowBand() {
 }
 
 interface NavProps {
-  /** Whether the sidebar is open. */
+  /** Whether the sidebar is open, and what it lists: chats, or the Plugins screen's. */
   open: boolean;
+  lists?: 'chats' | 'plugins';
   onToggle: () => void;
   /** None when there is nowhere to go: the arrow is dim. */
   onBack?: () => void;
@@ -52,7 +53,7 @@ interface NavProps {
  * The sidebar's button, Back and Forward at the top line's left end, as Codex has them. Over the line, not in
  * it: the gaps between them still move the window. On a Mac they start after the system's three buttons.
  */
-export function NavButtons({ open, onToggle, onBack, onForward }: NavProps) {
+export function NavButtons({ open, lists = 'chats', onToggle, onBack, onForward }: NavProps) {
   const ipc = desktop();
   return (
     <div
@@ -60,7 +61,7 @@ export function NavButtons({ open, onToggle, onBack, onForward }: NavProps) {
       data-tauri-drag-region={ipc ? '' : undefined}
     >
       <IconButton
-        aria-label={open ? 'Hide chats' : 'Show chats'}
+        aria-label={`${open ? 'Hide' : 'Show'} ${lists}`}
         aria-expanded={open}
         className="head-button"
         onClick={onToggle}

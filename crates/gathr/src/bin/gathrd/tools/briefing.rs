@@ -30,15 +30,23 @@ pub struct Facts {
     assistant: bool,
     /// In a chat with no project, the person's other agents, each with its description.
     agents: Vec<String>,
+    /// The Skills folder and its enabled skills that can be read, by name and description.
+    skills: Option<(PathBuf, Vec<(String, String)>)>,
 }
+
+/// The agent's worktree, its own folder and Shared, what it may read, and the Skills folder.
+type Folders = (
+    Option<(PathBuf, String)>,
+    Option<(PathBuf, PathBuf)>,
+    Vec<PathBuf>,
+    Option<PathBuf>,
+);
 
 pub fn facts(
     conn: &Connection,
     chat: &str,
     agent: Option<&str>,
-    worktree: Option<(PathBuf, String)>,
-    own: Option<(PathBuf, PathBuf)>,
-    read: Vec<PathBuf>,
+    (worktree, own, read, skills): Folders,
 ) -> Result<Facts, gathr::Error> {
     let title: String = conn
         .query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
@@ -92,6 +100,14 @@ pub fn facts(
         false => Vec::new(),
     };
     let assistant = gathr::assistant::assistant(conn)?;
+    let off = gathr::skills::off(conn)?;
+    let skills = skills.map(|dir| {
+        let listed = gathr::skills::list(&dir, &off).into_iter();
+        let usable = listed
+            .filter(|s| s.enabled)
+            .filter_map(|s| Some((s.name, s.description?)));
+        (dir, usable.collect::<Vec<_>>())
+    });
     Ok(Facts {
         title,
         name,
@@ -104,6 +120,7 @@ pub fn facts(
         person: gathr::assistant::person_name(conn)?,
         assistant: plain && agent.is_some() && assistant.as_deref() == agent,
         agents,
+        skills: skills.filter(|(_, listed)| !listed.is_empty()),
     })
 }
 
@@ -132,6 +149,34 @@ fn title_of(role: Role) -> Option<&'static str> {
 /// The tools turned off for every agent, by name: what the briefing says is off.
 pub fn off() -> Vec<&'static str> {
     DENIED_TOOLS.iter().map(|(name, _)| *name).collect()
+}
+
+/// A description is cut to this many characters, and past LISTED the skills are named only, so
+/// many skills never crowd the briefing.
+const DESCRIBED: usize = 200;
+const LISTED: usize = 6_000;
+
+/// Where the skills are, how to use one, and each one with its description.
+fn skills(dir: &std::path::Path, listed: &[(String, String)]) -> String {
+    let described: Vec<String> = listed
+        .iter()
+        .map(|(name, what)| match what.char_indices().nth(DESCRIBED) {
+            Some((cut, _)) => format!("- {name}: {}…", &what[..cut]),
+            None => format!("- {name}: {what}"),
+        })
+        .collect();
+    let list = match described.iter().map(|l| l.len() + 1).sum::<usize>() > LISTED {
+        true => {
+            let names: Vec<&str> = listed.iter().map(|(name, _)| name.as_str()).collect();
+            format!(" {}.", names.join(", "))
+        }
+        false => format!("\n{}", described.join("\n")),
+    };
+    format!(
+        "Skills are in \"{}\", each a folder with a SKILL.md. Before a task a skill fits, read its \
+         SKILL.md and follow it. The skills:{list}",
+        dir.display()
+    )
 }
 
 /// How a room chat works, for an agent with teammates there.
@@ -232,6 +277,9 @@ pub fn text(facts: &Facts) -> String {
             team.display(),
             checkout.display()
         ));
+    }
+    if let Some((dir, listed)) = &facts.skills {
+        lines.push(skills(dir, listed));
     }
     lines.extend([
         "Follow the project's AGENTS.md and CLAUDE.md when present.".to_string(),

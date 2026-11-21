@@ -349,6 +349,15 @@ export interface AppState {
   failed: { why: string; ref: string } | null;
 }
 
+/** A folder in the Skills folder: its SKILL.md's description, or why it can't be read. */
+export interface Skill {
+  name: string;
+  description: string | null;
+  path: string;
+  enabled: boolean;
+  problem: string | null;
+}
+
 export class Failure extends Error {
   constructor(
     readonly error: string,
@@ -485,6 +494,35 @@ export const api = {
   /** What it did, and the folders it couldn't remove yet (`left`). */
   delete: (kind: Deletable, id: string) =>
     call<DeleteCounts & { left: string[] }>('DELETE', `/api/${kind}s/${id}`),
+  skills: () => call<{ folder: string; skills: Skill[] }>('GET', '/api/skills'),
+  /** The skill with its SKILL.md's text after the front matter; none without a SKILL.md. */
+  skill: (name: string) =>
+    call<Skill & { text: string | null }>('GET', `/api/skills/${encodeURIComponent(name)}`),
+  enableSkill: (name: string, enabled: boolean) =>
+    call<Skill>('PATCH', `/api/skills/${encodeURIComponent(name)}`, { enabled }),
+  /** Deletes its folder. */
+  removeSkill: (name: string) => call<unknown>('DELETE', `/api/skills/${encodeURIComponent(name)}`),
+  newSkill: (skill: { name: string; description: string; text: string }) =>
+    call<Skill>('POST', '/api/skills', skill),
+  /** One Markdown file as a skill of its own: named by its front matter, else by the file's name. */
+  addSkillFile: (file: File) =>
+    call<Skill>('POST', `/api/skills?file=${encodeURIComponent(file.name)}`, file).then((s) => s.name),
+  /** A folder picked with its files, each sent with its path inside it: the skill's name is the folder's. */
+  addSkillFolder: async (files: readonly File[]) => {
+    const parts = (f: File) => f.webkitRelativePath.split('/');
+    // Hidden files, such as a Mac's .DS_Store, are left out.
+    const kept = files.filter((f) => !parts(f).some((p) => p.startsWith('.')));
+    const name = parts(kept[0] ?? files[0])[0];
+    const inner = (f: File) => parts(f).slice(1).join('/');
+    kept.sort((a, b) => Number(inner(b) === 'SKILL.md') - Number(inner(a) === 'SKILL.md'));
+    for (const [i, file] of kept.entries()) {
+      const path = `/api/skills/${encodeURIComponent(name)}/files?path=${encodeURIComponent(inner(file))}`;
+      await call<unknown>('POST', i === 0 ? `${path}&new=true` : path, file);
+    }
+    return name;
+  },
+  /** Opens its folder in the system's file manager: the desktop window only. */
+  openSkill: (name: string) => call<unknown>('POST', `/api/skills/${encodeURIComponent(name)}/open`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>

@@ -1,9 +1,11 @@
 /* The rail (0070): 44 wide on the shell, icons only. Home sits on the word mark's line (both centre 26 under
-   the top line); Update and Settings at the foot, 12 above the window's edge (6 of it the shell's margin). */
+   the top line), Plugins under it; Update and Settings at the foot, 12 above the window's edge (6 of it the
+   shell's margin). */
 .rail {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 6px;
   padding: 10px 0 6px;
 }
 .rail-foot {
@@ -13,7 +15,6 @@
   gap: 6px;
   margin-top: auto;
 }
-.rail-mark,
 .rail-button {
   display: grid;
   place-items: center;
@@ -23,11 +24,12 @@
   border-radius: 8px;
   color: var(--muted-foreground);
 }
-.rail-mark {
+/* The screen that's open. */
+.rail .rail-button[aria-current="page"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
-.rail :is(.rail-mark, .rail-button) svg {
+.rail .rail-button svg {
   width: 18px;
   height: 18px;
   stroke-width: 1.75;

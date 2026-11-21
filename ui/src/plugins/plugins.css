@@ -1,0 +1,282 @@
+/* The Plugins screen: its sidebar is navigation's (sidebar.css), its main panel a page of rows, as the approved
+   mock-up (second round) draws them. */
+.plugins-nav .brand {
+  justify-content: space-between;
+}
+.plugins-nav .brand .row-icon {
+  width: 24px;
+  opacity: 1;
+}
+.plugins-nav .navbutton[aria-current="page"] {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.plugins-nav-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+  stroke-width: 1.5;
+}
+.plugins-nav .chatrow[data-disabled] .chat-link {
+  color: var(--muted-foreground);
+}
+.plugins-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.app > .chat.plugins {
+  overflow: auto;
+  background: var(--frame);
+}
+.plugins-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+.plugins-page h1 {
+  margin: 0 0 18px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.plugins-page > .notice {
+  margin: 0 0 16px;
+}
+.plugins-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.plugins-search {
+  display: flex;
+  flex: 0 1 300px;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+}
+.plugins-search svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.plugins-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  outline: none;
+  box-shadow: none;
+}
+.plugins-add {
+  margin-left: auto;
+}
+.plugins-empty {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.plugins-empty h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.plugins-empty p {
+  margin: 0;
+}
+.plugin-group + .plugin-group {
+  margin-top: 22px;
+}
+.plugin-group h2 {
+  margin: 0 0 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.plugin-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plugin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.plugin-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 9px 4px;
+  border-radius: 0;
+  text-align: left;
+}
+.plugin-open:hover {
+  background: none;
+}
+.plugin-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted-foreground);
+}
+.plugin-tile svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.5;
+}
+.plugin-words {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.plugin-words strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.plugin-open:hover strong {
+  text-decoration: underline;
+}
+.plugin-words span {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.plugin-words .plugin-problem,
+.skill-title .plugin-problem {
+  color: var(--danger);
+}
+.plugin-row[data-disabled] :is(strong, .plugin-tile) {
+  color: var(--muted-foreground);
+}
+.plugin-more {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--muted-foreground);
+}
+.plugins-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 0 18px -4px;
+  padding: 2px 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.plugins-back svg {
+  width: 14px;
+  height: 14px;
+}
+.skill-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.skill-head .plugin-tile {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+}
+.skill-head .plugin-tile svg {
+  width: 20px;
+  height: 20px;
+}
+.skill-title {
+  flex: 1;
+  min-width: 0;
+}
+.skill-title h1 {
+  margin: 0;
+}
+.skill-title p {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+.skill-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+.skill-folder {
+  margin: 14px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.skill-folder code {
+  margin-left: 4px;
+  font-size: 12px;
+}
+.skill-enabled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.skill-enabled-words {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+}
+.skill-enabled-words .muted {
+  font-size: 12.5px;
+}
+.skill-text {
+  max-width: 44rem;
+  margin-top: 22px;
+}
+.skill-text > h2 {
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.new-skill {
+  display: grid;
+  gap: 14px;
+  max-width: 40rem;
+}
+.new-skill h1 {
+  margin-bottom: 4px;
+}
+/* As base.css draws a field. */
+.new-skill textarea {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--canvas);
+  border: 1px solid var(--control);
+  border-radius: 7px;
+  resize: vertical;
+  font-size: 14px;
+}
+.new-skill footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
