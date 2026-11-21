@@ -1,0 +1,34 @@
+/* A PDF's pages on the panel's surface, white, one under another; a workbook's sheets as small tabs over its table. */
+.pdf {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.pdf-page {
+  flex: none;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.pdf-page > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sheet-tabs {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+.sheet-tabs > .workspace-tab {
+  height: 26px;
+  font-size: 12.5px;
+}

@@ -388,7 +388,7 @@ pub enum Unshown {
     Gone,
     /// Over `SHOWN`.
     Large,
-    /// Not UTF-8 text.
+    /// Not UTF-8 text, or a PDF or workbook that can't be read (`documents`).
     NotText,
 }
 

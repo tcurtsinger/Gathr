@@ -1,5 +1,5 @@
 import { ChevronRight, CodeXml, Copy, File as FileIcon, FileX, Folder, FolderOpen } from 'lucide-react';
-import { type CSSProperties, useContext, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useContext, useEffect, useState } from 'react';
 import { api, Failure, type FileEntry, type FileTree, type Unshown } from '../api';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
@@ -8,6 +8,8 @@ import { isPicture, OpenFile } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { FileBody, hasLook } from './FileBody';
 import { isPage, PageFrame } from './PageFrame';
+import { PdfBody } from './PdfBody';
+import { SheetBody } from './SheetBody';
 
 /** A file open in a tab: its path, and its place in the tree from the top folder down. */
 export interface Opened {
@@ -114,31 +116,41 @@ function Node({ chat, entry, agent, opened = false, crumbs, onOpen }: NodeProps)
 const KINDS: Record<string, string> = {
   doc: 'Word',
   docx: 'Word',
-  xls: 'Excel',
-  xlsx: 'Excel',
   ppt: 'PowerPoint',
   pptx: 'PowerPoint',
-  pdf: 'PDF',
 };
 
-/** A file's tab: its path with Source and Copy, and its words as they look, or its picture. Viewing only. */
+/** Files whose tab draws them itself from the service's own answer, not from their words. */
+const DOCUMENTS: Record<string, typeof PdfBody> = {
+  pdf: PdfBody,
+  xlsx: SheetBody,
+  xlsm: SheetBody,
+  xls: SheetBody,
+  ods: SheetBody,
+};
+
+/** A file's tab: its path with Source and Copy, and its words as they look, its picture, a PDF's pages or a
+ * workbook's sheets. Viewing only. */
 export function FileTab({ chat, file }: { chat: string; file: Opened }) {
   const picture = isPicture(file.path);
+  const name = file.crumbs.at(-1) ?? file.path;
+  const ending = name.split('.').pop()?.toLowerCase() ?? '';
+  const Document = DOCUMENTS[ending];
   const [shown, setShown] = useState<{ text: string } | { unshown: Unshown }>();
   const [broken, setBroken] = useState(false);
   const [source, setSource] = useState(false);
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
   useEffect(() => {
-    if (!picture) api.words(chat, file.path).then(setShown, setFailure);
-  }, [chat, file.path, picture]);
+    if (!picture && !Document) api.words(chat, file.path).then(setShown, setFailure);
+  }, [chat, file.path, picture, Document]);
+  const unshow = useCallback((unshown: Unshown) => setShown({ unshown }), []);
   const text = shown && 'text' in shown ? shown.text : undefined;
-  const name = file.crumbs.at(-1) ?? file.path;
   const page = isPage(name);
   const said = broken ? 'gone' : shown && 'unshown' in shown ? shown.unshown : undefined;
   // A page too large to show as text still shows as it looks, by its address; only its Source and Copy go.
   const unshown = page && said !== 'gone' ? undefined : said;
-  const kind = KINDS[name.split('.').pop()?.toLowerCase() ?? ''];
+  const kind = KINDS[ending];
   const copy = (words: string) =>
     navigator.clipboard.writeText(words).catch(() => setFailure(new Failure('Copy failed', null, null)));
   // A link in the file that isn't a full path is beside the file, not in an agent's folder.
@@ -182,6 +194,8 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
           </strong>
           {unshown === 'gone' && <span>It was moved or deleted.</span>}
         </div>
+      ) : Document ? (
+        <Document chat={chat} path={file.path} onUnshown={unshow} onFailure={setFailure} />
       ) : page && shown && !source ? (
         <PageFrame chat={chat} path={file.path} name={name} />
       ) : picture ? (
