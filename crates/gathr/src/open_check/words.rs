@@ -35,9 +35,9 @@ pub(super) fn check(
     };
     let lines = [
         format!(
-            "Check {author}'s answer before the person relies on it. Don't redo the work, but where it says \
-             something was built or changed, check that part by running it and using it: reading the diff alone \
-             isn't a check, and \"it works\" with no proof is a claim without evidence."
+            "Check {author}'s answer before the person relies on it, by reading: the answer, what was said in the \
+             room, and the change itself. Don't run or rebuild the work. Run something yourself only when what \
+             you read looks wrong, or a claim has nothing behind it."
         ),
         format!("The person asked: {}", body(asked)?),
         format!("{author}'s answer:\n{}", body(answer)?),
