@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { useCard } from '../components/Corner';
-import { FIND, KINDS, type Kind, type Part, WORDS } from './note';
+import { FIND, KINDS, type Kind, PATH, type Part, WORDS } from './note';
 import './pageframe.css';
 
 /** An HTML page shows as it looks. */
@@ -38,12 +38,14 @@ function clicked(data: unknown): { part: Part; rect: number[] } | undefined {
     KINDS.includes(d.kind as Kind) &&
     typeof d.words === 'string' &&
     typeof d.find === 'string' &&
+    d.find.length <= FIND &&
+    PATH.test(d.find) &&
     rect.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) < 100_000);
   if (!fits) return undefined;
   const part = {
     kind: d.kind as Kind,
     words: (d.words as string).slice(0, WORDS),
-    find: (d.find as string).slice(0, FIND),
+    find: d.find as string,
   };
   return { part, rect: rect as number[] };
 }

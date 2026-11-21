@@ -20,7 +20,12 @@ export interface Note extends Part {
 
 /** The longest words and path a note carries: all of it comes from a page an agent wrote. */
 export const WORDS = 80;
-export const FIND = 300;
+export const FIND = 600;
+/**
+ * The only form a part's path takes, as the notes script writes it: `body` or an id, then each tag and its place. A
+ * page that says anything else is not heard: the path goes into a message sent in the person's name.
+ */
+export const PATH = /^(body|#[A-Za-z][\w-]*)( > [A-Za-z][\w-]*(:nth-of-type\(\d+\))?)*$/;
 
 /**
  * The one form of a note's first line, which the agent reads and the window reads back:
