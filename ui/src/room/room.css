@@ -64,6 +64,26 @@
   max-width: 760px;
   margin: 0 auto;
 }
+/* A new chat: the face of who a message goes to and the greeting, in the middle of the column; while the "@" list
+   is open, at its top, so the list never covers them. */
+.room-col:has(> .room-greeting) {
+  min-height: 100%;
+  justify-content: center;
+}
+.chat.room:has(.mention-list) .room-col:has(> .room-greeting) {
+  justify-content: flex-start;
+}
+.room-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.room-greeting p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 550;
+}
 .room-foot {
   width: min(760px, calc(100% - 48px));
   margin: 8px auto 16px;

@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type Agent, api, type Chat, type Failure, type Named, type PickedName, type Project } from './api';
+import {
+  type Agent,
+  api,
+  type Chat,
+  type Failure,
+  type Named,
+  type PickedName,
+  type Project,
+  type Settings,
+} from './api';
 import { Confirm } from './components/Confirm';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
@@ -100,6 +109,17 @@ export function App() {
       if (event.type === 'agents' || event.type === 'lagged') load();
     });
   }, []);
+
+  // The person's name and assistant, for a new chat's greeting: read again as Settings closes, and when agents
+  // change (deleting the assistant clears it).
+  const [you, setYou] = useState<Pick<Settings, 'person_name' | 'assistant'>>({});
+  const loadYou = useCallback(() => api.settings().then(setYou, setFailure), []);
+  useEffect(() => {
+    loadYou();
+    return listen((event) => {
+      if (event.type === 'agents' || event.type === 'lagged') loadYou();
+    });
+  }, [loadYou]);
 
   useEffect(() => {
     const load = () => api.projects().then(setProjects, setFailure);
@@ -269,6 +289,7 @@ export function App() {
     chat,
     agents,
     removed,
+    you,
     draft: drafts.current.get(chat.id)?.text ?? '',
     picks: drafts.current.get(chat.id)?.picks,
     onDraft: (text: string, picks: Picked[] = []) => {
@@ -396,7 +417,10 @@ export function App() {
         target={settings}
         onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}
         onReference={openReference}
-        onClose={() => setSettings(null)}
+        onClose={() => {
+          setSettings(null);
+          loadYou();
+        }}
       />
     </div>
   );

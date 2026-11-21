@@ -11,6 +11,7 @@ const settings = { stale_days: 3, cancel_days: 7, agent_folder: 'X:\\Made\\Up' }
 function service(sent: unknown[]) {
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/startup') return new Response(JSON.stringify({ on: false }));
+    if (path === '/api/agents') return new Response(JSON.stringify({ agents: [], removed: [] }));
     if (init?.method !== 'PATCH') return new Response(JSON.stringify(settings));
     const change = JSON.parse(String(init.body));
     sent.push(change);

@@ -1,10 +1,14 @@
 import { ComposerMenu, ComposerMenuItem } from '@/components/assistant-ui/elements/composer';
 import { Face } from './Face';
 
-/** Someone "@" can name: `meta` is its role in the chat; `out` when naming it brings it into the chat. */
+/**
+ * Someone "@" can name: `about` is its description, `meta` its role in the chat; `out` when naming it brings it into
+ * the chat.
+ */
 export interface Person {
   id: string;
   name: string;
+  about?: string;
   meta?: string;
   out?: boolean;
 }
@@ -14,10 +18,12 @@ interface Props {
   /** The lit row, which Enter picks. */
   lit: number;
   onPick: (index: number) => void;
+  /** Whether those who join by it go under "Bring in": not in a new chat, where everyone would. */
+  apart: boolean;
 }
 
 /** The "@" list above the message box: the composer's one menu, a face at 24 on each row. */
-export function MentionList({ people, lit, onPick }: Props) {
+export function MentionList({ people, lit, onPick, apart }: Props) {
   const row = (p: Person) => {
     const k = people.indexOf(p);
     return (
@@ -33,16 +39,20 @@ export function MentionList({ people, lit, onPick }: Props) {
         onClick={() => onPick(k)}
       >
         <Face agent={{ id: p.id, name: p.name }} size={24} />
-        <span className="flex-1 truncate text-start">{p.name}</span>
+        <span className="flex-1 truncate text-start">
+          {p.name}
+          {p.about && <span className="mention-about">{p.about}</span>}
+        </span>
         {p.meta && <span className="mention-meta">{p.meta}</span>}
       </ComposerMenuItem>
     );
   };
+  const team = people.filter((p) => !p.out);
   const outside = people.filter((p) => p.out);
   return (
     <ComposerMenu open role="listbox" aria-label="Agents" className="mention-list">
-      {people.filter((p) => !p.out).map(row)}
-      {outside.length > 0 && (
+      {team.map(row)}
+      {apart && outside.length > 0 ? (
         // biome-ignore lint/a11y/useSemanticElements: a listbox's groups, as ARIA's combobox pattern has them
         <div role="group" aria-labelledby="mention-bring-in">
           <div id="mention-bring-in" className="mention-label">
@@ -50,6 +60,8 @@ export function MentionList({ people, lit, onPick }: Props) {
           </div>
           {outside.map(row)}
         </div>
+      ) : (
+        outside.map(row)
       )}
     </ComposerMenu>
   );

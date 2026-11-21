@@ -10,11 +10,20 @@
   overflow: auto;
 }
 .agent-list button:not([data-slot]) {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   margin-bottom: 8px;
   text-align: left;
   overflow-wrap: anywhere;
+}
+/* The assistant's row: Assistant at its right, small and muted. */
+.agent-list button small {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
 }
 .agent-list .agent-add {
   margin-bottom: 12px;

@@ -7,6 +7,7 @@ import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
 import { AgentFolder } from './AgentFolder';
 import { AppVersion } from './AppVersion';
+import { Assistant } from './Assistant';
 import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
 
@@ -94,6 +95,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
           />
         </div>
       )}
+      <Assistant onReference={onReference} />
       <AgentFolder onReference={onReference} />
       <HandoffLimit onReference={onReference} />
       <AutoCompact onReference={onReference} />

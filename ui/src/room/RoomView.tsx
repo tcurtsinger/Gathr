@@ -12,9 +12,11 @@ import {
   type PickedName,
   type Project,
   type ReplyTarget,
+  type Settings,
 } from '../api';
 import { ChatMenu } from '../components/ChatMenu';
 import { Composer, type Person } from '../components/Composer';
+import { Face } from '../components/Face';
 import { kept, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { ProjectPick } from '../components/ProjectPick';
@@ -42,6 +44,8 @@ interface Props {
   chat: Chat;
   agents: Agent[];
   removed?: Named[];
+  /** The person's name and assistant, for a new chat's greeting. */
+  you: Pick<Settings, 'person_name' | 'assistant'>;
   draft: string;
   picks?: Picked[];
   onDraft: (text: string, picks?: Picked[]) => void;
@@ -84,8 +88,12 @@ export function RoomView(props: Props) {
   const fresh = !chat.id;
   const members = fresh ? (props.projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
   const team = useMemo(() => peopleOf(members, known), [members, known]);
-  const who = nameable(members, agents, !chat.project);
-  const to = recipients(picks, who, members, state);
+  // A new chat with no project: a message that names nobody goes to the assistant.
+  const assistant = fresh && !chat.project ? agents.find((a) => a.id === props.you.assistant) : undefined;
+  const who = nameable(members, agents, !chat.project, assistant);
+  const to = recipients(picks, who, members, state, assistant);
+  // Who a new chat's message goes to, by itself: the assistant, or the project's lead.
+  const ahead = fresh ? recipients([], who, members, state, assistant)[0] : undefined;
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   const sidebar = !fresh && (props.sidebar ?? state.members.length > 1);
 
@@ -184,16 +192,23 @@ export function RoomView(props: Props) {
           acts={acts}
           found={props.found}
           header={
-            failure && (
-              <FailureNotice
-                failure={failure}
-                onReference={onReference}
-                action={
-                  <Button type="button" variant="outline" onClick={reload}>
-                    Retry
-                  </Button>
-                }
-              />
+            fresh ? (
+              <div className="room-greeting">
+                {ahead && <Face agent={{ id: ahead.id, name: ahead.name }} size={56} />}
+                <p>{greeting(new Date().getHours(), props.you.person_name)}</p>
+              </div>
+            ) : (
+              failure && (
+                <FailureNotice
+                  failure={failure}
+                  onReference={onReference}
+                  action={
+                    <Button type="button" variant="outline" onClick={reload}>
+                      Retry
+                    </Button>
+                  }
+                />
+              )
             )
           }
         >
@@ -254,7 +269,7 @@ export function RoomView(props: Props) {
                 dropOn={column}
                 onSend={sendDraft}
                 onStop={running ? stop : undefined}
-                hint="Message the team"
+                hint={ahead ? `Message ${ahead.name}` : 'Message the team'}
                 people={who}
                 to={to}
               />
@@ -267,27 +282,49 @@ export function RoomView(props: Props) {
   );
 }
 
-/** Who "@" lists: the chat's team, then, in a chat with no project, every other agent, who joins by it. */
-function nameable(members: Member[], agents: Agent[], open: boolean): Person[] {
+/**
+ * Who "@" lists: the chat's team, then, in a chat with no project, every other agent, who joins by it; the assistant
+ * first, marked, in a new chat with no project.
+ */
+function nameable(members: Member[], agents: Agent[], open: boolean, assistant?: Agent): Person[] {
+  const about = (id: string) => agents.find((a) => a.id === id)?.description ?? undefined;
   const team = members.map((m) => ({
     id: m.agent,
     name: m.name,
+    about: about(m.agent),
     meta: m.role === 'supervisor' ? 'Lead' : undefined,
   }));
   if (!open) return team;
   const others = agents.filter((a) => !members.some((m) => m.agent === a.id));
-  return [...team, ...others.map((a) => ({ id: a.id, name: a.name, out: true }))];
+  const ordered = assistant ? [assistant, ...others.filter((a) => a !== assistant)] : others;
+  return [
+    ...team,
+    ...ordered.map((a) => ({
+      id: a.id,
+      name: a.name,
+      about: about(a.id),
+      meta: a === assistant ? 'Assistant' : undefined,
+      out: true,
+    })),
+  ];
 }
 
-/** Who gets the message: each agent it names, else the lead, else the agent that spoke last. */
-function recipients(picks: Picked[], who: Person[], members: Member[], state: RoomState) {
+/** Who gets the message: each agent it names, else the lead, else the agent that spoke last, else the assistant. */
+function recipients(picks: Picked[], who: Person[], members: Member[], state: RoomState, assistant?: Agent) {
   const named = [...picks].sort((a, b) => a.at - b.at);
   const each = named.filter((p, i) => named.findIndex((q) => q.id === p.id) === i);
   if (each.length)
     return each.map((p) => ({ id: p.id, name: p.name, joins: who.find((w) => w.id === p.id)?.out }));
   const lead = members.find((m) => m.role === 'supervisor');
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
-  const one = lead?.agent ?? (members.length === 1 ? members[0].agent : last);
+  const one = lead?.agent ?? (members.length === 1 ? members[0].agent : (last ?? assistant?.id));
   const person = who.find((w) => w.id === one);
   return person ? [{ id: person.id, name: person.name }] : [];
+}
+
+/** A new chat's line, by the computer's clock: "Good morning, Sam", "Still up?". */
+function greeting(hour: number, name?: string | null) {
+  if (hour < 5) return name ? `Still up, ${name}?` : 'Still up?';
+  const part = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  return name ? `Good ${part}, ${name}` : `Good ${part}`;
 }

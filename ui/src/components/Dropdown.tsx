@@ -7,6 +7,8 @@ import './dropdown.css';
 export interface Choice {
   value: string;
   label: string;
+  /** Before the label, in the list and closed: an agent's face. */
+  icon?: ReactNode;
 }
 
 type Props = Omit<ComponentProps<'button'>, 'value' | 'onChange' | 'children'> & {
@@ -79,7 +81,16 @@ export function Dropdown({
                     <CheckIcon className="size-4" />
                   </Select.ItemIndicator>
                 </span>
-                <Select.ItemText>{c.label}</Select.ItemText>
+                <Select.ItemText>
+                  {c.icon ? (
+                    <span className="dropdown-choice">
+                      {c.icon}
+                      {c.label}
+                    </span>
+                  ) : (
+                    c.label
+                  )}
+                </Select.ItemText>
               </Select.Item>
             ))}
           </Select.Viewport>
