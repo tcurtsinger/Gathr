@@ -1,8 +1,8 @@
 //! When the window tells the person outside it (0058): from the chat list's `needs`, whether a chat
-//! started needing them since the window was last in front. The app's thread reads the routes and
-//! shows what this decides.
+//! started needing them since the window was last in front; from its `working`, whether a chat's
+//! agents have all stopped. The app's thread reads the routes and shows what this decides.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -12,25 +12,41 @@ use crate::approvals::GATHR_ASKS;
 /// How often the window reads the service.
 pub const EVERY: Duration = Duration::from_secs(5);
 
-/// The chats that need the person, each with its title, and whether the whole app is paused.
+/// The chats that need the person and those a turn of runs, each with its title; the chats a
+/// pause of their own holds; and whether the whole app is paused.
 #[derive(Debug)]
 pub struct Read {
     pub needs: BTreeMap<String, String>,
+    pub working: BTreeMap<String, String>,
+    pub held: BTreeSet<String>,
     pub paused: bool,
 }
 
 /// A read of `GET /api/chats` and `GET /api/pauses`: none unless both answered, so a pauses read
 /// that failed during a pause never looks like a resume.
 pub fn read(chats: Option<&Value>, pauses: Option<&Value>) -> Option<Read> {
-    let needs = chats?.as_array()?.iter().filter(|c| c["needs"] == true);
-    let needs = needs.filter_map(|c| {
+    let chats = chats?.as_array()?;
+    let pauses = pauses?;
+    let held = pauses["pauses"].as_array().into_iter().flatten();
+    let held = held.filter(|p| p["scope"] == "chat");
+    Some(Read {
+        needs: titled(chats, "needs"),
+        working: titled(chats, "working"),
+        held: held
+            .filter_map(|p| Some(p["target"].as_str()?.to_string()))
+            .collect(),
+        paused: app_paused(pauses),
+    })
+}
+
+/// The chats whose `key` is true, each with its title.
+fn titled(chats: &[Value], key: &str) -> BTreeMap<String, String> {
+    let chats = chats.iter().filter(|c| c[key] == true);
+    let chats = chats.filter_map(|c| {
         let title = c["title"].as_str().unwrap_or_default().to_string();
         Some((c["id"].as_str()?.to_string(), title))
     });
-    Some(Read {
-        needs: needs.collect(),
-        paused: app_paused(pauses?),
-    })
+    chats.collect()
 }
 
 /// Whether `GET /api/pauses` holds a pause of the whole app.
@@ -55,6 +71,10 @@ struct Chat {
 pub struct State {
     chats: BTreeMap<String, Chat>,
     paused: bool,
+    /// The chats working at the last read, with their titles.
+    working: BTreeMap<String, String>,
+    /// The chats that stopped at the last read, told if the next still finds them stopped.
+    stopping: BTreeMap<String, String>,
 }
 
 /// How the app started. After an update made while hidden, what waits is taken as seen.
@@ -73,7 +93,7 @@ pub enum Notice {
         body: String,
         /// What an app pause let through: `gathr_ask`.
         why: Option<&'static str>,
-        /// The chat started needing the person.
+        /// The chat started needing the person; false when its work stopped.
         rose: bool,
     },
     Summary {
@@ -96,6 +116,9 @@ pub enum Notice {
 /// What a chat that needs the person says.
 const NEEDS_YOU: &str = "Needs you";
 
+/// What a chat whose agents have all stopped says.
+const STOPPED: &str = "Work has stopped";
+
 /// What to tell the person after the read `now`. `front`: the window is in front now. `visited`:
 /// it has been in front since the last read, if only for a moment. `approvals` gives a chat's open
 /// approvals, read only during an app pause.
@@ -114,6 +137,8 @@ pub fn decide(
     let mut next = State {
         chats: BTreeMap::new(),
         paused: now.paused,
+        working: now.working.clone(),
+        stopping: BTreeMap::new(),
     };
     let (mut notices, mut shown, mut counted) = (Vec::new(), Vec::new(), Vec::new());
     for (id, title) in &now.needs {
@@ -188,6 +213,23 @@ pub fn decide(
         }),
         _ => notices.extend(shown),
     }
+    // A chat that stopped is told at the next read that still finds it stopped: between one
+    // agent's turn and the teammate it named, no turn of the chat runs for a moment.
+    let quiet = |id: &String| {
+        let busy = now.working.contains_key(id) || now.needs.contains_key(id);
+        !busy && !now.held.contains(id) && !now.paused && !front && !visited
+    };
+    for (id, title) in before.stopping.iter().filter(|(id, _)| quiet(id)) {
+        notices.push(Notice::Show {
+            chat: id.clone(),
+            title: title.clone(),
+            body: STOPPED.to_string(),
+            why: None,
+            rose: false,
+        });
+    }
+    let stopped = before.working.iter().filter(|(id, _)| quiet(id));
+    next.stopping = stopped.map(|(id, t)| (id.clone(), t.clone())).collect();
     if !counted.is_empty() {
         for id in &counted {
             let chat = next.chats.get_mut(id).expect("counted from this read");
@@ -216,4 +258,65 @@ pub fn summary_body(count: usize) -> String {
 fn gathrs_ask(chat: &Value) -> bool {
     let mut open = chat["approvals"].as_array().into_iter().flatten();
     open.any(|a| a["why"].as_str().is_some_and(|w| w.starts_with(GATHR_ASKS)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A read with chat `c` working or not, and what else holds it.
+    fn read(working: bool, needs: bool, held: bool, paused: bool) -> Read {
+        let c = || BTreeMap::from([("c".to_string(), "Plan".to_string())]);
+        Read {
+            working: if working { c() } else { BTreeMap::new() },
+            needs: if needs { c() } else { BTreeMap::new() },
+            held: held.then(|| "c".to_string()).into_iter().collect(),
+            paused,
+        }
+    }
+
+    /// The reads in turn, hidden, with a visit before the read at `visit`: each read's stop notices.
+    fn told(reads: &[Read], visit: Option<usize>) -> Vec<usize> {
+        let mut state = None;
+        let mut told = Vec::new();
+        for (at, now) in reads.iter().enumerate() {
+            let visited = visit == Some(at);
+            let (next, notices) = decide(state.as_ref(), Start::Other, now, false, visited, |_| {
+                Value::Null
+            });
+            let stops = notices
+                .iter()
+                .filter(|n| matches!(n, Notice::Show { body, .. } if body == STOPPED));
+            told.extend(stops.map(|_| at));
+            state = Some(next);
+        }
+        told
+    }
+
+    const NONE: [usize; 0] = [];
+
+    #[test]
+    fn a_chat_that_stops_working_is_told_once_at_the_second_read_that_finds_it_stopped() {
+        let off = || read(false, false, false, false);
+        let on = || read(true, false, false, false);
+        assert_eq!(told(&[on(), off(), off(), off()], None), [2]);
+        // The gap between one agent's turn and the teammate it named.
+        assert_eq!(told(&[on(), off(), on(), off()], None), NONE);
+        // Never at a start: nothing was working at a read before it.
+        assert_eq!(told(&[off(), off(), off()], None), NONE);
+    }
+
+    #[test]
+    fn a_stop_is_not_told_when_the_chat_needs_the_person_or_is_paused_or_was_seen() {
+        let on = || read(true, false, false, false);
+        let stop = |needs, held, paused| read(false, needs, held, paused);
+        let off = || stop(false, false, false);
+        assert_eq!(told(&[on(), stop(true, false, false), off()], None), NONE);
+        assert_eq!(told(&[on(), off(), stop(true, false, false)], None), NONE);
+        assert_eq!(told(&[on(), stop(false, true, false), off()], None), NONE);
+        assert_eq!(told(&[on(), off(), stop(false, true, false)], None), NONE);
+        assert_eq!(told(&[on(), off(), stop(false, false, true)], None), NONE);
+        assert_eq!(told(&[on(), off(), off()], Some(1)), NONE);
+        assert_eq!(told(&[on(), off(), off()], Some(2)), NONE);
+    }
 }
