@@ -215,8 +215,18 @@ fn lines(
     (chat, turn, agent): (&str, &str, &str),
     since: Option<i64>,
 ) -> Result<Vec<Line>, Error> {
+    // A teammate's question to the person, as Gathr's line at the time of its answer (open: when
+    // asked). Its asker hears the answer as its turn's ask instead.
     let sql = format!(
-        "{MINE}SELECT m.id, m.role, m.body, t.agent_id, a.name FROM messages m
+        "{MINE}SELECT 'question ' || q.id AS id, 'gathr', coalesce(a.name, 'An agent')
+             || ' asked the person \"' || q.question || '\". ' || CASE WHEN q.answered_ts IS NULL
+             THEN 'Not answered yet.' ELSE 'They answered: '
+             || concat_ws('. ', 'Picked: ' || q.pick, 'Their words: ' || q.words) END,
+             NULL, NULL, coalesce(q.answered_ts, q.asked_ts) AS ts
+         FROM questions q LEFT JOIN agents a ON a.id = q.agent
+         WHERE q.chat_id = ?1 AND q.agent != ?3 AND (?4 IS NULL OR coalesce(q.answered_ts, q.asked_ts) > ?4)
+         UNION ALL
+         SELECT m.id, m.role, m.body, t.agent_id, a.name, m.ts FROM messages m
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
          WHERE m.chat_id = ?1 AND m.kind = 'text' AND m.copy_of IS NULL
            AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
@@ -231,7 +241,7 @@ fn lines(
                AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
                AND m.id NOT IN (SELECT c.copy_of FROM messages c JOIN mine u ON u.id = c.turn_id
                                 WHERE c.copy_of IS NOT NULL)))
-         ORDER BY m.ts DESC, m.id DESC LIMIT ?5"
+         ORDER BY ts DESC, id DESC LIMIT ?5"
     );
     let mut stmt = conn.prepare_cached(&sql)?;
     let rows = stmt.query_map(params![chat, turn, agent, since, MOST as i64], |r| {
