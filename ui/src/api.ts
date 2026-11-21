@@ -376,6 +376,11 @@ export class Failure extends Error {
     readonly error: string,
     readonly why: string | null,
     readonly ref: string | null,
+    /**
+     * The service didn't answer at all: it's starting, or handing over to an update. What only loads says
+     * nothing then: the live socket's return reloads it, so there's nothing to tell the person or to dismiss.
+     */
+    readonly away = false,
   ) {
     super(why ? `${error}: ${why}` : error);
   }
@@ -392,7 +397,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch {
-    throw new Failure('Connection failed', 'The service did not respond. Try again.', null);
+    throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
   }
   const answer = await response.json().catch(() => null);
   if (!response.ok || answer === null) {

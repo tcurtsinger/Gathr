@@ -141,7 +141,7 @@ export function useRoom(chat: string) {
       (f: Failure) => {
         if (held.current !== late) return;
         held.current = null;
-        setFailure(f);
+        if (!f.away) setFailure(f);
       },
     );
   }, [chat]);

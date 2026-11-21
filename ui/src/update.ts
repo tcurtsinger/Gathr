@@ -8,7 +8,14 @@ import { useNewestWins } from './newest';
  * missed events (a hand-over to the update drops it), then followed as the service sends it. Of a
  * read and a live state, only the newest started shows.
  */
-export function useAppUpdate(onFailure: (f: Failure) => void) {
+export function useAppUpdate(tell: (f: Failure) => void) {
+  // Update hands the service over to the new release: its not answering then is the update working.
+  const onFailure = useCallback(
+    (f: Failure) => {
+      if (!f.away) tell(f);
+    },
+    [tell],
+  );
   const [app, setApp] = useState<AppState | null>(null);
   // From the click until the service answers: a second click would only be refused.
   const [asking, setAsking] = useState(false);
