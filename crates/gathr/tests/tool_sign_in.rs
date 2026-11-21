@@ -46,10 +46,19 @@ impl ServerHandler for Desk {
     }
 }
 
+/// The Client ID and secret an admin made for Gathr, where the service takes no app it doesn't know.
+const CLIENT: &str = "made-up-client-7";
+const SECRET: &str = "made-up-secret-9";
+
 /// What the made-up service lets in, and what it was sent.
 #[derive(Default)]
 struct Desked {
     origin: String,
+    /// Whether Gathr can register itself. When it can't, Gathr signs in as `CLIENT`, and each token
+    /// asked without `SECRET` is refused; tokens then last 10 s, so each use renews them.
+    registers: bool,
+    /// Every body sent to the token address.
+    exchanged: Vec<String>,
     /// The access tokens the tool takes now.
     valid: Vec<String>,
     /// Whether a renewal is taken.
@@ -70,14 +79,15 @@ fn token(desk: &mut Desked) -> Json<Value> {
     Json(json!({
         "access_token": access,
         "token_type": "Bearer",
-        "expires_in": 3600,
+        "expires_in": if desk.registers { 3600 } else { 10 },
         "refresh_token": format!("made-up-refresh-{}", desk.handed.len()),
     }))
 }
 
 /// Starts Service desk and its sign-in service on one port: the tool's link, and what it shares.
-fn desk() -> (String, Shared) {
+fn desk(registers: bool) -> (String, Shared) {
     let shared: Shared = Arc::default();
+    shared.lock().unwrap().registers = registers;
     let (tx, rx) = std::sync::mpsc::channel();
     let kept = shared.clone();
     std::thread::spawn(move || {
@@ -131,14 +141,21 @@ fn desk() -> (String, Shared) {
             let server = move || {
                 let o = o.clone();
                 async move {
-                    Json(json!({
+                    let mut server = json!({
                         "issuer": o,
                         "authorization_endpoint": format!("{o}/authorize"),
                         "token_endpoint": format!("{o}/token"),
-                        "registration_endpoint": format!("{o}/register"),
                         "response_types_supported": ["code"],
                         "code_challenge_methods_supported": ["S256"],
-                    }))
+                    });
+                    match registers {
+                        true => server["registration_endpoint"] = format!("{o}/register").into(),
+                        false => {
+                            server["token_endpoint_auth_methods_supported"] =
+                                json!(["client_secret_post"])
+                        }
+                    }
+                    Json(server)
                 }
             };
             let register = |Json(asked): Json<Value>| async move {
@@ -158,6 +175,11 @@ fn desk() -> (String, Shared) {
             };
             let exchange = |State(desk): State<Shared>, body: String| async move {
                 let mut desk = desk.lock().unwrap();
+                desk.exchanged.push(body.clone());
+                if !desk.registers && !body.contains(&format!("client_secret={SECRET}")) {
+                    let refused = Json(json!({ "error": "invalid_client" }));
+                    return (StatusCode::UNAUTHORIZED, refused).into_response();
+                }
                 let renewing = body.contains("grant_type=refresh_token");
                 if renewing && !desk.renews {
                     let refused = Json(json!({ "error": "invalid_grant" }));
@@ -221,7 +243,7 @@ fn line_with(file: &Path, word: &str) -> Option<Value> {
 
 #[test]
 fn a_tool_signs_in_through_the_browser_renews_and_asks_again_when_refused() {
-    let (link, desk) = desk();
+    let (link, desk) = desk(true);
     let data = TempDir::new();
     let (args, env) = (data.0.join("args.jsonl"), data.0.join("env.jsonl"));
     let engine = common::replay_engine();
@@ -347,19 +369,7 @@ fn a_tool_signs_in_through_the_browser_renews_and_asks_again_when_refused() {
     );
     assert!(ok, "{rows}");
     let sealed = rows["rows"][0]["s"].as_str().unwrap().to_string();
-    // Every file in the data folder: the database and its journal, the logs, the engine's files.
-    let mut folder = String::new();
-    let mut dirs = vec![data.0.clone()];
-    while let Some(dir) = dirs.pop() {
-        for entry in std::fs::read_dir(dir).unwrap().flatten() {
-            match entry.file_type().unwrap().is_dir() {
-                true => dirs.push(entry.path()),
-                false => folder.push_str(&String::from_utf8_lossy(
-                    &std::fs::read(entry.path()).unwrap_or_default(),
-                )),
-            }
-        }
-    }
+    let folder = everything_in(&data.0);
     for secret in handed.iter().chain(&["made-up-refresh-1".to_string()]) {
         let hex: String = secret.bytes().map(|b| format!("{b:02X}")).collect();
         assert!(!sealed.contains(&hex), "the sign-in is stored as text");
@@ -377,4 +387,140 @@ fn a_tool_signs_in_through_the_browser_renews_and_asks_again_when_refused() {
             assert!(!text.contains(secret.as_str()), "a token is in {what}");
         }
     }
+}
+
+/// Every file in the data folder as text: the database and its journal, the logs, the engine's files.
+fn everything_in(data: &Path) -> String {
+    let mut folder = String::new();
+    let mut dirs = vec![data.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            match entry.file_type().unwrap().is_dir() {
+                true => dirs.push(entry.path()),
+                false => folder.push_str(&String::from_utf8_lossy(
+                    &std::fs::read(entry.path()).unwrap_or_default(),
+                )),
+            }
+        }
+    }
+    folder
+}
+
+/// Starts a sign-in with `asked` and plays the browser through it: the sign-in page's address.
+fn signs_in(service: &TestService, asked: Value) -> String {
+    let started = service.send("POST", "/api/tools/sign-in", asked);
+    assert_eq!(started.status, 200, "{}", started.body);
+    let page = started.json()["url"].as_str().unwrap().to_string();
+    let (desk_port, path) = at(&page);
+    let signed = http::request(desk_port, "GET", &path, &[]).unwrap();
+    let location = signed.headers.lines().find_map(|l| {
+        let (name, value) = l.split_once(':')?;
+        name.eq_ignore_ascii_case("location")
+            .then(|| value.trim().to_string())
+    });
+    let came = service.get(&at(&location.unwrap()).1, &[]);
+    assert!(came.body.contains("Signed in"), "{}", came.body);
+    page
+}
+
+#[test]
+fn a_tool_whose_service_takes_no_app_signs_in_with_a_client_id_and_its_secret() {
+    let (link, desk) = desk(false);
+    desk.lock().unwrap().renews = true;
+    let data = TempDir::new();
+    let engine = common::replay_engine();
+    let service = TestService::start_with(&data.0, &[("BROWSER", &engine)]);
+    let redirect = format!("http://127.0.0.1:{}/tools/signed-in", service.info.port);
+
+    // Gathr knows before any sign-in that the tool needs a Client ID, and the address to give.
+    let asked = service.send("POST", "/api/tools", json!({ "link": link }));
+    let needs = json!({ "needs": "sign_in", "registers": false, "redirect": redirect });
+    assert_eq!(asked.json(), needs, "{}", asked.body);
+    let bare = service.send("POST", "/api/tools/sign-in", json!({ "link": link }));
+    let needs = json!({ "registers": false, "redirect": redirect });
+    assert_eq!(bare.json(), needs, "{}", bare.body);
+
+    let client = json!({ "link": link, "client_id": CLIENT, "client_secret": SECRET });
+    let page = signs_in(&service, client);
+    assert!(page.contains(&format!("client_id={CLIENT}")), "{page}");
+    // Its tokens run out at once: listing it renews them, with the sign-in read from the database.
+    let tools = service.call("GET", "/api/tools").json();
+    let tool = tools["tools"][0].clone();
+    assert_eq!(
+        (&tool["client_id"], &tool["state"]),
+        (&json!(CLIENT), &json!("connected")),
+        "{tools}"
+    );
+    let id = tool["id"].as_str().unwrap().to_string();
+    let one = service.call("GET", &format!("/api/tools/{id}")).json();
+    assert_eq!(one["redirect"], json!(redirect), "{one}");
+
+    // Gathr restarts: the renewal still sends the secret.
+    drop(service);
+    let service = TestService::start_with(&data.0, &[("BROWSER", &engine)]);
+    let renewals = |desk: &Shared| {
+        let desk = desk.lock().unwrap();
+        let renewals = desk
+            .exchanged
+            .iter()
+            .filter(|b| b.contains("refresh_token"));
+        renewals.count()
+    };
+    let before = renewals(&desk);
+    let tools = service.call("GET", "/api/tools").json();
+    assert_eq!(tools["tools"][0]["state"], "connected", "{tools}");
+    assert!(
+        renewals(&desk) > before,
+        "{:?}",
+        desk.lock().unwrap().exchanged
+    );
+
+    // Sign in again signs in as the same client, with its secret, in one step.
+    let page = signs_in(&service, json!({ "tool": id }));
+    assert!(page.contains(&format!("client_id={CLIENT}")), "{page}");
+    let exchanged = desk.lock().unwrap().exchanged.clone();
+    let codes = exchanged
+        .iter()
+        .filter(|b| b.contains("authorization_code"));
+    assert_eq!(codes.count(), 2, "{exchanged:?}");
+    assert!(
+        exchanged.iter().all(|b| b.contains(SECRET)),
+        "a token was asked without the secret: {exchanged:?}"
+    );
+
+    let tools = service.call("GET", "/api/tools").json();
+    let (ok, events) = gathr(&data.0, &["diag", "query", "SELECT * FROM event_log"]);
+    assert!(ok, "{events}");
+    let (ok, rows) = gathr(
+        &data.0,
+        &[
+            "diag",
+            "query",
+            "SELECT hex(sign_in) AS s, client_id FROM tools",
+        ],
+    );
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"][0]["client_id"], CLIENT, "{rows}");
+    let sealed = rows["rows"][0]["s"].as_str().unwrap();
+    let hex: String = SECRET.bytes().map(|b| format!("{b:02X}")).collect();
+    assert!(!sealed.contains(&hex), "the secret is stored as text");
+    let one = service.call("GET", &format!("/api/tools/{id}")).body;
+    for (what, text) in [
+        ("the data folder", &everything_in(&data.0)),
+        ("the list", &tools.to_string()),
+        ("the tool", &one),
+        ("the events", &events.to_string()),
+    ] {
+        assert!(!text.contains(SECRET), "the secret is in {what}");
+    }
+
+    // Remove takes its Client ID and secret with it.
+    let removed = service.call("DELETE", &format!("/api/tools/{id}"));
+    assert_eq!(removed.status, 200, "{}", removed.body);
+    let (ok, rows) = gathr(
+        &data.0,
+        &["diag", "query", "SELECT count(*) AS n FROM tools"],
+    );
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"][0]["n"], 0, "{rows}");
 }

@@ -361,8 +361,22 @@ export interface WebTool {
   has_key: boolean;
   /** Whether it signed in through the browser: never the sign-in. */
   signed_in: boolean;
+  /** The Client ID it signs in with, where its sign-in service takes no app it doesn't know: never the secret. */
+  client_id: string | null;
   /** Asked of it when listed; none while it's disabled. */
   state: 'connected' | 'not_reachable' | 'key_refused' | 'sign_in' | null;
+}
+
+/** A tool whose sign-in service takes no app it doesn't know: the address its admin gives the app they make. */
+export interface NeedsClient {
+  registers?: false;
+  redirect?: string;
+}
+
+/** The Client ID an admin made for Gathr, and its secret if any. */
+export interface ClientGiven {
+  client_id?: string;
+  client_secret?: string;
 }
 
 /** One thing a tool lets an agent do, with the first line of its description. */
@@ -546,18 +560,26 @@ export const api = {
   openSkill: (name: string) => call<unknown>('POST', `/api/skills/${encodeURIComponent(name)}/open`),
   /** Every tool on the web, each enabled one's state asked of it now. */
   tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
-  /** One tool, with its actions when it's connected. */
-  tool: (id: string) => call<WebTool & { actions: ToolAction[] | null }>('GET', `/api/tools/${id}`),
-  /** Gathr connects to the link: the tool saved, or what it needs first. */
+  /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */
+  tool: (id: string) =>
+    call<WebTool & { actions: ToolAction[] | null; redirect?: string }>('GET', `/api/tools/${id}`),
+  /**
+   * Gathr connects to the link: the tool saved, or what it needs first. One that signs in where Gathr can't register
+   * itself says so, with the address its admin gives the app they make for Gathr.
+   */
   addTool: (tool: { link: string; name?: string; key?: string }) =>
-    call<{ tool?: WebTool; needs?: 'key' | 'sign_in' }>('POST', '/api/tools', tool),
+    call<{ tool?: WebTool; needs?: 'key' | 'sign_in' } & NeedsClient>('POST', '/api/tools', tool),
   /** A new key is saved only when the tool takes it. */
   changeTool: (id: string, change: { enabled?: boolean; key?: string }) =>
     call<WebTool>('PATCH', `/api/tools/${id}`, change),
   removeTool: (id: string) => call<unknown>('DELETE', `/api/tools/${id}`),
-  /** Opens the tool's sign-in page in the browser; its end comes live as `tools` with this `sign_in`. */
-  signInTool: (tool: { link: string; name?: string } | { tool: string }) =>
-    call<{ sign_in: string; url: string }>('POST', '/api/tools/sign-in', tool),
+  /**
+   * Opens the tool's sign-in page in the browser; its end comes live as `tools` with this `sign_in`. A Client ID given
+   * is used, and kept once signed in; a tool signing in again without one uses its own. One that needs a Client ID
+   * and has none answers so instead.
+   */
+  signInTool: (tool: ({ link: string; name?: string } | { tool: string }) & ClientGiven) =>
+    call<{ sign_in: string; url: string } | Required<NeedsClient>>('POST', '/api/tools/sign-in', tool),
   cancelToolSignIn: (signIn: string) => call<unknown>('DELETE', `/api/tools/sign-in/${signIn}`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>

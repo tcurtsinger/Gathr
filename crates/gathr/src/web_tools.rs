@@ -46,6 +46,9 @@ pub struct Tool {
     pub has_key: bool,
     /// Whether it signed in through the browser; never the sign-in.
     pub signed_in: bool,
+    /// The Client ID it signed in with, where its sign-in service takes no app it doesn't know: not a
+    /// secret. Never its Client secret.
+    pub client_id: Option<String>,
     pub added_ts: i64,
 }
 
@@ -69,7 +72,8 @@ pub enum Problem {
     NotReachable,
 }
 
-const COLUMNS: &str = "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, added_ts";
+const COLUMNS: &str =
+    "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, client_id, added_ts";
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
     Ok(Tool {
@@ -79,7 +83,8 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
         enabled: r.get(3)?,
         has_key: r.get(4)?,
         signed_in: r.get(5)?,
-        added_ts: r.get(6)?,
+        client_id: r.get(6)?,
+        added_ts: r.get(7)?,
     })
 }
 
@@ -125,18 +130,20 @@ pub fn access(conn: &Connection, id: &str, writer: &Writer) -> Result<Access, Er
 pub fn add(conn: &Connection, name: &str, link: &str, key: Option<&str>) -> Result<Tool, Error> {
     let id = ulid(now_us());
     let sealed = key.map(|k| seal::seal(&id, k)).transpose()?;
-    insert(conn, &id, name, link, sealed, None)
+    insert(conn, &id, name, link, sealed, None, None)
 }
 
-/// Saves a tool that signed in, as `id`, with its sign-in sealed by `tool_sign_in::sealed`.
+/// Saves a tool that signed in, as `id`, with its sign-in sealed by `tool_sign_in::sealed` and the
+/// Client ID it signed in with, if any.
 pub fn add_signed_in(
     conn: &Connection,
     id: &str,
     name: &str,
     link: &str,
     sealed: &[u8],
+    client_id: Option<&str>,
 ) -> Result<Tool, Error> {
-    insert(conn, id, name, link, None, Some(sealed))
+    insert(conn, id, name, link, None, Some(sealed), client_id)
 }
 
 fn insert(
@@ -146,11 +153,12 @@ fn insert(
     link: &str,
     key: Option<Vec<u8>>,
     sign_in: Option<&[u8]>,
+    client_id: Option<&str>,
 ) -> Result<Tool, Error> {
     conn.execute(
-        "INSERT INTO tools (id, name, link, enabled, key, sign_in, added_ts)
-         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6)",
-        params![id, name, link, key, sign_in, now_us()],
+        "INSERT INTO tools (id, name, link, enabled, key, sign_in, client_id, added_ts)
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7)",
+        params![id, name, link, key, sign_in, client_id, now_us()],
     )?;
     get(conn, id)
 }
@@ -161,6 +169,16 @@ pub fn set_sign_in(conn: &Connection, id: &str, sealed: &[u8]) -> Result<(), Err
     conn.execute(
         "UPDATE tools SET sign_in = ?2 WHERE id = ?1",
         params![id, sealed],
+    )?;
+    Ok(())
+}
+
+/// Keeps the Client ID a new sign-in was made with, or none.
+pub fn set_client_id(conn: &Connection, id: &str, client_id: Option<&str>) -> Result<(), Error> {
+    get(conn, id)?;
+    conn.execute(
+        "UPDATE tools SET client_id = ?2 WHERE id = ?1",
+        params![id, client_id],
     )?;
     Ok(())
 }
@@ -184,7 +202,7 @@ pub fn set_enabled(conn: &Connection, id: &str, on: bool) -> Result<(), Error> {
     Ok(())
 }
 
-/// Removes the tool, its key and its sign-in.
+/// Removes the tool, its key and its sign-in, with its Client ID and secret.
 pub fn remove(conn: &Connection, id: &str) -> Result<(), Error> {
     get(conn, id)?;
     conn.execute("DELETE FROM tools WHERE id = ?1", [id])?;

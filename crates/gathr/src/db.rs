@@ -81,6 +81,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0071_agent_marks.sql"),
     include_str!("../migrations/0072_tools.sql"),
     include_str!("../migrations/0073_tool_sign_in.sql"),
+    include_str!("../migrations/0074_tool_client_id.sql"),
 ];
 
 /// The schema version this build writes.
@@ -759,6 +760,36 @@ mod drop_old_tables_test {
         let kept: String = conn
             .query_row(
                 "SELECT name || ' ' || link || ' ' || hex(key) || ' ' || (sign_in IS NULL) FROM tools",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, "Tracker https://tracker.example.com/mcp 0102 1");
+    }
+
+    /// 0074 adds a tool's Client ID, empty: a tool from before keeps its name, link and sign-in.
+    #[test]
+    fn a_tool_from_before_keeps_its_sign_in_and_has_no_client_id() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-client-id-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..73] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 73;
+             INSERT INTO tools (id, name, link, enabled, sign_in, added_ts) VALUES
+                 ('t1', 'Tracker', 'https://tracker.example.com/mcp', 1, x'0102', 5);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let kept: String = conn
+            .query_row(
+                "SELECT name || ' ' || link || ' ' || hex(sign_in) || ' ' || (client_id IS NULL)
+                 FROM tools",
                 [],
                 |r| r.get(0),
             )

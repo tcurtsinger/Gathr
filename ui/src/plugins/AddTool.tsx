@@ -2,6 +2,7 @@ import { ChevronLeft, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
+import { ClientFields, given, noClient } from './ClientId';
 import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { host } from './tool';
 
@@ -15,18 +16,23 @@ interface Props {
 /**
  * Add a tool: its link, and its name unless the tool's own will do. Gathr asks the tool what it needs: one that
  * wants a key gets the Key field; one that signs in through the browser gets Sign in, and Use a key for one that
- * takes a key as well.
+ * takes a key as well. One whose sign-in service takes no app it doesn't know gets the address for its admin, and the
+ * Client ID and secret they send.
  */
 export function AddTool({ onBack, onAdded, onReference }: Props) {
   const [link, setLink] = useState('');
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [needs, setNeeds] = useState<'key' | 'sign_in' | null>(null);
+  /** The address for the admin, when the tool needs a Client ID. */
+  const [redirect, setRedirect] = useState<string | null>(null);
+  const [client, setClient] = useState(noClient);
   const [checking, setChecking] = useState(false);
   /** Why, under the field it's about. */
   const [why, setWhy] = useState<{ field: 'link' | 'key'; text: string } | null>(null);
-  const signIn = useToolSignIn(onAdded);
+  const signIn = useToolSignIn(onAdded, setRedirect);
   const needsKey = needs === 'key';
+  const needsClient = needs === 'sign_in' && redirect !== null;
   const add = () => {
     setChecking(true);
     setWhy(null);
@@ -36,6 +42,7 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
         setChecking(false);
         if (answer.tool) onAdded(answer.tool.id);
         else setNeeds(answer.needs ?? 'key');
+        setRedirect(answer.redirect ?? null);
       },
       (f: Failure) => {
         setChecking(false);
@@ -69,7 +76,14 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
           <Button
             type="button"
             size="sm"
-            onClick={() => signIn.start({ link: link.trim(), name: name.trim() || undefined })}
+            disabled={needsClient && !client.id.trim()}
+            onClick={() =>
+              signIn.start({
+                link: link.trim(),
+                name: name.trim() || undefined,
+                ...(needsClient ? given(client) : {}),
+              })
+            }
           >
             Sign in
           </Button>
@@ -112,6 +126,7 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
           onChange={(e) => {
             setLink(e.target.value);
             setNeeds(null);
+            setRedirect(null);
             setWhy(null);
             signIn.cancel();
           }}
@@ -144,10 +159,19 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
           {under('key') || <p className="muted">The key stays in Gathr. Agents never see it.</p>}
         </>
       )}
-      {needs === 'sign_in' && !signIn.waiting && !signIn.failed && (
+      {needs === 'sign_in' && !needsClient && !signIn.waiting && !signIn.failed && (
         <p className="muted">
           {name.trim() || host(link.trim())} signs in with your account, in your browser.
         </p>
+      )}
+      {needs === 'sign_in' && redirect !== null && !signIn.waiting && !signIn.failed && (
+        <>
+          <p className="muted">
+            {name.trim() || host(link.trim())} needs its admin to set Gathr up. Give them this address, then
+            enter the Client ID they send.
+          </p>
+          <ClientFields redirect={redirect} client={client} onChange={setClient} />
+        </>
       )}
       {signIn.failed && (
         <ToolSignInFailed
