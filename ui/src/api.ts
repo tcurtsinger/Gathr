@@ -219,6 +219,10 @@ export interface Settings {
   handoff_limit: number | null;
   /** Tokens an engine compacts at (200000 to 500000); null for each engine's own. */
   auto_compact: number | null;
+  /** What agents call the person; null until set. */
+  person_name?: string | null;
+  /** The agent a new chat's message that names nobody goes to; null for none. */
+  assistant?: string | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -240,6 +244,8 @@ export interface Agent {
   background: string | null;
   /** A picture the person uploaded, as a data URL; shown instead of the drawn face. */
   picture?: string | null;
+  /** One line of up to 80 characters: what it is for, beside its name in the "@" list. */
+  description?: string | null;
 }
 
 /** An agent as Settings saves it: a face field is sent only when it changed. */

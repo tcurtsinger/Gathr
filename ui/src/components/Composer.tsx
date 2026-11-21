@@ -164,7 +164,7 @@ export function Composer(props: Props) {
   };
   return (
     <Frame className="composer" data-thread={onClose ? '' : undefined}>
-      {open && <MentionList people={matches} lit={at} onPick={choose} />}
+      {open && <MentionList people={matches} lit={at} onPick={choose} apart={people.some((p) => !p.out)} />}
       <ComposerBar>
         {files.length > 0 && (
           <FileTiles>

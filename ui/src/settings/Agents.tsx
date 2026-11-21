@@ -23,6 +23,8 @@ export function Agents({ onReference }: { onReference: Open }) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  /** The assistant's id, marked in the list. */
+  const [assistant, setAssistant] = useState<string | null>(null);
   /** The agent last saved, so its form says so until it changes again. */
   const [saved, setSaved] = useState<string | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
@@ -30,6 +32,7 @@ export function Agents({ onReference }: { onReference: Open }) {
   const load = useCallback(() => {
     api.agents().then((a) => setAgents(a.agents), setFailure);
     api.accounts().then(setAccounts, setFailure);
+    api.settings().then((s) => setAssistant(s.assistant ?? null), setFailure);
   }, []);
   useEffect(() => {
     load();
@@ -73,7 +76,8 @@ export function Agents({ onReference }: { onReference: Open }) {
               setSaved(null);
             }}
           >
-            {a.name}
+            <span>{a.name}</span>
+            {a.id === assistant && <small>Assistant</small>}
           </button>
         ))}
       </div>
@@ -125,6 +129,7 @@ interface FormProps {
 /** Model is undefined until its account's models arrive: a new agent, or one moved to another account, takes the first. */
 type Fields = {
   name: string;
+  description?: string | null;
   account: string;
   model: string | null | undefined;
   effort: string | null;
@@ -167,6 +172,7 @@ function AgentForm(props: FormProps) {
   };
   const {
     name,
+    description,
     account,
     model,
     effort,
@@ -203,10 +209,22 @@ function AgentForm(props: FormProps) {
     ...(background !== (agent?.background ?? null) && { background }),
     ...(picture !== (agent?.picture ?? null) && { picture }),
   };
-  const draft = { name: name.trim(), account, model: model ?? null, effort, approvals, ...face };
+  // The description too: sent only when it changed.
+  const about = description?.trim() || null;
+  const described = about !== (agent?.description ?? null) && { description: about };
+  const draft = {
+    name: name.trim(),
+    account,
+    model: model ?? null,
+    effort,
+    approvals,
+    ...face,
+    ...described,
+  };
   const changed =
     !agent ||
     Object.keys(face).length > 0 ||
+    !!described ||
     draft.name !== agent.name ||
     draft.account !== agent.account ||
     draft.model !== agent.model ||
@@ -253,6 +271,15 @@ function AgentForm(props: FormProps) {
           // biome-ignore lint/a11y/noAutofocus: the form opens from Add, to type the name
           autoFocus={!agent}
           onChange={(e) => edit({ name: e.target.value })}
+        />
+      </label>
+      <label className="agent-field">
+        Description
+        <input
+          value={description ?? ''}
+          maxLength={80}
+          autoComplete="off"
+          onChange={(e) => edit({ description: e.target.value })}
         />
       </label>
       <FaceFields

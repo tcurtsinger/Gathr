@@ -125,7 +125,10 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
   its own: the thread starts at the frame's top.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
   the normal 16px root size (0037). A new chat's box
-  keeps the column's content width, and a new chat centres its heading, optional project notch and composer.
+  keeps the column's content width. A new chat centres the face of who its message goes to (the assistant, or
+  the picked project's lead; none without one) at 56px over a greeting by the computer's clock, "Good morning,
+  Sam" (05:00), "Good afternoon" (12:00), "Good evening" (17:00), "Still up, Sam?" (00:00), the person's name
+  from Settings > General; while the @ list is open they sit at the column's top.
 - Workspace starts at 40% of available width, initially clamped to 360 to 760px.
   Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
   chat at least 360px: when the window narrows, the workspace gives way first, down to
@@ -168,11 +171,12 @@ Compose ThreadPrimitive, MessagePrimitive and the shared ChatComposer. The full
 upstream Thread has no Composer override. ChatComposer uses the modular Composer,
 attachments, mentions, slash actions, selection quoting and Send/Stop through the
 runtime adapter. There is no recipient picker (C24, 0028): the box's hint names who
-gets a message that names nobody, "Message Mira" (the Supervisor, else the chat's
-agent, else a new chat's first agent). Typing @ at a word's start, anywhere in the
-message, opens the composer's one menu above the box's left edge: a 24px face, the name, and the role muted in a chat of two or more; in a chat with no
-project, every other agent follows under "Bring in" (12px muted, a rule above), up
-to five in the chat. Up and Down move the lit row, Enter or Tab picks, Escape
+gets a message that names nobody in a new chat, "Message Mira" (the assistant, or the project's lead), and
+reads "Message the team" in a chat that has begun. Typing @ at a word's start, anywhere in the
+message, opens the composer's one menu above the box's left edge: a 24px face, the name, its description
+muted, and the role muted at the right in a chat of two or more; in a chat with no
+project, every other agent follows under "Bring in" (12px muted, a rule above). In a new chat with no project
+the assistant comes first, marked "Assistant", and nobody is under "Bring in". It is seven rows tall, then scrolls. Up and Down move the lit row, Enter or Tab picks, Escape
 closes it, and a click picks; the lit row has no Enter mark. The name goes in as
 "@Name ". Only a name picked from the list counts, as @ and / work in other apps'
 boxes: a typed @Ann with nothing picked is plain text. The box keeps each picked

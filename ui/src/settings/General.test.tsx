@@ -12,6 +12,7 @@ vi.mock('../live', () => ({ listen: () => () => {} }));
 function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/agents') return new Response(JSON.stringify(NO_AGENTS));
     if (path === '/api/app') return new Response('{}');
     if (init?.method !== 'PUT') return new Response(JSON.stringify({ on }));
     sent.push(JSON.parse(String(init.body)));
@@ -24,6 +25,8 @@ function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
   });
 }
 afterEach(() => vi.unstubAllGlobals());
+
+const NO_AGENTS = { agents: [], removed: [] };
 
 /** Picks a Theme as a person does. */
 const pick = async (theme: { click: () => Promise<void> }, choice: string) => {
@@ -111,7 +114,8 @@ test('Space turns it on; a change that fails puts it back with its reference and
 test('a read on focus that answers after a save never undoes the save', async () => {
   let release = () => {};
   let held = false;
-  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/agents') return new Response(JSON.stringify(NO_AGENTS));
     if (init?.method === 'PUT') return new Response(JSON.stringify({ on: true }));
     if (!held) return new Response(JSON.stringify({ on: false }));
     // The system's answer is taken now, before the save; the reply waits until released.
@@ -144,6 +148,7 @@ test('a read on focus that answers after a newer read never shows the older stat
   ];
   vi.stubGlobal('fetch', async (path: string) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/agents') return new Response(JSON.stringify(NO_AGENTS));
     if (path === '/api/app') return new Response('{}');
     const read = reads.shift() ?? { on: true, hold: false };
     const answer = new Response(JSON.stringify({ on: read.on }));
@@ -167,6 +172,7 @@ test('a read on focus that fails while a save is pending leaves no failure once 
   let holdPut = false;
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/agents') return new Response(JSON.stringify(NO_AGENTS));
     if (path === '/api/app') return new Response('{}');
     if (init?.method !== 'PUT') {
       if (!holdPut) return new Response(JSON.stringify({ on: false }));
