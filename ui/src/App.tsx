@@ -19,6 +19,7 @@ import { kept, keep as remember } from './kept';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
+import { Plugins } from './plugins/Plugins';
 import { Rail } from './Rail';
 import { report, timeToPaint } from './report';
 import type { Found } from './room/Room';
@@ -53,6 +54,8 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
+  // The Plugins screen, in place of the chat list and the chat until Home or a chat is opened.
+  const [plugins, setPlugins] = useState(false);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
@@ -178,6 +181,7 @@ export function App() {
   const newChat = useCallback((project?: string) => {
     setFresh({ project });
     setSelected(null);
+    setPlugins(false);
   }, []);
   const keep = (chat: string, f: Unsent) => setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
   const start = (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => {
@@ -210,11 +214,12 @@ export function App() {
     if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
     setSelected(id);
     setFresh(null);
+    setPlugins(false);
   };
-  // What the main area showed this run, a chat's id or '' for New, for Back and Forward. Opening something
-  // after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
+  // What the main area showed this run, a chat's id, '' for New or PLUGINS, for Back and Forward. Opening
+  // something after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
   const [trail, setTrail] = useState<{ list: string[]; at: number }>({ list: [], at: -1 });
-  const shown = selected ?? (fresh ? '' : null);
+  const shown = plugins ? PLUGINS : (selected ?? (fresh ? '' : null));
   useEffect(() => {
     if (shown === null) return;
     setTrail((t) =>
@@ -222,13 +227,14 @@ export function App() {
     );
   }, [shown]);
   const there = (key: string) =>
-    key !== shown && (key === '' || [...chats, ...archived].some((c) => c.id === key));
+    key !== shown && (key === '' || key === PLUGINS || [...chats, ...archived].some((c) => c.id === key));
   const back = trail.list.findLastIndex((key, i) => i < trail.at && there(key));
   const ahead = trail.list.findIndex((key, i) => i > trail.at && there(key));
   const go = (at: number) => {
     setTrail((t) => ({ ...t, at }));
     const key = trail.list[at];
-    if (key) choose(key);
+    if (key === PLUGINS) setPlugins(true);
+    else if (key) choose(key);
     else newChat();
   };
   // A click on a system notification opens its chat: the desktop app calls this (0058).
@@ -351,11 +357,15 @@ export function App() {
     <div className={nav ? 'app' : 'app nav-closed'}>
       <NavButtons
         open={nav}
+        lists={plugins ? 'plugins' : 'chats'}
         onToggle={() => showNav(!nav)}
         onBack={back < 0 ? undefined : () => go(back)}
         onForward={ahead < 0 ? undefined : () => go(ahead)}
       />
       <Rail
+        plugins={plugins}
+        onHome={() => setPlugins(false)}
+        onPlugins={() => setPlugins(true)}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
         update={{
           ready: readyVersion(appUpdate.app),
@@ -364,37 +374,40 @@ export function App() {
           onUpdate: appUpdate.update,
         }}
       />
-      <Sidebar
-        chats={chats}
-        archived={archived}
-        projects={projects}
-        onArchive={(c, opener) => setAsking({ verb: 'Archive', chat: c, opener })}
-        onDelete={(c, opener) => setAsking({ verb: 'Delete', chat: c, opener })}
-        onRestore={restore}
-        selected={selected}
-        onSelect={choose}
-        onNew={newChat}
-        onDeleteProject={askDelete}
-        onProjectSettings={(project, opener) =>
-          setSettings({
-            page: 'projects',
-            project,
-            opener: opener ?? (document.activeElement as HTMLElement),
-          })
-        }
-        actions={
-          <SearchFlyout
-            name={name}
-            onReference={openReference}
-            onShortcut={() => showNav(true)}
-            onOpen={(hit) => {
-              setFound('message' in hit ? { chat: hit.chat, message: hit.message } : undefined);
-              openChat(hit.chat);
-            }}
-          />
-        }
-      />
-      {screen ? (
+      {plugins && <Plugins onReference={openReference} />}
+      {!plugins && (
+        <Sidebar
+          chats={chats}
+          archived={archived}
+          projects={projects}
+          onArchive={(c, opener) => setAsking({ verb: 'Archive', chat: c, opener })}
+          onDelete={(c, opener) => setAsking({ verb: 'Delete', chat: c, opener })}
+          onRestore={restore}
+          selected={selected}
+          onSelect={choose}
+          onNew={newChat}
+          onDeleteProject={askDelete}
+          onProjectSettings={(project, opener) =>
+            setSettings({
+              page: 'projects',
+              project,
+              opener: opener ?? (document.activeElement as HTMLElement),
+            })
+          }
+          actions={
+            <SearchFlyout
+              name={name}
+              onReference={openReference}
+              onShortcut={() => showNav(true)}
+              onOpen={(hit) => {
+                setFound('message' in hit ? { chat: hit.chat, message: hit.message } : undefined);
+                openChat(hit.chat);
+              }}
+            />
+          }
+        />
+      )}
+      {plugins ? null : screen ? (
         <RoomView
           key={screen.chat.id || 'new'}
           {...screen}
@@ -460,6 +473,9 @@ export function App() {
   );
   return <KnownFaces.Provider value={faces}>{app}</KnownFaces.Provider>;
 }
+
+/** The Plugins screen's place in Back and Forward: never a chat's id. */
+const PLUGINS = 'plugins';
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */
 function neighbour(chat: Chat, list: Chat[]): Chat | undefined {
