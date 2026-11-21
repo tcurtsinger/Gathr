@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './components/ChatMenu';
@@ -74,98 +74,76 @@ export function Sidebar(props: Props) {
         {actions}
       </div>
       <div className="chatlist">
-        {projects.length > 0 && (
-          <section>
-            <h2>Projects</h2>
-            {projects.map((p) => {
-              const open = !folded.has(p.id);
-              return (
-                <div key={p.id}>
-                  <div className="project-row">
-                    <button
-                      type="button"
-                      className="navbutton"
-                      aria-expanded={open}
-                      onClick={() => {
-                        const next = new Set(folded);
-                        if (open) next.add(p.id);
-                        else next.delete(p.id);
-                        setFolded(next);
-                      }}
-                    >
-                      {open ? <FolderOpen aria-hidden="true" /> : <Folder aria-hidden="true" />}
-                      <span>{p.name}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="row-icon"
-                      aria-label={`New chat in ${p.name}`}
-                      onClick={() => onNew(p.id)}
-                    >
-                      <Plus aria-hidden="true" />
-                    </button>
-                    <ChatMenu
-                      label={`More for ${p.name}`}
-                      className="row-icon row-more"
-                      onProjectSettings={(opener) => props.onProjectSettings(p.id, opener)}
-                      onDelete={(opener) => props.onDeleteProject(p, opener)}
-                    />
-                  </div>
-                  {open && (
-                    <div className="project-chats">{chats.filter((c) => c.project === p.id).map(row)}</div>
-                  )}
-                </div>
-              );
-            })}
-          </section>
-        )}
+        {projects.map((p) => {
+          const open = !folded.has(p.id);
+          const own = chats.filter((c) => c.project === p.id);
+          return (
+            <section key={p.id}>
+              <div className="project-row">
+                <h2>
+                  <button
+                    type="button"
+                    className="list-header"
+                    aria-expanded={open}
+                    onClick={() => {
+                      const next = new Set(folded);
+                      if (open) next.add(p.id);
+                      else next.delete(p.id);
+                      setFolded(next);
+                    }}
+                  >
+                    <span>{p.name}</span>
+                    {/* Closed, a project shows its count as Archived does. */}
+                    {!open && <span className="nav-count">{own.length}</span>}
+                  </button>
+                </h2>
+                <button
+                  type="button"
+                  className="row-icon"
+                  aria-label={`New chat in ${p.name}`}
+                  onClick={() => onNew(p.id)}
+                >
+                  <Plus aria-hidden="true" />
+                </button>
+                <ChatMenu
+                  label={`More for ${p.name}`}
+                  className="row-icon row-more"
+                  onProjectSettings={(opener) => props.onProjectSettings(p.id, opener)}
+                  onDelete={(opener) => props.onDeleteProject(p, opener)}
+                />
+              </div>
+              {open && own.map(row)}
+            </section>
+          );
+        })}
         {plain.length > 0 && (
           <section>
             {projects.length > 0 && <h2>Chats</h2>}
             {plain.map(row)}
           </section>
         )}
-        <section className="archive-group">
-          <button
-            type="button"
-            className="navbutton"
-            aria-expanded={archiveOpen}
-            onClick={(e) => {
-              setArchiveOpen(!archiveOpen);
-              // At the foot of a long list, opening it would show nothing new without this.
-              const group = e.currentTarget.parentElement;
-              if (!archiveOpen) requestAnimationFrame(() => group?.scrollIntoView({ block: 'nearest' }));
-            }}
-          >
-            <ArchiveIcon open={archiveOpen} />
-            Archived
-            <span className="nav-count">{archived.length}</span>
-          </button>
+        <section>
+          <h2>
+            <button
+              type="button"
+              className="list-header"
+              aria-expanded={archiveOpen}
+              onClick={(e) => {
+                setArchiveOpen(!archiveOpen);
+                // At the foot of a long list, opening it would show nothing new without this.
+                const group = e.currentTarget.closest('section');
+                if (!archiveOpen) requestAnimationFrame(() => group?.scrollIntoView({ block: 'nearest' }));
+              }}
+            >
+              Archived
+              <span className="nav-count">{archived.length}</span>
+            </button>
+          </h2>
           {archiveOpen &&
             (archived.length ? archived.map(row) : <p className="sidebar-empty">No archived chats</p>)}
         </section>
       </div>
       <ResizeHandle label="Resize navigation" side="right" name="--sidebar-width" min={190} max={() => 400} />
     </nav>
-  );
-}
-
-/** Lucide's Archive, its lid lifted on its left hinge while the group is open. */
-function ArchiveIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="archive-icon"
-      data-open={open || undefined}
-    >
-      <rect className="archive-lid" width="20" height="5" x="2" y="3" rx="1" />
-      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-      <path d="M10 12h4" />
-    </svg>
   );
 }
