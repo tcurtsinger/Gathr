@@ -236,7 +236,8 @@ function Picked({ message, words: text }: { message: Message; words: string }) {
 
 /** An agent's main message: its picture in the margin, the card, then its replies folded. */
 function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) {
-  const agent = card.turn.agent as string;
+  // A turn sent to no agent has none: it is drawn as "An agent".
+  const agent = card.turn.agent ?? '';
   return (
     <div className="room-item room-turn">
       <span className="room-who">
@@ -439,7 +440,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
       </div>
     );
   }
-  const agent = item.turn.agent as string;
+  const agent = item.turn.agent ?? '';
   const running = working(item);
   return (
     <div className="room-reply" data-found={holds(item, ctx.found)}>
