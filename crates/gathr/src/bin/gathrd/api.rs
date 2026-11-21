@@ -62,6 +62,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::board::routes())
         .merge(crate::questions::routes())
         .merge(crate::files::routes())
+        .merge(crate::view::routes())
         .merge(crate::archive::routes())
         .merge(crate::settings::routes())
         .merge(crate::skills::routes())
@@ -155,10 +156,10 @@ fn admit(
     headers: &HeaderMap,
     uri: &Uri,
 ) -> Result<Option<crate::tools::Caller>, (StatusCode, &'static str)> {
-    if let Some(refused) = refusal(s, headers) {
+    let path = uri.path();
+    if let Some(refused) = refusal(s, headers, path) {
         return Err(refused);
     }
-    let path = uri.path();
     let hook = [crate::tools::HOOK_PATH, crate::tools::PUSH_PATH].contains(&path);
     let tools = path == "/mcp" || path.starts_with("/mcp/") || hook;
     if !tools && !path.starts_with("/api/") && path != "/health" {
@@ -188,8 +189,9 @@ fn admit(
     }
 }
 
-/// Why a request is refused before its token is looked at: a foreign Host or Origin.
-fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)> {
+/// Why a request is refused before its token is looked at: a foreign Host or Origin. A sealed
+/// page's own requests under `/view/` say `Origin: null`, and its key is their permission.
+fn refusal(s: &State, headers: &HeaderMap, path: &str) -> Option<(StatusCode, &'static str)> {
     let port = s.port;
     let host = headers
         .get(header::HOST)
@@ -198,7 +200,10 @@ fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)>
     if host != format!("127.0.0.1:{port}") && host != format!("localhost:{port}") {
         return Some((StatusCode::FORBIDDEN, "host not allowed"));
     }
-    if let Some(origin) = headers.get(header::ORIGIN) {
+    if let Some(origin) = headers
+        .get(header::ORIGIN)
+        .filter(|_| !path.starts_with("/view/"))
+    {
         let own = [
             format!("http://127.0.0.1:{port}"),
             format!("http://localhost:{port}"),

@@ -114,19 +114,27 @@ fn swap(s: &State, code: &str, trace: &str) -> Response {
 }
 
 pub fn content_type(file: &Path) -> &'static str {
-    match file.extension().and_then(|e| e.to_str()).unwrap_or("") {
-        "html" => "text/html; charset=utf-8",
+    let ending = file.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ending.to_lowercase().as_str() {
+        "html" | "htm" => "text/html; charset=utf-8",
         "md" => "text/markdown; charset=utf-8",
         "txt" => "text/plain; charset=utf-8",
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
+        "gif" => "image/gif",
+        "avif" => "image/avif",
         "pdf" => "application/pdf",
-        "js" => "text/javascript",
+        "js" | "mjs" => "text/javascript",
         "css" => "text/css",
         "svg" => "image/svg+xml",
         "png" => "image/png",
         "ico" => "image/x-icon",
         "woff2" => "font/woff2",
+        "woff" => "font/woff",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
         "json" => "application/json",
         _ => "application/octet-stream",
     }

@@ -97,8 +97,8 @@ pub async fn lines(
 }
 
 #[derive(Deserialize)]
-struct Shown {
-    path: String,
+pub struct Shown {
+    pub path: String,
 }
 
 /// A picture from one of the chat's folders, for the window's tiles and viewer.
@@ -141,7 +141,7 @@ fn safe(kind: &'static str) -> [(header::HeaderName, &'static str); 4] {
 }
 
 /// The chat's tree as the window shows it: the folders of this chat only.
-async fn tree_of(
+pub async fn tree_of(
     s: &State,
     t: &Trace,
     chat: &str,
