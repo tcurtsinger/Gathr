@@ -206,9 +206,7 @@ Raw HTML policy, link behavior and Diagnostics references stay governed by Gathr
 
 An agent's picture carries no state (the owner's call of 2026-11-21). A state shows only where it is said
 beside words ([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)): Needs you (a blue dot), Can't
-run (a red disc with !), Working (a three-quarter blue ring), Stopped (a grey disc with a square; a plain square at
-24 and under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's hand) and Free (a plain green
-dot). A card's head says "Working · 1m" or "Needs you" with its mark at 12px. A Working mark turns once in 1.6s
+run (a red disc with !) and Working (a three-quarter blue ring). A card's head says "Working · 1m" or "Needs you" with its mark at 12px. A Working mark turns once in 1.6s
 (the owner's call of 2026-11-19: a ring standing still read as stuck); under reduced motion it is still.
 
 A chat's sidebar row shows its most pressing of Needs you, Can't run and Working as the

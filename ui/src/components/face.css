@@ -59,16 +59,6 @@ html.light .face {
 .mark-cut {
   fill: var(--cut);
 }
-.mark-hand {
-  fill: none;
-  stroke: var(--cut);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.mark-hand[data-small] {
-  stroke-width: 1.9;
-}
 .mark-arc {
   fill: none;
   stroke: var(--c);
@@ -80,9 +70,6 @@ html.light .face {
 }
 .mark[data-state="cant"] {
   --c: var(--destructive);
-}
-.mark[data-state="free"] {
-  --c: var(--free);
 }
 /* Working turns beside its chat in the sidebar and on a card's head (the owner's call of 2026-11-19). Calm and
    thin, one turn every 1.6s; still under reduced motion. */

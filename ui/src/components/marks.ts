@@ -1,5 +1,5 @@
 /** An agent's state, as its mark (0071), most pressing first. */
-const MARKS = ['needs', 'cant', 'working', 'stopped', 'blocked', 'waiting', 'free'] as const;
+const MARKS = ['needs', 'cant', 'working'] as const;
 export type Mark = (typeof MARKS)[number];
 
 /** Each mark's word, wherever the state is said. */
@@ -7,10 +7,6 @@ export const WORD: Record<Mark, string> = {
   needs: 'Needs you',
   cant: 'Can’t run',
   working: 'Working',
-  stopped: 'Stopped',
-  blocked: 'Blocked',
-  waiting: 'Waiting',
-  free: 'Free',
 };
 
 /** The service's word for a state (0071's answer), as the window names it. */
@@ -18,10 +14,6 @@ export const FROM_SERVICE: Record<string, Mark> = {
   needs_you: 'needs',
   cant_run: 'cant',
   working: 'working',
-  stopped: 'stopped',
-  blocked: 'blocked',
-  waiting: 'waiting',
-  free: 'free',
 };
 
 /** How long: "40s", "5m", "1m 12s" while it works, "2h 5m", "3d". */
