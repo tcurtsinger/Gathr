@@ -27,8 +27,6 @@ export interface SettingsTarget {
 interface Props {
   target: SettingsTarget | null;
   onPage: (page: Page) => void;
-  /** Opens a failure's reference in Turns. */
-  onReference: (ref: string) => void;
   onClose: () => void;
 }
 
@@ -57,7 +55,7 @@ const groups: [string, [Page, string, LucideIcon][]][] = [
 ];
 
 /** Settings, centred over the current screen (0023): its pages at the left in three groups. The screen under it keeps its state. */
-export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
+export function SettingsPanel({ target, onPage, onClose }: Props) {
   // Each pick in the left column opens its page afresh: Projects again goes back to the list.
   const [visit, setVisit] = useState(0);
   return (
@@ -98,13 +96,13 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
           </div>
           <div className="settings-page" key={visit}>
             {target.page === 'general' ? (
-              <General onReference={onReference} />
+              <General />
             ) : target.page === 'engines' ? (
-              <Engines onReference={onReference} />
+              <Engines />
             ) : target.page === 'teamwork' ? (
-              <Teamwork onReference={onReference} />
+              <Teamwork />
             ) : target.page === 'projects' ? (
-              <Projects start={target.project} onReference={onReference} />
+              <Projects start={target.project} />
             ) : target.page === 'friction' ? (
               <Friction />
             ) : (

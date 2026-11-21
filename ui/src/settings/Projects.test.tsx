@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import '../theme.css';
 import type { Agent, Project } from '../api';
 import type { LiveEvent } from '../live';
@@ -59,7 +60,12 @@ test('a refused save says why with its reference, and keeps the draft', async ()
   const refused = { error: 'Project settings failed', why: 'made-up folder refusal', ref: 'made-up-ref' };
   service(() => new Response(JSON.stringify(refused), { status: 400 }));
   const opened: string[] = [];
-  const screen = await render(<Projects start="p" onReference={(ref) => opened.push(ref)} />);
+  const screen = await render(
+    <>
+      <Projects start="p" />
+      <Corner onReference={(ref) => opened.push(ref)} />
+    </>,
+  );
 
   await screen.getByRole('textbox', { name: 'Folder' }).fill('X:\\made-up\\elsewhere');
   await screen.getByRole('button', { name: 'Save' }).click();
@@ -73,7 +79,7 @@ test('a refused save says why with its reference, and keeps the draft', async ()
 
 test('the team keeps one Supervisor and at least one agent; a new Supervisor or Reviewer makes the one before a Member', async () => {
   service((body) => new Response(JSON.stringify({ ...project, ...body, members: project.members })));
-  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  const screen = await render(<Projects start="p" />);
   const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
   const remove = (name: string) => screen.getByRole('button', { name: `Remove ${name}` });
   const pick = async (field: ReturnType<typeof role>, choice: string) => {
@@ -119,7 +125,7 @@ test('Delete asks with what the service counts, then deletes the project and sho
     }
     return answer({});
   });
-  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  const screen = await render(<Projects start="p" />);
   await screen.getByRole('button', { name: 'Delete' }).click();
   const confirm = screen.getByRole('dialog', { name: 'Delete Made-up project?' });
   await expect.element(confirm.getByText('4 chats will be deleted. Files are kept.')).toBeVisible();

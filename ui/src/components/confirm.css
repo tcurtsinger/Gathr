@@ -25,9 +25,6 @@
   font-size: 14px;
   line-height: 1.5;
 }
-.confirm-dialog .notice {
-  margin: 0 24px;
-}
 .confirm-dialog footer {
   display: flex;
   justify-content: flex-end;

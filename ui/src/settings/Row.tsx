@@ -47,7 +47,7 @@ export function Group({ title, right }: { title: string; right?: ReactNode }) {
 
 /**
  * The one row of a setting: its name and one muted line at the left, its control at the right. What follows it
- * (a notice, a sign-in, an open editor) takes the row's whole width under them.
+ * (a sign-in, an open editor) takes the row's whole width under them.
  */
 export function Row({
   name,

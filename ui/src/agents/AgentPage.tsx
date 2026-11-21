@@ -3,16 +3,14 @@ import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
 import { danger } from '../components/Confirm';
+import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
-import { FailureNotice } from '../components/Notice';
 import { shuffled } from '../components/pictures';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { report, timeToPaint } from '../report';
 import { engineName } from '../settings/Accounts';
 import { FaceFields } from './FaceFields';
 import { choices, chosen, efforts, firstChoice } from './models';
-
-type Open = (ref: string) => void;
 
 interface Props {
   /** None for Add. */
@@ -25,7 +23,6 @@ interface Props {
   onSaved: (agent: Agent) => void;
   /** What the delete couldn't remove yet, if anything. */
   onDeleted: (left: Failure | null) => void;
-  onReference: Open;
 }
 
 /** Model is undefined until its account's models arrive: a new agent, or one moved to another account, takes the first. */
@@ -57,7 +54,7 @@ const modes: [Approvals, string, string][] = [
  * the account's models and their efforts, and Approvals, saved together with Save.
  */
 export function AgentPage(props: Props) {
-  const { agent, accounts, assistant, saved, onBack, onSaved, onDeleted, onReference } = props;
+  const { agent, accounts, assistant, saved, onBack, onSaved, onDeleted } = props;
   // Only the fields edited here, over the agent as saved, so a save from elsewhere shows in
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
@@ -80,6 +77,8 @@ export function AgentPage(props: Props) {
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const models = useModels(account);
+  useCard(failure);
+  useCard(models.failure);
   const id = useId();
 
   const list = models.list ?? [];
@@ -150,7 +149,6 @@ export function AgentPage(props: Props) {
 
   return (
     <form className="agent-page" aria-labelledby={`${id}title`} onSubmit={submit}>
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <button type="button" className="screen-back" onClick={onBack}>
         <ChevronLeft aria-hidden="true" />
         Agents
@@ -192,7 +190,6 @@ export function AgentPage(props: Props) {
           opener={deleting}
           onCancel={() => setDeleting(null)}
           onDeleted={onDeleted}
-          onReference={onReference}
         />
       )}
       <div className="agent-rows">
@@ -229,9 +226,7 @@ export function AgentPage(props: Props) {
           />
         </Row>
         <Row name="Model" id={`${id}model`} line="One of the engine’s models. It stays until you change it.">
-          {models.failure ? (
-            <FailureNotice failure={models.failure} onReference={onReference} />
-          ) : models.list === null ? (
+          {models.list === null && !models.failure ? (
             <p className="muted" role="status">
               Loading models
             </p>

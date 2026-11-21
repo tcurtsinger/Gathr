@@ -82,8 +82,8 @@ export function PathTiles({ chat, paths }: { chat: string; paths: string[] }) {
   );
 }
 
-/** A file still in the window, before Send: a picture shows from memory. */
-export function LocalTile({ file, onRemove }: { file: File; onRemove: () => void }) {
+/** A file still in the window, not sent yet: a picture shows from memory. */
+export function LocalTile({ file, onRemove }: { file: File; onRemove?: () => void }) {
   const [src, setSrc] = useState<string>();
   useEffect(() => {
     if (!isPicture(file.name)) return;

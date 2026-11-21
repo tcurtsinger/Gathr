@@ -76,19 +76,6 @@ body:has(.app) {
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
 }
-.app > .chat .reading {
-  width: 100%;
-  max-width: 52rem;
-  margin: 24px auto;
-  padding: 0 16px;
-}
-/* Over an open chat: at its top, at the chat's reading width, the thread scrolling below. */
-.topline ~ .chat > .app-failure {
-  flex-shrink: 0;
-}
-.topline ~ .chat > .app-failure .notice {
-  margin: 0;
-}
 /* The top line's icon buttons (More, Summary, the panel's), on IconButton: DESIGN.md "Header". */
 .head-button {
   position: relative;

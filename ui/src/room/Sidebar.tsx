@@ -1,11 +1,10 @@
 import { SquareKanban } from 'lucide-react';
-import type { Failure } from '../api';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
 
 /** The room's sidebar beside the chat, as the old chat's: its one tab, Board, is always there. */
-export function RoomSidebar({ chat, onFailure }: { chat: string; onFailure: (f: Failure) => void }) {
+export function RoomSidebar({ chat }: { chat: string }) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
       <ResizeHandle label="Resize chat sidebar" side="left" name="--workspace-width" min={360} max={widest} />
@@ -31,7 +30,7 @@ export function RoomSidebar({ chat, onFailure }: { chat: string; onFailure: (f: 
         aria-labelledby="room-tab-board"
         className="workspace-view"
       >
-        <Board chat={chat} onFailure={onFailure} />
+        <Board chat={chat} />
       </section>
     </aside>
   );

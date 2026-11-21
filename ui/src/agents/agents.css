@@ -42,9 +42,6 @@
   color: var(--muted-foreground);
   font-size: 12.5px;
 }
-.agent-page > .notice {
-  margin: 0 0 16px;
-}
 .agent-page .screen-title h1 {
   display: flex;
   align-items: baseline;
@@ -121,9 +118,6 @@
 .agent-control > p {
   margin: 0;
   font-size: 14px;
-}
-.agent-control > .notice {
-  margin: 0;
 }
 .agent-foot {
   display: flex;

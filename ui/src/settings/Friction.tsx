@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Failure, type FrictionReport } from '../api';
-import { FailureNotice } from '../components/Notice';
+import { useCard } from '../components/Corner';
 import { Page, Row } from './Row';
 
 const when = (time: string) =>
@@ -22,13 +22,13 @@ const facts = (f: FrictionReport) =>
 export function Friction() {
   const [list, setList] = useState<FrictionReport[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   useEffect(() => {
     api.friction().then(setList, setFailure);
   }, []);
 
   return (
     <Page title="Friction" line="What agents reported got in their way, newest first.">
-      {failure && <FailureNotice failure={failure} />}
       {list?.length === 0 && <p className="settings-empty">No friction reported yet</p>}
       {list && list.length > 0 && (
         <ul className="settings-rows settings-top friction">

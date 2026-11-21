@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type PauseScope, type Pauses } from './api';
+import { api, type PauseScope, type Pauses } from './api';
 import { listen } from './live';
 import { useNewestWins } from './newest';
 
@@ -21,17 +21,17 @@ const none: Pauses = { pauses: [], usage: [] };
  * Every pause and usage hold, live: one list for the whole app, as the service keeps it. Of reads,
  * actions' answers and live lists, only the newest started shows. An action that another list
  * overlapped reads the list again: which of them the service applied last can't be told from the
- * window. A refusal rejects with its reference.
+ * window. A read that fails says nothing; a refused action rejects with its reference.
  */
-export function usePauses(onFailure: (f: Failure) => void) {
+export function usePauses() {
   const [pauses, setPauses] = useState<Pauses>(none);
   const newest = useNewestWins();
   // Counts every read, action and live list as it starts.
   const started = useRef(0);
   const load = useCallback(() => {
     started.current++;
-    newest(api.pauses()).then(setPauses, onFailure);
-  }, [newest, onFailure]);
+    newest(api.pauses()).then(setPauses, () => {});
+  }, [newest]);
   useEffect(() => {
     load();
     return listen((event) => {

@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Agent, Model } from '../api';
+import { Corner } from '../components/Corner';
 import type { LiveEvent } from '../live';
 import { Agents } from './Agents';
 
@@ -89,7 +90,12 @@ afterEach(() => {
 
 /** The screen; with a name, at that agent's page, opened from the sidebar as a person does. */
 async function show(name?: string, onReference: (ref: string) => void = () => {}) {
-  const screen = await render(<Agents onReference={onReference} onAssistant={() => {}} />);
+  const screen = await render(
+    <>
+      <Agents onAssistant={() => {}} />
+      <Corner onReference={onReference} />
+    </>,
+  );
   if (name) await screen.getByRole('navigation', { name: 'Agents' }).getByRole('button', { name }).click();
   return screen;
 }

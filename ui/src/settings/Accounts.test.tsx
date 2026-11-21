@@ -2,10 +2,16 @@
 import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { Accounts } from './Accounts';
 
 test('Add opens at the name, needs one, keeps it when adding fails, and Cancel gives focus back', async () => {
-  const screen = await render(<Accounts onReference={() => {}} />);
+  const screen = await render(
+    <>
+      <Accounts />
+      <Corner onReference={() => {}} />
+    </>,
+  );
   const add = screen.getByRole('button', { name: 'Add' });
 
   await add.click();

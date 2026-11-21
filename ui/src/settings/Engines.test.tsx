@@ -3,7 +3,15 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Engine } from '../api';
+import { Corner } from '../components/Corner';
 import { Engines } from './Engines';
+
+const WithCorner = () => (
+  <>
+    <Engines />
+    <Corner onReference={() => {}} />
+  </>
+);
 
 const account = (id: string, name: string, sign_in: Account['sign_in'] = null): Account => ({
   id,
@@ -45,7 +53,7 @@ const codex: Engine['copy'] = { ...copy('idle'), version: '0.166.0' };
 
 test('Rename on another account opens its own name, not the last draft', async () => {
   service([copy('idle')]);
-  const screen = await render(<Engines onReference={() => {}} />);
+  const screen = await render(<WithCorner />);
   const rename = async (name: string) => {
     await screen.getByRole('button', { name: `More for ${name}` }).click();
     await page.getByRole('menuitem', { name: 'Rename' }).click();
@@ -61,7 +69,7 @@ test('Remove asks first: Escape keeps the account and Settings open, Remove dele
   service([copy('idle')], removed);
   const screen = await render(
     <dialog ref={(d) => d?.showModal()}>
-      <Engines onReference={() => {}} />
+      <Engines />
     </dialog>,
   );
   const row = screen.getByRole('listitem').filter({ hasText: 'Made-up two' });
@@ -89,7 +97,7 @@ test('Remove asks first: Escape keeps the account and Settings open, Remove dele
 test('a check that takes several looks ends as failed, with Check back and no Up to date', async () => {
   const failed = { why: 'made-up feed failure', ref: 'made-up-ref' };
   service([copy('checking'), copy('checking'), copy('checking'), copy('idle', failed)]);
-  const screen = await render(<Engines onReference={() => {}} />);
+  const screen = await render(<WithCorner />);
   await expect.element(screen.getByText('Update failed')).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Check' }).first()).toBeEnabled();
   // Only Codex, listed second, is up to date.
@@ -100,7 +108,7 @@ test('a check that takes several looks ends as failed, with Check back and no Up
 test("each engine's Check asks for its own copy", async () => {
   const sent: string[] = [];
   service([copy('idle')], sent);
-  const screen = await render(<Engines onReference={() => {}} />);
+  const screen = await render(<WithCorner />);
   // Codex is listed second.
   await screen.getByRole('button', { name: 'Check' }).nth(1).click();
   await expect.poll(() => sent).toEqual(['POST /api/engines/codex/update']);
@@ -118,7 +126,7 @@ test('a sign-in shows the code field only when its engine takes a pasted code', 
   );
   const opened: unknown[] = [];
   vi.stubGlobal('open', (url: unknown) => opened.push(url));
-  const screen = await render(<Engines onReference={() => {}} />);
+  const screen = await render(<WithCorner />);
   const rows = screen.getByRole('listitem');
   const paste = rows.filter({ hasText: 'Made-up paste' });
   const browser = rows.filter({ hasText: 'Made-up browser' });
@@ -146,7 +154,7 @@ test('a Codex sign-in moves between the browser page and a device code, and a re
       device: true,
     }),
   ]);
-  const screen = await render(<Engines onReference={() => {}} />);
+  const screen = await render(<WithCorner />);
   const rows = screen.getByRole('listitem');
 
   await rows.filter({ hasText: 'Made-up page' }).getByRole('button', { name: 'Use a device code' }).click();
@@ -154,8 +162,8 @@ test('a Codex sign-in moves between the browser page and a device code, and a re
   await expect.element(device.getByText('MADE-UP1')).toBeVisible();
   await expect.element(device.getByRole('button', { name: 'Use a device code' })).not.toBeInTheDocument();
   await device.getByRole('button', { name: 'Use browser' }).click();
-  const refused = rows.filter({ hasText: 'Made-up refused' });
-  await expect.element(refused.getByText('made-up refusal')).toBeVisible();
+  const refused = screen.getByRole('alert').filter({ hasText: 'made-up refusal' });
+  await expect.element(refused).toBeVisible();
   await refused.getByRole('button', { name: 'Retry' }).click();
   await expect
     .poll(() => sent)

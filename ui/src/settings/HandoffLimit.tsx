@@ -7,7 +7,7 @@ const choices = [
 ];
 
 /** Settings > Teamwork: how many messages between agents in a row a team chat takes before it pauses. */
-export function HandoffLimit({ onReference }: { onReference: (ref: string) => void }) {
+export function HandoffLimit() {
   return (
     <SettingChoice
       field="handoff_limit"
@@ -16,7 +16,6 @@ export function HandoffLimit({ onReference }: { onReference: (ref: string) => vo
       choices={choices}
       // A limit set another way (the API takes 1 to 1000) still shows as it is.
       other={(n) => `${n} hand-offs`}
-      onReference={onReference}
     />
   );
 }

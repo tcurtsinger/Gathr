@@ -32,7 +32,7 @@ function setup(delays: Record<string, number> = {}) {
     return json(answers[q] ?? { chats: [], messages: [] });
   });
   const onOpen = vi.fn();
-  render(<SearchFlyout name={() => 'Made-up Agent'} onOpen={onOpen} onReference={() => {}} />);
+  render(<SearchFlyout name={() => 'Made-up Agent'} onOpen={onOpen} />);
   return onOpen;
 }
 

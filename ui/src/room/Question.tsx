@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure, Question } from '../api';
 import { Composer } from '../components/Composer';
+import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
-import { FailureNotice } from '../components/Notice';
 import { StateMark } from '../components/StateMark';
 import { clock, type People } from './Room';
 import '../components/popover-panel.css';
@@ -95,9 +95,8 @@ export function Questions(props: {
   at: number | null | undefined;
   onOpen: (at: number | null | undefined) => void;
   onAnswer: OnAnswer;
-  onReference: (ref: string) => void;
 }) {
-  const { people, at, onOpen, onAnswer, onReference } = props;
+  const { people, at, onOpen, onAnswer } = props;
   const open = props.questions.filter((q) => !q.answered);
   return (
     <Popover.Root open={at !== undefined} onOpenChange={(o) => onOpen(o ? null : undefined)}>
@@ -154,7 +153,7 @@ export function Questions(props: {
                 <b>{q.name}</b> <span className="room-time">{clock(q.asked)}</span>
               </div>
               <Markdown className="room-said" text={q.question} names={people.names} />
-              <Answer question={q} onAnswer={onAnswer} onReference={onReference} />
+              <Answer question={q} onAnswer={onAnswer} />
             </section>
           ))}
         </Popover.Content>
@@ -172,12 +171,13 @@ function show(at: number | null | undefined) {
 }
 
 /** A choice answers at once, with any words typed; the words alone answer with Send. */
-function Answer(props: { question: Question; onAnswer: OnAnswer; onReference: (ref: string) => void }) {
-  const { question: q, onAnswer, onReference } = props;
+function Answer(props: { question: Question; onAnswer: OnAnswer }) {
+  const { question: q, onAnswer } = props;
   const [words, setWords] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [refused, setRefused] = useState<Failure>();
+  useCard(refused);
   const send = (pick?: string) => {
     if (sending) return;
     setSending(true);
@@ -219,7 +219,6 @@ function Answer(props: { question: Question; onAnswer: OnAnswer; onReference: (r
         hint="Your answer"
         label="Answer"
       />
-      {refused && <FailureNotice failure={refused} onReference={onReference} />}
     </div>
   );
 }

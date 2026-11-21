@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { AppState } from '../api';
+import { Corner } from '../components/Corner';
 import { AppVersion } from './AppVersion';
 
 vi.mock('../live', () => ({ listen: () => () => {} }));
@@ -21,7 +22,7 @@ function service(app: Partial<AppState>) {
 
 test('the version shows, with Update when a release is ready', async () => {
   service({ state: 'ready', update: { version: '9.9.9' } });
-  const screen = await render(<AppVersion onReference={() => {}} />);
+  const screen = await render(<AppVersion />);
   await expect.element(screen.getByText('Version 9.9.8')).toBeVisible();
   await expect.element(screen.getByText('9.9.9 is ready')).toBeVisible();
   await screen.getByRole('button', { name: 'Update to 9.9.9' }).click();
@@ -30,25 +31,35 @@ test('the version shows, with Update when a release is ready', async () => {
 
 test('with nothing ready it says so and checks when asked', async () => {
   service({});
-  const screen = await render(<AppVersion onReference={() => {}} />);
+  const screen = await render(<AppVersion />);
   await expect.element(screen.getByText('Up to date')).toBeVisible();
   await screen.getByRole('button', { name: 'Check for updates' }).click();
   await expect.poll(() => sent).toEqual([null]);
 });
 
 test('the last failure shows with its reference, and a build with no feed offers nothing', async () => {
-  service({ failed: { why: 'made-up failure', ref: 'made-up-ref' } });
+  const failed = { why: 'made-up failure', ref: 'made-up-ref' };
+  service({ state: 'ready', update: { version: '9.9.9' }, failed });
   const opened: string[] = [];
-  const screen = await render(<AppVersion onReference={(ref) => opened.push(ref)} />);
+  const screen = await render(
+    <>
+      <AppVersion />
+      <Corner onReference={(ref) => opened.push(ref)} />
+    </>,
+  );
   await expect.element(screen.getByText('Update failed')).toBeVisible();
-  // Not "Up to date": the check behind it didn't finish.
-  await expect.element(screen.getByText('The last check failed')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
-  screen.unmount();
+  await screen.unmount();
+
+  // Not "Up to date": the check behind it didn't finish.
+  service({ failed });
+  const idle = await render(<AppVersion />);
+  await expect.element(idle.getByText('The last check failed')).toBeVisible();
+  await idle.unmount();
 
   service({ state: 'off' });
-  const off = await render(<AppVersion onReference={() => {}} />);
+  const off = await render(<AppVersion />);
   await expect.element(off.getByText('This build does not update')).toBeVisible();
   await expect.element(off.getByRole('button')).not.toBeInTheDocument();
 });

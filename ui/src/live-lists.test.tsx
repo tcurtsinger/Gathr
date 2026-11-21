@@ -23,7 +23,6 @@ const made: {
   archived: Chat[];
   projects: Project[];
   refuse?: boolean;
-  refuseAgents?: boolean;
   hold?: Promise<void>;
 } = { chats: [], archived: [], projects: [] };
 function service() {
@@ -36,8 +35,6 @@ function service() {
       return json(chats);
     }
     if (path === '/api/chats?archived=true') return json(made.archived);
-    if (path === '/api/agents' && made.refuseAgents)
-      return json({ error: 'Agents failed', why: 'made-up agents refusal', ref: 'made-up-agents' }, 500);
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
@@ -52,7 +49,6 @@ afterEach(() => {
   made.archived = [];
   made.projects = [];
   made.refuse = false;
-  made.refuseAgents = false;
   made.hold = undefined;
 });
 
@@ -81,27 +77,6 @@ test('a draft begun while the list reloads stays open when the reload lands', as
     .toBeVisible();
   await expect.element(page.getByRole('heading', { level: 1, name: 'New chat' })).toBeInTheDocument();
   await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Made-up draft');
-});
-
-test('a failure while a chat is open shows above it, with why and its reference, until dismissed', async () => {
-  made.chats = [{ id: 'c0', title: 'Made-up open chat', project: null }];
-  service();
-  await render(<App />);
-  await expect
-    .element(page.getByRole('heading', { level: 1, name: 'Made-up open chat' }))
-    .toBeInTheDocument();
-
-  made.refuseAgents = true;
-  for (const on of live) on({ type: 'agents' } as LiveEvent);
-  const notice = page.getByRole('alert').filter({ hasText: 'Agents failed' });
-  await expect.element(notice.getByText('made-up agents refusal')).toBeVisible();
-  await expect.element(notice.getByRole('button', { name: 'Reference made-up-agents' })).toBeVisible();
-  await expect
-    .element(page.getByRole('heading', { level: 1, name: 'Made-up open chat' }))
-    .toBeInTheDocument();
-
-  await notice.getByRole('button', { name: 'Dismiss' }).click();
-  await expect.element(notice).not.toBeInTheDocument();
 });
 
 const other: Chat = { id: 'c1', title: 'Made-up other chat', project: null };

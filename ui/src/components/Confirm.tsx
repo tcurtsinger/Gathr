@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
+import { useCard } from './Corner';
 import { Dialog } from './Dialog';
-import { FailureNotice } from './Notice';
 import './confirm.css';
 
 /** Outlined danger, not the registry's filled destructive: Delete and Remove (DESIGN.md "Archive"). */
@@ -17,14 +17,13 @@ interface Props {
   danger?: boolean;
   /** The verb waits: what the body says hasn't arrived yet. */
   waiting?: boolean;
-  /** What the body needed failed to load: shown with its reference, and the verb stays off. */
+  /** What the body needed failed to load: told with its reference, and the verb stays off. */
   loadFailure?: Failure | null;
   /** Gets focus back once the question goes, if it's still on the page. */
   opener?: HTMLElement | null;
   onCancel: () => void;
-  /** Settles when the service has done it; a failure keeps the question open with its reference. */
+  /** Settles when the service has done it; a failure keeps the question open and is told with its reference. */
   onConfirm: () => Promise<unknown>;
-  onReference: (ref: string) => void;
 }
 
 /** A question, Cancel and the verb, over the current screen (a variant of the one Dialog). Cancel has focus. */
@@ -38,7 +37,6 @@ export function Confirm({
   opener,
   onCancel,
   onConfirm,
-  onReference,
 }: Props) {
   const [busy, setBusy] = useState(false);
   useEffect(() => () => opener?.focus(), [opener]);
@@ -51,11 +49,10 @@ export function Confirm({
       setFailure(f);
     });
   };
-  const shown = failure ?? loadFailure;
+  useCard(failure ?? loadFailure);
   return (
     <Dialog open bare title={question} className="confirm-dialog" onClose={() => busy || onCancel()}>
       {body && <p className="confirm-body muted">{body}</p>}
-      {shown && <FailureNotice failure={shown} onReference={onReference} />}
       <footer>
         <span className="visually-hidden" role="status">
           {busy ? 'Saving' : ''}

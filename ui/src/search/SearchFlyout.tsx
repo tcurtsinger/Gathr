@@ -1,9 +1,8 @@
 import { Search } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { api, type ChatHit, type Failure, type MessageHit } from '../api';
+import { useCard } from '../components/Corner';
 import { NavFlyout } from '../components/NavFlyout';
-import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import './search.css';
 
@@ -12,7 +11,6 @@ interface Props {
   name: (agent: string | null) => string;
   /** Opens the hit's chat, at the message for a message hit; `at` is when the person picked it. */
   onOpen: (hit: ChatHit | MessageHit, at: number) => void;
-  onReference: (ref: string) => void;
   /** Ctrl K: opens the sidebar too, if it was closed. */
   onShortcut?: () => void;
 }
@@ -28,7 +26,7 @@ const SLOW = 300;
  * messages, newest first, with one cursor across both. The query stays between openings; an answer to
  * an older query is dropped.
  */
-export function SearchFlyout({ name, onOpen, onReference, onShortcut }: Props) {
+export function SearchFlyout({ name, onOpen, onShortcut }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Found | null>(null);
@@ -36,6 +34,7 @@ export function SearchFlyout({ name, onOpen, onReference, onShortcut }: Props) {
   const [slow, setSlow] = useState(false);
   const [cursor, setCursor] = useState(-1);
   const [tries, setTries] = useState(0);
+  useCard(failure, { label: 'Retry', run: () => setTries((n) => n + 1) });
   const input = useRef<HTMLInputElement>(null);
   const asked = useRef(0);
   const shortcut = useRef(onShortcut);
@@ -189,17 +188,6 @@ export function SearchFlyout({ name, onOpen, onReference, onShortcut }: Props) {
       <div className="flyout-body" id="search-results" role="listbox" aria-label="Search results">
         {group('Chats', found?.chats ?? [], 0)}
         {group('Messages', found?.messages ?? [], found?.chats.length ?? 0)}
-        {failure && (
-          <FailureNotice
-            failure={failure}
-            onReference={onReference}
-            action={
-              <Button type="button" variant="outline" onClick={() => setTries((n) => n + 1)}>
-                Retry
-              </Button>
-            }
-          />
-        )}
         <p className="flyout-empty" role="status" hidden={!status}>
           {status}
         </p>

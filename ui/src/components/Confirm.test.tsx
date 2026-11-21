@@ -26,7 +26,6 @@ function Settings() {
             setAsking(false);
           }}
           onConfirm={async () => {}}
-          onReference={() => {}}
         />
       )}
     </Dialog>

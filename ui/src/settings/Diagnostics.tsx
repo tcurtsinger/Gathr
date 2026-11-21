@@ -1,8 +1,8 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
+import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
-import { FailureNotice, Notice } from '../components/Notice';
 import { Page } from './Row';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
@@ -27,6 +27,7 @@ export function Diagnostics({ reference, ...turns }: Props) {
 function Reference({ reference }: { reference: string }) {
   const [events, setEvents] = useState<TurnEvent[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   useEffect(() => {
     setEvents(null);
     setFailure(null);
@@ -40,7 +41,6 @@ function Reference({ reference }: { reference: string }) {
 
   return (
     <Page wide title={`Reference ${reference}`}>
-      {failure && <FailureNotice failure={failure} />}
       {events && (
         <div className="trace">
           {typeof why === 'string' && <p>{why}</p>}
@@ -54,6 +54,7 @@ function Reference({ reference }: { reference: string }) {
 function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
   const [list, setList] = useState<TurnTimeline[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const [filter, setFilter] = useState<Filter>('All');
   const [find, setFind] = useState('');
   const [picked, setPicked] = useState<string | undefined>(turn);
@@ -100,7 +101,6 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
         </label>
         {list && <span className="muted">{list.length === 1 ? '1 turn' : `${list.length} turns`}</span>}
       </div>
-      {failure && <FailureNotice failure={failure} />}
       {list?.length === 0 && <p className="settings-empty">No turns yet</p>}
       {list && list.length > 0 && (
         <div className="split">
@@ -154,13 +154,16 @@ function Timeline({ turn }: { turn: TurnTimeline }) {
             <dd>{size}</dd>
           </div>
         ))}
+        {turn.status === 'failed' && (
+          <div>
+            <dt>Reference</dt>
+            <dd>
+              <code>{turn.ref}</code>
+            </dd>
+          </div>
+        )}
       </dl>
-      {turn.status === 'failed' && (
-        <>
-          <Notice danger title="Turn failed" links={<code className="ref">{turn.ref}</code>} />
-          {turn.why && <p>{turn.why}</p>}
-        </>
-      )}
+      {turn.status === 'failed' && turn.why && <p>{turn.why}</p>}
       <Steps events={turn.events} />
     </div>
   );

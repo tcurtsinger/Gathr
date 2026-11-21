@@ -193,8 +193,6 @@ window.fetch = (url, init) =>
     ? Promise.resolve(new Response(JSON.stringify({ lines: board, agents: 4 })))
     : fetched(url, init);
 
-const ignore = () => {};
-
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
@@ -214,7 +212,6 @@ function Preview() {
   const acts = {
     approve: (request: string) =>
       setState((s) => ({ ...s, approvals: s.approvals.filter((a) => a.request !== request) })),
-    reference: ignore,
     ask: setAsking,
     like: (message: string, give: boolean) =>
       setState((s) => ({
@@ -242,7 +239,6 @@ function Preview() {
             at={asking}
             onOpen={setAsking}
             onAnswer={answer}
-            onReference={ignore}
           />
           <WorkspaceToggle open={sidebar} onToggle={() => setSidebar(!sidebar)} />
         </div>
@@ -260,7 +256,7 @@ function Preview() {
           />
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat="preview" onFailure={ignore} />}
+      {sidebar && <RoomSidebar chat="preview" />}
     </div>
   );
 }

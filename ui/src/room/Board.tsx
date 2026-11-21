@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type BoardLine, type Failure } from '../api';
+import { api, type BoardLine } from '../api';
 import { listen } from '../live';
 import './board.css';
 
@@ -10,17 +10,21 @@ const STATES: Record<BoardLine['state'], string> = {
   done: 'Done',
 };
 
-/** The chat's board, the room's sidebar tab: read only. */
-export function Board({ chat, onFailure }: { chat: string; onFailure: (f: Failure) => void }) {
+/** The chat's board, the room's sidebar tab: read only. A read that fails says nothing: the live socket reloads it. */
+export function Board({ chat }: { chat: string }) {
   const [lines, setLines] = useState<BoardLine[] | null>(null);
   useEffect(() => {
-    const load = () => api.board(chat).then((b) => setLines(b.lines), onFailure);
+    const load = () =>
+      api.board(chat).then(
+        (b) => setLines(b.lines),
+        () => {},
+      );
     load();
     return listen((event) => {
       if (event.type === 'board' && event.chat === chat) setLines(event.lines);
       if (event.type === 'lagged') load();
     });
-  }, [chat, onFailure]);
+  }, [chat]);
   if (!lines) return null;
   return (
     <div className="board">

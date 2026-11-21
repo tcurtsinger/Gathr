@@ -7,7 +7,7 @@ const choices = [
 ];
 
 /** Settings > Teamwork: the tokens at which an agent's engine compacts its conversation by itself. */
-export function AutoCompact({ onReference }: { onReference: (ref: string) => void }) {
+export function AutoCompact() {
   return (
     <SettingChoice
       field="auto_compact"
@@ -15,7 +15,6 @@ export function AutoCompact({ onReference }: { onReference: (ref: string) => voi
       line="How full a conversation gets before it is compacted."
       choices={choices}
       other={(n) => `${Math.round(n / 1000)}K`}
-      onReference={onReference}
     />
   );
 }

@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api, type Failure, type Settings } from '../api';
+import { useCard } from '../components/Corner';
 import { useNewestWins } from '../newest';
 
 /**
  * The saved settings, read as a page opens. `save` shows a change at once and answers whether it was taken; a
- * refused one says why and shows what's saved.
+ * refused one is told in the corner and shows what's saved.
  */
 export function useSettings() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const newest = useNewestWins();
 
   useEffect(() => {
@@ -30,5 +32,5 @@ export function useSettings() {
       },
     );
   };
-  return { saved, failure, save };
+  return { saved, save };
 }

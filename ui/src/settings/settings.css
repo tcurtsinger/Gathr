@@ -168,18 +168,10 @@ html.light .settings-panel {
   align-items: center;
   gap: 8px;
 }
-/* What follows a row (a notice, a sign-in, an open editor) takes its whole width. */
+/* What follows a row (a sign-in, an open editor) takes its whole width. */
 .setting > :not(.setting-words, .setting-control) {
   grid-column: 1 / -1;
 }
-:is(.settings-col, .settings-wide) .notice {
-  min-height: 0;
-  margin: 8px 0 12px;
-  padding: 12px 14px;
-  gap: 6px 14px;
-  font-size: 13px;
-}
-
 /* The app's one button, dropdown, field and switch, drawn smaller here, as the mock-up has them. */
 :is(.settings-col, .settings-wide) [data-slot="button"] {
   height: 28px;

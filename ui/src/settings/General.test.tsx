@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { followTheme } from '../theme';
 import { General } from './General';
 
@@ -55,7 +56,7 @@ test('Theme applies at once, is kept for the next start, and System follows the 
   cookie('');
   const light = () => document.documentElement.classList.contains('light');
   const systemLight = matchMedia('(prefers-color-scheme: light)').matches;
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(<General />);
   const theme = screen.getByRole('combobox', { name: 'Theme' });
   await expect.element(theme).toHaveTextContent('System');
 
@@ -66,7 +67,7 @@ test('Theme applies at once, is kept for the next start, and System follows the 
   document.documentElement.classList.toggle('light', systemLight);
   followTheme();
   expect(light()).toBe(!systemLight);
-  await screen.rerender(<General key="again" onReference={() => {}} />);
+  await screen.rerender(<General key="again" />);
   const kept = screen.getByRole('combobox', { name: 'Theme' });
   await expect.element(kept).toHaveTextContent(systemLight ? 'Dark' : 'Light');
 
@@ -82,7 +83,7 @@ test('the desktop window title bar takes Theme at start and on each change, and 
   });
   cookie('dark');
   followTheme();
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(<General />);
   const theme = screen.getByRole('combobox', { name: 'Theme' });
   await pick(theme, 'Light');
   await pick(theme, 'System');
@@ -93,7 +94,12 @@ test('the desktop window title bar takes Theme at start and on each change, and 
 test('Space turns it on; a change that fails puts it back with its reference and keeps focus', async () => {
   const sent: unknown[] = [];
   service(false, [true, 'fail'], sent);
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(
+    <>
+      <General />
+      <Corner onReference={() => {}} />
+    </>,
+  );
   const toggle = screen.getByRole('switch', { name: 'Open at login' });
   await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
 
@@ -124,7 +130,7 @@ test('a read on focus that answers after a save never undoes the save', async ()
     });
     return answer;
   });
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(<General />);
   const toggle = screen.getByRole('switch', { name: 'Open at login' });
   await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
 
@@ -154,7 +160,7 @@ test('a read on focus that answers after a newer read never shows the older stat
     if (read.hold) await new Promise<void>((done) => (release = done));
     return answer;
   });
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(<General />);
   const toggle = screen.getByRole('switch', { name: 'Open at login' });
   await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
 
@@ -183,7 +189,7 @@ test('a read on focus that fails while a save is pending leaves no failure once 
     });
     return new Response(JSON.stringify({ on: true }));
   });
-  const screen = await render(<General onReference={() => {}} />);
+  const screen = await render(<General />);
   const toggle = screen.getByRole('switch', { name: 'Open at login' });
   await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
 

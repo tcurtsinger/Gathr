@@ -9,10 +9,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
+import { useCard } from '../components/Corner';
 import { DialogMenuContent } from '../components/DialogMenu';
 import { Dropdown } from '../components/Dropdown';
 import { IconButton } from '../components/IconButton';
-import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { Group, Row } from './Row';
 import { SignInFailed, SignInWaiting } from './SignIn';
@@ -31,12 +31,11 @@ const said: Record<string, string> = {
   unknown: 'Checking',
 };
 
-type Open = (ref: string) => void;
-
 /** Settings > Engines' accounts (settings-entry/v5): each named, on one engine, signed in on its own. */
-export function Accounts({ onReference }: { onReference: Open }) {
+export function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   /** The form, open to add (no account) or to rename one. */
   const [form, setForm] = useState<{ account?: Account; opener: HTMLElement | null } | null>(null);
   /** Gets focus once an account is removed, as its row goes. */
@@ -70,7 +69,6 @@ export function Accounts({ onReference }: { onReference: Open }) {
           </Button>
         }
       />
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       {form && (
         // A new form for each account, so one account's draft never carries to another.
         <AccountForm
@@ -90,7 +88,6 @@ export function Accounts({ onReference }: { onReference: Open }) {
               onRename={(opener) => open(opener, account)}
               onRemoved={() => addButton.current?.focus()}
               onFailure={setFailure}
-              onReference={onReference}
             />
           ))}
         </ul>
@@ -171,10 +168,9 @@ interface RowProps {
   onRename: (opener: HTMLElement | null) => void;
   onRemoved: () => void;
   onFailure: (f: Failure) => void;
-  onReference: Open;
 }
 
-function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: RowProps) {
+function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   /** Focus goes back to the menu's button when Remove's question is cancelled. */
@@ -227,9 +223,7 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
         line={`${engineName(account.engine)} · ${state}`}
         after={
           <>
-            {failed && (
-              <SignInFailed account={id} failed={failed} onFailure={onFailure} onReference={onReference} />
-            )}
+            {failed && <SignInFailed account={id} failed={failed} onFailure={onFailure} />}
             {waiting && <SignInWaiting account={account} waiting={waiting} onFailure={onFailure} />}
           </>
         }

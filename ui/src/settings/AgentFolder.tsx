@@ -1,18 +1,19 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
-import { FailureNotice } from '../components/Notice';
+import { useCard } from '../components/Corner';
 import { desktop } from '../desktop';
 import { report } from '../report';
 import { Row } from './Row';
 
 /** Settings > Teamwork's Agent folder (M1): every project's Shared folder and one folder per agent, in one place. */
-export function AgentFolder({ onReference }: { onReference: (ref: string) => void }) {
+export function AgentFolder() {
   const [folder, setFolder] = useState<string | null>(null);
   // What the person typed while editing; null when not editing. A refused folder stays as typed.
   const [typed, setTyped] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const change = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
   const picking = useRef(false);
@@ -119,12 +120,7 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
     <Row
       name={typed === null ? 'Agent folder' : <label htmlFor="agent-folder">Agent folder</label>}
       line="Each project gets a Shared folder and one per agent."
-      after={
-        <>
-          {editor}
-          {failure && <FailureNotice failure={failure} onReference={onReference} />}
-        </>
-      }
+      after={editor}
     >
       {typed === null && (
         <>

@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { AutoCompact } from './AutoCompact';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -23,7 +24,12 @@ test("auto-compact saves when picked, Engine's own as none; a refused pick says 
     return shown();
   });
   const opened: string[] = [];
-  const screen = await render(<AutoCompact onReference={(ref) => opened.push(ref)} />);
+  const screen = await render(
+    <>
+      <AutoCompact />
+      <Corner onReference={(ref) => opened.push(ref)} />
+    </>,
+  );
   const pick = screen.getByRole('combobox', { name: 'Auto-compact' });
   const choose = async (choice: string) => {
     await pick.click();

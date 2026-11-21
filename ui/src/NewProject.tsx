@@ -1,9 +1,9 @@
 import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
+import { useCard } from './components/Corner';
 import { Dialog } from './components/Dialog';
 import { Dropdown } from './components/Dropdown';
-import { Notice } from './components/Notice';
 import { Switch } from './components/Switch';
 import './new-project.css';
 
@@ -15,17 +15,17 @@ interface Props {
   projects: Project[];
   onClose: () => void;
   onCreated: (project: Project) => void;
-  onReference: (ref: string) => void;
 }
 
 /** A project: its name, its folder and its team of up to five, one of them the Supervisor (0028). */
-export function NewProject({ open, agents, projects, onClose, onCreated, onReference }: Props) {
+export function NewProject({ open, agents, projects, onClose, onCreated }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState('');
   const [team, setTeam] = useState<string[]>([]);
   const [lead, setLead] = useState('');
   const [reviewer, setReviewer] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(open ? failure : null);
   const supervisor = team.includes(lead) ? lead : team[0];
   const taken = projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
   const ready = name.trim() && folder.trim() && team.length > 0 && !taken;
@@ -110,22 +110,6 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
               />
             </div>
           </>
-        )}
-        {failure && (
-          <Notice
-            danger
-            title={failure.error}
-            reference={
-              failure.ref ? { ref: failure.ref, open: () => onReference(failure.ref as string) } : undefined
-            }
-            links={
-              failure.why && (
-                <span className="muted new-project-why" title={failure.why}>
-                  {failure.why}
-                </span>
-              )
-            }
-          />
         )}
         <footer className="agent-actions">
           <Button type="button" variant="ghost" onClick={onClose}>
