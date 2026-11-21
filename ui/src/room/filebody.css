@@ -1,0 +1,84 @@
+/* A file's body in its tab: a Markdown page, numbered lines, a table. */
+.filebody-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px 32px;
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+/* A document's title reads as its title; the rest of the headings stay the chat's section labels. */
+.filebody-md h1[data-streamdown] {
+  font-size: 1.3em;
+}
+
+.filebody-lines {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+.filebody-lines > pre {
+  margin: 0;
+  padding: 14px 0;
+  font: inherit;
+  white-space: pre;
+}
+/* The numbers stay at the left while a long line scrolls sideways. */
+.filebody-lines > .filebody-numbers {
+  position: sticky;
+  left: 0;
+  flex: none;
+  min-height: 100%;
+  padding-inline: 14px;
+  background: var(--frame);
+  color: var(--muted-foreground);
+  text-align: right;
+  user-select: none;
+}
+.filebody-lines > .filebody-text {
+  padding-right: 16px;
+}
+.filebody-text span {
+  color: var(--l);
+}
+:root:not(.light) .filebody-text span {
+  color: var(--shiki-dark, var(--l));
+}
+
+/* A table as a message's is: the label size, the heading row tinted and semibold, cells 10px by 6px. The heading row
+   stays in sight while the rows scroll. */
+.filebody-table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-size: 13px;
+}
+.filebody-table > table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.filebody-table :is(th, td) {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.filebody-table th {
+  position: sticky;
+  top: 0;
+  background: color-mix(in oklab, var(--foreground) 4%, var(--frame));
+  font-weight: 600;
+}
+.filebody-more {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted-foreground);
+}
