@@ -277,7 +277,9 @@ pub fn text(facts: &Facts) -> String {
     if let Some(designs) = &facts.designs {
         lines.push(format!(
             "Your project's designs folder is \"{}\": a design for the person to look at goes \
-             there under <name>/, one HTML page per option, and opens in their Designs tab.",
+             there under <name>/, one HTML page per option, and opens in their Designs tab. To have \
+             them pick one, call ask_person with the design's pages as its files and one choice per \
+             page, in the same order.",
             designs.display()
         ));
     }

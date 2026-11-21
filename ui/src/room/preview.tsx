@@ -257,7 +257,7 @@ function Preview() {
           />
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat="preview" room={state} />}
+      {sidebar && <RoomSidebar chat="preview" room={state} onAnswer={answer} />}
     </div>
   );
 }

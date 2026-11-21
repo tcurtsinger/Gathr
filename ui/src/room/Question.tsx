@@ -14,7 +14,7 @@ import { clock, type People, Words } from './Room';
 import '../components/popover-panel.css';
 
 /** Sends the person's answer: it fails with the service's refusal. */
-type OnAnswer = (
+export type OnAnswer = (
   question: Question,
   pick?: string,
   words?: string,
