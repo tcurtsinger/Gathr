@@ -17,7 +17,7 @@ the planned read-only pool is not built yet. The CLI's diagnostics open a read-o
 
 Claude Code uses a long-lived stream-json process; Codex uses a long-lived app-server.
 Each agent has at most one engine on one conversation at a time: its latest in the chat. Each turn's opening carries
-the chat's lines the agent hasn't heard, and `@Name` in an agent's words wakes that member when its turn ends
+the chat's lines the agent hasn't heard, and `@Name` in an agent's words wakes that member when its turn ends, or in a chat with no project brings that agent in
 ([0081](archive/decisions/0081-agents-hear-the-room-and-name-each-other.md)). Switching closes the old process gently;
 after compaction, the conversation's next turn hears the chat's last lines.
 Stop uses the provider's interrupt. The turn boundary uses a `Driver` enum and shared `Frame` values,

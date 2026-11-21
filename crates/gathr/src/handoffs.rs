@@ -104,13 +104,16 @@ pub struct Mentions {
     pub from: String,
     pub named: Vec<Named>,
     pub over: Option<Over>,
+    /// The chat's agents, when the words brought one in.
+    pub joined: Option<Vec<crate::team::Member>>,
 }
 
 /// The members `turn`'s words name with `@Name` (0081), but its own agent and, for a check, the lead
 /// it checks, each recorded as a hand-off from the turn's agent. Its words are its last words
 /// (`room::last_words`), never its working notes. Past the limit the chat pauses, the line saying
-/// so goes in the turn, and nobody from that member on is named. None in a chat of one agent, or an
-/// archived one.
+/// so goes in the turn, and nobody from that member on is named. In a chat with no project, an agent
+/// of the person's from outside it joins it when named, while the chat has room. None in an archived
+/// chat.
 pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, Error> {
     let found: Option<(String, Option<String>)> = conn
         .query_row(
@@ -132,14 +135,12 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         Ok(Some(_)) | Err(Error::Refused(_)) => return Ok(woke),
         Err(e) => return Err(e),
     }
-    let team = crate::team::members(conn, &chat)?;
-    let Some(sender) = team
-        .iter()
-        .find(|m| m.agent == from)
-        .filter(|_| team.len() > 1)
-    else {
+    let mut team = crate::team::members(conn, &chat)?;
+    let Some(sender) = team.iter().find(|m| m.agent == from).cloned() else {
         return Ok(woke);
     };
+    let inside = team.len();
+    team.extend(outsiders(conn, &chat)?);
     let Some((message, words)) = crate::room::last_words(conn, turn)? else {
         return Ok(woke);
     };
@@ -153,9 +154,17 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         .query_row([turn], |r| r.get::<_, Option<String>>(0))
         .optional()?
         .flatten();
+    let outside = &team[inside..];
     for member in crate::team::mentioned(&team, &words) {
         if member.agent == from || lead.as_deref() == Some(member.agent.as_str()) {
             continue;
+        }
+        let joins = outside.iter().any(|o| o.agent == member.agent);
+        if joins && !crate::team::seat(conn, &chat, &member.agent)? {
+            continue;
+        }
+        if joins {
+            woke.joined = Some(crate::team::members(conn, &chat)?);
         }
         let counted = record(conn, &chat, &from, &member.agent)?;
         if let Some(limit) = counted.over {
@@ -179,4 +188,23 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         });
     }
     Ok(woke)
+}
+
+/// The person's agents a chat with no project can bring in: every one not in it. None for a project's
+/// chat, whose team is its team.
+fn outsiders(conn: &Connection, chat: &str) -> Result<Vec<crate::team::Member>, Error> {
+    let mut statement = conn.prepare_cached(
+        "SELECT a.id, a.name FROM agents a JOIN chats c ON c.id = ?1 AND c.project IS NULL
+         WHERE a.removed_ts IS NULL
+           AND a.id NOT IN (SELECT agent_id FROM chat_members WHERE chat_id = ?1)
+         ORDER BY a.created_ts, a.id",
+    )?;
+    let rows = statement.query_map([chat], |r| {
+        Ok(crate::team::Member {
+            agent: r.get(0)?,
+            name: r.get(1)?,
+            role: crate::team::Role::Member,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }

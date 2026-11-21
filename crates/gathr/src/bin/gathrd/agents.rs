@@ -28,7 +28,8 @@ pub fn routes() -> Router<Arc<State>> {
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
 /// falls back to the engine's own default, or a face's gender or skin tone, which the seed then
-/// picks, or its background, which is then a grey, or its picture, which brings the drawn face back.
+/// picks, or its background, which is then a grey, or its picture, which brings the drawn face back,
+/// or its description.
 #[derive(Deserialize)]
 struct Body {
     name: Option<String>,
@@ -47,6 +48,8 @@ struct Body {
     background: Option<Option<String>>,
     #[serde(default, deserialize_with = "present")]
     picture: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present")]
+    description: Option<Option<String>>,
 }
 
 /// Tells `"model": null` (clear it) from no `model` at all (keep it).
@@ -69,6 +72,7 @@ impl Body {
             skin: self.skin,
             background: self.background,
             picture: self.picture,
+            description: self.description,
         }
     }
 }
@@ -153,6 +157,7 @@ async fn add(
         skin: None,
         background: None,
         picture: None,
+        description: None,
     };
     let agent = blank.changed(body.change());
     save(&s, &t, ("add", ERROR), agent, None).await

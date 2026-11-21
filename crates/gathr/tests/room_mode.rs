@@ -537,3 +537,35 @@ fn a_turn_whose_last_words_start_with_reply_is_a_reply_whatever_came_before() {
     ];
     assert_eq!(said, want, "{history}");
 }
+
+#[test]
+fn the_assistant_takes_words_that_name_nobody_and_brings_in_whom_it_names() {
+    let data = TempDir::new();
+    let room = room(
+        &data.0,
+        &saying(&data.0, &["@Bo the map is yours.", "Done."]),
+    );
+    let set = room
+        .service
+        .send("PATCH", "/api/settings", json!({ "assistant": room.ann }));
+    assert_eq!(set.status, 200, "{}", set.body);
+    let made = room.service.send("POST", "/api/chats", json!({}));
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+    let room = Room { chat, ..room };
+    room.say("Plan the walk", None);
+    let history = room.quiet(2);
+
+    // Ann, the assistant, took the person's words and leads; her words brought Bo in for a turn.
+    assert_eq!(room.turns_of(&history, &room.ann), [json!("person")]);
+    assert_eq!(room.turns_of(&history, &room.bo), [json!("teammate")]);
+    let members = history["members"].as_array().unwrap().iter();
+    let seats: Vec<(Value, Value)> = members
+        .map(|m| (m["agent"].clone(), m["role"].clone()))
+        .collect();
+    let want = [
+        (json!(room.ann), json!("supervisor")),
+        (json!(room.bo), json!("member")),
+    ];
+    assert_eq!(seats, want, "{history}");
+    assert!(room.turns_of(&history, &room.lead).is_empty(), "{history}");
+}

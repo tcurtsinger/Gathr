@@ -77,6 +77,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0067_questions.sql"),
     include_str!("../migrations/0068_drop_old_tables.sql"),
     include_str!("../migrations/0069_no_agent_pause.sql"),
+    include_str!("../migrations/0070_agent_description.sql"),
 ];
 
 /// The schema version this build writes.
@@ -684,5 +685,35 @@ mod drop_old_tables_test {
             .map(Result::unwrap)
             .collect();
         assert_eq!(left, ["app", "chat"]);
+    }
+
+    /// 0070 gives agents a description: every agent from before stays, with none.
+    #[test]
+    fn agents_from_before_stay_with_no_description() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-description-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..69] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 69;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 2);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let rows: Vec<String> = conn
+            .prepare("SELECT rowid || ' ' || id || ' ' || coalesce(description, '-') FROM agents ORDER BY rowid")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(rows, ["1 mira -", "2 bo -"]);
     }
 }

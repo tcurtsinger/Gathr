@@ -73,6 +73,18 @@ async fn woken(chats: &Arc<Chats>, ended: &Ended) {
         }
     };
     let from = mentions.from.clone();
+    if let Some(members) = &mentions.joined {
+        let seats: Vec<_> = members
+            .iter()
+            .map(|m| json!({ "agent": m.agent, "role": m.role }))
+            .collect();
+        let joined = Event::point("gathr.chat.members")
+            .trace(&ended.trace)
+            .chat(&ended.chat)
+            .ok();
+        chats.writer.record(joined.attr("members", seats));
+        chats.publish(json!({ "type": "members", "chat": ended.chat, "members": members }));
+    }
     for named in mentions.named {
         let told = named.told;
         let delivered = deliver(

@@ -24,6 +24,12 @@ pub struct Facts {
     own: Option<(PathBuf, PathBuf)>,
     /// In a project chat, the project's folder in the agent folder and the project's own.
     read: Vec<PathBuf>,
+    /// What the person asked to be called.
+    person: Option<String>,
+    /// Whether this agent is the person's assistant.
+    assistant: bool,
+    /// In a chat with no project, the person's other agents, each with its description.
+    agents: Vec<String>,
 }
 
 pub fn facts(
@@ -66,6 +72,26 @@ pub fn facts(
             })
             .collect(),
     };
+    let plain: bool = conn
+        .query_row(
+            "SELECT project IS NULL FROM chats WHERE id = ?1",
+            [chat],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or(false);
+    let agents = match plain {
+        true => gathr::agents::list(conn)?
+            .into_iter()
+            .filter(|a| Some(a.id.as_str()) != agent)
+            .map(|a| match a.description {
+                Some(what) => format!("{} ({what})", a.name),
+                None => a.name,
+            })
+            .collect(),
+        false => Vec::new(),
+    };
+    let assistant = gathr::assistant::assistant(conn)?;
     Ok(Facts {
         title,
         name,
@@ -75,6 +101,9 @@ pub fn facts(
         worktree,
         own,
         read,
+        person: gathr::assistant::person_name(conn)?,
+        assistant: plain && agent.is_some() && assistant.as_deref() == agent,
+        agents,
     })
 }
 
@@ -145,6 +174,26 @@ pub fn text(facts: &Facts) -> String {
         "{who} in Gathr, in the chat \"{}\"{role}.",
         facts.title
     )];
+    if let Some(person) = &facts.person {
+        lines.push(format!(
+            "The person's name is {person}: call them {person}."
+        ));
+    }
+    if facts.assistant {
+        lines.push(
+            "You are the person's assistant: a message that names nobody comes to you. Do small \
+             things yourself."
+                .to_string(),
+        );
+    }
+    if !facts.agents.is_empty() {
+        lines.push(format!(
+            "The person's other agents: {}. Naming one with @Name in your last words brings them \
+             into this chat to answer the person directly, so hand an ask to the agent it belongs \
+             to instead of relaying it.",
+            facts.agents.join(", ")
+        ));
+    }
     if !facts.others.is_empty() {
         // A team chat's turn opens with what the chat said since the agent's last turn (0081).
         let (lead, heard) = match facts.team {

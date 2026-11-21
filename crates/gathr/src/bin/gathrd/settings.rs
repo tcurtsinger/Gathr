@@ -8,7 +8,7 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use gathr::event::Event;
-use gathr::folders;
+use gathr::{assistant, folders};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -19,7 +19,8 @@ pub fn routes() -> Router<Arc<State>> {
     Router::new().route("/api/settings", get(settings).patch(change_settings))
 }
 
-/// Settings > General: the agent folder (0034), the hand-off limit and Auto-compact.
+/// Settings > General: the agent folder (0034), the hand-off limit, Auto-compact, the person's name
+/// and their assistant.
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     let data = s.data.path().to_path_buf();
     db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
@@ -34,11 +35,19 @@ struct Change {
     /// Auto-compact (K3): one of 200000 to 500000, or `null` for each engine's own; left out, unchanged.
     #[serde(default, deserialize_with = "present")]
     auto_compact: Option<Option<i64>>,
+    /// What agents call the person, or `null` for nothing; left out, unchanged.
+    #[serde(default, deserialize_with = "present")]
+    person_name: Option<Option<String>>,
+    /// The assistant's agent id, or `null` for none; left out, unchanged.
+    #[serde(default, deserialize_with = "present")]
+    assistant: Option<Option<String>>,
 }
 
 /// A field that's there, `null` included, apart from one that's left out.
-fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
-    Option::<i64>::deserialize(d).map(Some)
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<Option<T>>, D::Error> {
+    Option::<T>::deserialize(d).map(Some)
 }
 
 async fn change_settings(
@@ -70,6 +79,12 @@ async fn change_settings(
         if let (Ok(()), Some(at)) = (&saved, body.auto_compact) {
             saved = gathr::context::set_auto_compact(c, at);
         }
+        if let (Ok(()), Some(name)) = (&saved, &body.person_name) {
+            saved = assistant::set_person_name(c, name.as_deref());
+        }
+        if let (Ok(()), Some(agent)) = (&saved, &body.assistant) {
+            saved = assistant::set_assistant(c, agent.as_deref());
+        }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;
         }
@@ -81,6 +96,7 @@ async fn change_settings(
         event
             .attr("handoff_limit", gathr::handoffs::limit(c)?)
             .attr("auto_compact", gathr::context::auto_compact(c)?)
+            .attr("assistant", assistant::assistant(c)?)
             .attr(
                 "agent_folder",
                 folders::root(c, &data)?.display().to_string(),
@@ -99,7 +115,11 @@ fn shown(
     let folder = folders::root(c, data)?.display().to_string();
     let handoff_limit = gathr::handoffs::limit(c)?;
     let auto_compact = gathr::context::auto_compact(c)?;
-    Ok(
-        json!({ "agent_folder": folder, "handoff_limit": handoff_limit, "auto_compact": auto_compact }),
-    )
+    Ok(json!({
+        "agent_folder": folder,
+        "handoff_limit": handoff_limit,
+        "auto_compact": auto_compact,
+        "person_name": assistant::person_name(c)?,
+        "assistant": assistant::assistant(c)?,
+    }))
 }
