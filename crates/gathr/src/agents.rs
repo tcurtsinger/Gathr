@@ -370,7 +370,7 @@ fn checked(
 /// The longest description an agent can have.
 pub const DESCRIPTION_MOST: usize = 80;
 
-/// The names the window draws a picture from (ui/src/components/marks.ts).
+/// The names the window draws a picture from (ui/src/components/pictures.ts).
 const SHAPES: [&str; 12] = [
     "circle", "tile", "cloud", "flower", "hexagon", "pebble", "shield", "drop", "star", "diamond",
     "bubble", "leaf",
