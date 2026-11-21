@@ -178,10 +178,13 @@ export function useRoom(chat: string) {
   );
 
   // The answer shows at once; the live event brings the same.
-  const answer = useCallback(async (id: number, pick?: string, words?: string) => {
-    const { question } = await api.answerQuestion(id, pick, words);
-    setState((s) => ({ ...s, questions: s.questions.map((q) => (q.id === id ? question : q)) }));
-  }, []);
+  const answer = useCallback(
+    async (asked: Question, pick?: string, words?: string, files?: readonly File[]) => {
+      const { question } = await api.answerQuestion(asked, pick, words, files);
+      setState((s) => ({ ...s, questions: s.questions.map((q) => (q.id === asked.id ? question : q)) }));
+    },
+    [],
+  );
 
   return { state, failure, reload: load, approve, answer };
 }

@@ -356,10 +356,12 @@ export class Failure extends Error {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
+    // A file goes as it is; anything else as JSON.
+    const raw = body instanceof Blob;
     response = await fetch(path, {
       method,
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined || raw ? {} : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch {
     throw new Failure('Connection failed', 'The service did not respond. Try again.', null);
@@ -370,6 +372,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     throw new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
   }
   return answer as T;
+}
+
+/** Saves each file in the chat's folder, in order: their saved names. */
+async function upload(chat: string, files: readonly File[]) {
+  const saved: string[] = [];
+  for (const file of files) {
+    const path = `/api/chats/${chat}/files?name=${encodeURIComponent(file.name)}`;
+    saved.push((await call<{ name: string }>('POST', path, file)).name);
+  }
+  return saved;
 }
 
 export const api = {
@@ -390,19 +402,36 @@ export const api = {
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (change: Partial<Settings>) => call<Settings>('PATCH', '/api/settings', change),
-  send: (chat: string, text: string, agent?: string, picks?: PickedName[], reply?: ReplyTarget) =>
-    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, {
+  /** Sends the message, with the files first saved in the chat's folder, a line each after its words. */
+  send: async (
+    chat: string,
+    text: string,
+    agent?: string,
+    picks?: PickedName[],
+    reply?: ReplyTarget,
+    files: readonly File[] = [],
+  ) => {
+    const saved = await upload(chat, files);
+    return call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, {
       text,
       agent,
       picks: picks?.length ? picks : undefined,
+      files: saved.length ? saved : undefined,
       ...reply,
-    }),
+    });
+  },
   /** The person's like (0057): it reaches the message's agent. */
   like: (chat: string, message: string) =>
     call<{ reaction: Reaction; did: string }>('PUT', `/api/chats/${chat}/messages/${message}/like`, {}),
   /** Answers a room chat's question: it starts the asking agent's turn. */
-  answerQuestion: (id: number, pick?: string, words?: string) =>
-    call<{ question: Question; turn: string }>('POST', `/api/questions/${id}/answer`, { pick, words }),
+  answerQuestion: async (question: Question, pick?: string, words?: string, files: readonly File[] = []) => {
+    const saved = await upload(question.chat, files);
+    return call<{ question: Question; turn: string }>('POST', `/api/questions/${question.id}/answer`, {
+      pick,
+      words,
+      files: saved.length ? saved : undefined,
+    });
+  },
   /** Takes the like back: the mark goes, and nothing it did is undone. */
   unlike: (chat: string, message: string) =>
     call<{ removed: boolean }>('DELETE', `/api/chats/${chat}/messages/${message}/like`),

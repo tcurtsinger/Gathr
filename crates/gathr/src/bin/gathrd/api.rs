@@ -59,6 +59,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::reads::routes())
         .merge(crate::board::routes())
         .merge(crate::questions::routes())
+        .merge(crate::files::routes())
         .merge(crate::archive::routes())
         .merge(crate::settings::routes())
         .merge(crate::pauses::routes())

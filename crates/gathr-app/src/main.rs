@@ -233,6 +233,8 @@ fn window(
         // The caller shows it once built: a close while WebView2 was still being set up skipped the
         // close handler and quit Gathr.
         .visible(false)
+        // A file dropped on the chat reaches the page: on Windows, Tauri's own handler takes the drop.
+        .disable_drag_drop_handler()
         // With no handler, the webview drops a link's new window: nothing opens.
         .on_new_window(|url, _| {
             open_in_browser(&url);

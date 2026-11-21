@@ -1,0 +1,129 @@
+/* The one file tile (the owner's pick, 2026-11-20: Codex's square tiles): 120px, the card's radius, a picture cropped
+   to fill it; another file is its icon with the name along the foot. Tiles sit in a row that wraps. */
+.file-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-tile {
+  position: relative;
+  flex: none;
+  width: 120px;
+  height: 120px;
+}
+.file-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  color: var(--muted-foreground);
+}
+button.file-face {
+  cursor: zoom-in;
+}
+.file-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.file-face > svg {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 22px;
+  stroke-width: 1.5;
+}
+.file-name {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 5px 8px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--foreground) 4%, var(--background));
+  color: var(--foreground);
+  font-size: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Remove: a small round x at the top right, always shown. */
+.file-remove.file-remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: #000000b3;
+  color: #fff;
+}
+.file-remove.file-remove:hover {
+  background: #000000e0;
+  color: #fff;
+}
+.file-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* A picture opened large: the app's dim backdrop, its name at the top left, an x at the top right. */
+.dialog.file-view {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+}
+.file-view .dialog-header {
+  border: 0;
+}
+.file-view .dialog-x {
+  color: #fff;
+}
+.file-stage {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  padding: 0 48px 48px;
+}
+.file-stage img {
+  max-width: 100%;
+  max-height: calc(100dvh - 101px);
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+/* A file dragged over the chat: the column dims behind a dashed edge that says where it goes. */
+.file-drop {
+  position: absolute;
+  inset: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1.5px dashed color-mix(in oklab, var(--attention) 60%, transparent);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  color: var(--attention);
+  font-size: 15px;
+  font-weight: 550;
+  pointer-events: none;
+}
+.file-drop svg {
+  width: 28px;
+  height: 28px;
+}

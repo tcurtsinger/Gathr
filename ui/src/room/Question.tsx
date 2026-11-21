@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import type { Failure, Question } from '../api';
 import { Composer } from '../components/Composer';
 import { Face } from '../components/Face';
+import { PathTiles } from '../components/FileTile';
+import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
@@ -13,7 +15,12 @@ import { clock, type People } from './Room';
 import '../components/popover-panel.css';
 
 /** Sends the person's answer: it fails with the service's refusal. */
-type OnAnswer = (id: number, pick?: string, words?: string) => Promise<unknown>;
+type OnAnswer = (
+  question: Question,
+  pick?: string,
+  words?: string,
+  files?: readonly File[],
+) => Promise<unknown>;
 
 /**
  * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open,
@@ -28,6 +35,7 @@ export function QuestionCard(props: {
 }) {
   const { question: q, people, onOpen, joined } = props;
   const open = !q.answered;
+  const answer = split(q.words ?? '');
   return (
     <div className="room-item room-turn">
       <span className="room-who">
@@ -65,9 +73,10 @@ export function QuestionCard(props: {
             </div>
             <p>
               {q.pick && <b>{q.pick}</b>}
-              {q.pick && q.words && ' · '}
-              {q.words}
+              {q.pick && answer.words && ' · '}
+              {answer.words}
             </p>
+            {answer.files.length > 0 && <PathTiles chat={q.chat} paths={answer.files} />}
           </div>
         )}
       </article>
@@ -154,12 +163,13 @@ export function Questions(props: {
 function Answer(props: { question: Question; onAnswer: OnAnswer; onReference: (ref: string) => void }) {
   const { question: q, onAnswer, onReference } = props;
   const [words, setWords] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [refused, setRefused] = useState<Failure>();
   const send = (pick?: string) => {
     if (sending) return;
     setSending(true);
-    onAnswer(q.id, pick, words).then(
+    onAnswer(q, pick, words, files).then(
       () => setRefused(undefined),
       (f: Failure) => {
         setRefused(f);
@@ -191,6 +201,8 @@ function Answer(props: { question: Question; onAnswer: OnAnswer; onReference: (r
       <Composer
         draft={words}
         onDraft={(text) => setWords(text)}
+        files={files}
+        onFiles={setFiles}
         onSend={() => send()}
         hint="Your answer"
         label="Answer"

@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   type Agent,
@@ -33,6 +33,7 @@ export interface Unsent {
   agent?: string;
   picks?: PickedName[];
   reply?: ReplyTarget;
+  files?: readonly File[];
   failure: Failure;
 }
 
@@ -44,6 +45,9 @@ interface Props {
   draft: string;
   picks?: Picked[];
   onDraft: (text: string, picks?: Picked[]) => void;
+  /** The files added to the draft, kept until Send. */
+  files?: File[];
+  onFiles: (files: File[]) => void;
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
   unsent: Unsent[];
   onUnsent: (update: (list: Unsent[]) => Unsent[]) => void;
@@ -51,7 +55,7 @@ interface Props {
   projects: Project[];
   onProject: (project: string) => void;
   onNewProject: () => void;
-  onStart: (text: string, agent?: string, picks?: PickedName[]) => void;
+  onStart: (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => void;
   notice?: ReactNode;
   pauses: Pauses;
   onPause: (action: 'pause' | 'resume' | 'stop', scope: PauseScope) => Promise<void>;
@@ -85,27 +89,35 @@ export function RoomView(props: Props) {
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   const sidebar = !fresh && (props.sidebar ?? state.members.length > 1);
 
-  const send = (text: string, agent?: string, named?: PickedName[], again?: Unsent) => {
+  const send = (
+    text: string,
+    agent?: string,
+    named?: PickedName[],
+    files?: readonly File[],
+    again?: Unsent,
+  ) => {
     if (fresh) {
       if (again) onUnsent((list) => list.filter((f) => f.id !== again.id));
-      return props.onStart(text, agent, named);
+      return props.onStart(text, agent, named, files);
     }
     const first = state.messages.length === 0;
-    api.send(chat.id, text, agent, named).then(
+    api.send(chat.id, text, agent, named, undefined, files).then(
       () => {
         if (again) onUnsent((list) => list.filter((f) => f.id !== again.id));
         if (first) props.onNamed();
       },
       (f: Failure) => {
-        const lost = { id: again?.id ?? crypto.randomUUID(), text, agent, picks: named, failure: f };
+        const lost = { id: again?.id ?? crypto.randomUUID(), text, agent, picks: named, files, failure: f };
         onUnsent((list) => [...list.filter((u) => u.id !== lost.id), lost]);
       },
     );
   };
   const sendDraft = () => {
     onDraft('', []);
-    send(draft, to[0]?.id, kept(picks));
+    props.onFiles([]);
+    send(draft, to[0]?.id, kept(picks), props.files);
   };
+  const column = useRef<HTMLElement>(null);
   const attempt = (action: () => Promise<unknown>) =>
     action().then(
       () => setRefused(undefined),
@@ -161,9 +173,10 @@ export function RoomView(props: Props) {
           </div>
         )}
       </TopLine>
-      <main className="chat room" aria-label={chat.title}>
+      <main className="chat room" aria-label={chat.title} ref={column}>
         {props.notice}
         <Room
+          chat={chat.id}
           state={state}
           people={team}
           acts={acts}
@@ -187,9 +200,13 @@ export function RoomView(props: Props) {
               key={u.id}
               failure={u.failure}
               onReference={onReference}
-              links={<span className="room-unsent">{u.text}</span>}
+              links={<span className="room-unsent">{u.text || u.files?.map((f) => f.name).join(', ')}</span>}
               action={
-                <Button type="button" variant="outline" onClick={() => send(u.text, u.agent, u.picks, u)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => send(u.text, u.agent, u.picks, u.files, u)}
+                >
                   Retry
                 </Button>
               }
@@ -230,6 +247,9 @@ export function RoomView(props: Props) {
                 draft={draft}
                 picks={picks}
                 onDraft={onDraft}
+                files={props.files}
+                onFiles={props.onFiles}
+                dropOn={column}
                 onSend={sendDraft}
                 onStop={running ? stop : undefined}
                 hint="Message the team"

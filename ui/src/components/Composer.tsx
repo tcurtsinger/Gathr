@@ -1,14 +1,17 @@
-import { X } from 'lucide-react';
+import { FilePlus, Paperclip, X } from 'lucide-react';
 import {
   Fragment,
   type KeyboardEvent,
   type Ref,
+  type RefObject,
   type SyntheticEvent,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ComposerActions,
   ComposerBar,
@@ -17,6 +20,8 @@ import {
   Composer as Frame,
 } from '@/components/assistant-ui/elements/composer';
 import { Face } from './Face';
+import { FileTiles, LocalTile } from './FileTile';
+import { MAX_FILES, MOST } from './files';
 import { IconButton } from './IconButton';
 import { MentionList, type Person } from './MentionList';
 import { follow, insert, type Picked, typing } from './mention';
@@ -44,6 +49,11 @@ interface Props {
   label?: string;
   /** Placed at a thread's foot: a cross and Escape close it. */
   onClose?: () => void;
+  /** The files added to the message, kept until Send: with `onFiles`, the box takes files. */
+  files?: readonly File[];
+  onFiles?: (files: File[]) => void;
+  /** Where a dropped file is taken, besides the box: the chat's column. */
+  dropOn?: RefObject<HTMLElement | null>;
 }
 
 const NOBODY: readonly Person[] = [];
@@ -56,8 +66,29 @@ const NONE: readonly Picked[] = [];
  */
 export function Composer(props: Props) {
   const { draft, picks = NONE, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to } = props;
-  const { label: name = 'Message', onClose } = props;
-  const canSend = draft.trim().length > 0;
+  const { label: name = 'Message', onClose, files = NO_FILES, onFiles } = props;
+  const canSend = draft.trim().length > 0 || files.length > 0;
+  // Why the last files added weren't all taken, until the next are.
+  const [note, setNote] = useState('');
+  const add = (more: File[]) => {
+    if (!onFiles || !more.length) return;
+    const fits = more.filter((f) => f.size <= MOST);
+    const room = fits.slice(0, MAX_FILES - files.length);
+    setNote(
+      fits.length < more.length
+        ? 'Files over 10 MB can’t be added'
+        : room.length < fits.length
+          ? 'A message takes up to 10 files'
+          : '',
+    );
+    if (room.length) onFiles([...files, ...room.map(named)]);
+  };
+  const send = () => {
+    setNote('');
+    onSend();
+  };
+  const dragging = useDrop(onFiles ? props.dropOn : undefined, add);
+  const picker = useRef<HTMLInputElement>(null);
   const stopping = !!onStop && !canSend;
   // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
   const label = stopping ? 'Stop this chat now' : 'Send';
@@ -129,12 +160,32 @@ export function Composer(props: Props) {
     }
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
-    if (canSend) onSend();
+    if (canSend) send();
   };
   return (
     <Frame className="composer" data-thread={onClose ? '' : undefined}>
       {open && <MentionList people={matches} lit={at} onPick={choose} />}
       <ComposerBar>
+        {files.length > 0 && (
+          <FileTiles>
+            {files.map((f, i) => (
+              <LocalTile
+                // biome-ignore lint/suspicious/noArrayIndexKey: the same file may be added twice
+                key={i}
+                file={f}
+                onRemove={() => {
+                  setNote('');
+                  onFiles?.(files.filter((_, j) => j !== i));
+                }}
+              />
+            ))}
+          </FileTiles>
+        )}
+        {note && (
+          <p className="composer-note" role="status">
+            {note}
+          </p>
+        )}
         <div className="composer-field">
           {people.length > 0 && <NameLayer text={draft} picks={picks} box={box} />}
           <textarea
@@ -155,10 +206,38 @@ export function Composer(props: Props) {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={keyDown}
+            onPaste={(e) => {
+              if (!onFiles || !e.clipboardData.files.length) return;
+              e.preventDefault();
+              add([...e.clipboardData.files]);
+            }}
           />
         </div>
         <ComposerToolbar>
-          <ComposerActions />
+          <ComposerActions>
+            {onFiles && (
+              <>
+                <IconButton
+                  aria-label="Add files"
+                  className="composer-attach"
+                  onClick={() => picker.current?.click()}
+                >
+                  <Paperclip aria-hidden="true" />
+                </IconButton>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label="Files"
+                  onChange={(e) => {
+                    add([...(e.target.files ?? [])]);
+                    e.target.value = '';
+                  }}
+                />
+              </>
+            )}
+          </ComposerActions>
           <ComposerActions>
             {!!to?.length && canSend && (
               <span className="composer-to" role="status">
@@ -180,13 +259,68 @@ export function Composer(props: Props) {
               streaming={stopping}
               idle={!canSend}
               disabled={!canSend && !stopping}
-              onClick={stopping ? onStop : onSend}
+              onClick={stopping ? onStop : send}
             />
           </ComposerActions>
         </ComposerToolbar>
       </ComposerBar>
+      {dragging &&
+        props.dropOn?.current &&
+        createPortal(
+          <div className="file-drop">
+            <FilePlus aria-hidden="true" />
+            Drop to add to your message
+          </div>,
+          props.dropOn.current,
+        )}
     </Frame>
   );
+}
+
+const NO_FILES: readonly File[] = [];
+
+/** A pasted picture with no name gets a plain one. */
+function named(file: File) {
+  if (file.name) return file;
+  const ext = file.type.split('/')[1] ?? 'png';
+  return new File([file], `picture.${ext === 'jpeg' ? 'jpg' : ext}`, { type: file.type });
+}
+
+/** Whether files are dragged over `target`; a drop there gives them to `take`. */
+function useDrop(target: RefObject<HTMLElement | null> | undefined, take: (files: File[]) => void) {
+  const [over, setOver] = useState(false);
+  const taking = useRef(take);
+  taking.current = take;
+  useEffect(() => {
+    const el = target?.current;
+    if (!el) return;
+    const carries = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+    const enter = (e: DragEvent) => {
+      if (!carries(e)) return;
+      e.preventDefault();
+      setOver(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!el.contains(e.relatedTarget as Node | null)) setOver(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!carries(e)) return;
+      e.preventDefault();
+      setOver(false);
+      taking.current([...(e.dataTransfer?.files ?? [])]);
+    };
+    el.addEventListener('dragenter', enter);
+    el.addEventListener('dragover', enter);
+    el.addEventListener('dragleave', leave);
+    el.addEventListener('drop', drop);
+    return () => {
+      el.removeEventListener('dragenter', enter);
+      el.removeEventListener('dragover', enter);
+      el.removeEventListener('dragleave', leave);
+      el.removeEventListener('drop', drop);
+    };
+  }, [target]);
+  return over;
 }
 
 /** "Ann", "Ann and Bo", "Ann, Bo and Cy": each name bold. */

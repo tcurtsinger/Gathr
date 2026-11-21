@@ -200,6 +200,21 @@ pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<P
     Ok(root.join(named(conn, "projects", project, &root, &[NO_PROJECT])?))
 }
 
+/// The Shared folder of `chat`'s project, the one folder all its agents read on both engines.
+pub fn shared_of(conn: &Connection, data: &Path, chat: &str) -> Result<PathBuf, Error> {
+    let project: Option<String> = conn
+        .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
+            r.get(0)
+        })
+        .optional()?
+        .flatten();
+    let project = match project {
+        Some(id) => project_folder(conn, data, &id)?,
+        None => real(&root(conn, data)?).join(NO_PROJECT),
+    };
+    Ok(project.join(SHARED))
+}
+
 /// The folder name of the project or agent `id` in `table`, chosen once from its name: unique
 /// among the table's, never one of `kept`, and not a folder already in `under`.
 fn named(

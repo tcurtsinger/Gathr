@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 're
 import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { Face, type FaceMark, type FaceOf } from '../components/Face';
+import { PathTiles } from '../components/FileTile';
+import { parts, split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
@@ -51,6 +53,8 @@ export interface Found {
 }
 
 interface Props {
+  /** The chat: where its pictures are served from. */
+  chat: string;
   state: RoomState;
   people: People;
   acts: Acts;
@@ -63,10 +67,17 @@ interface Props {
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ state, people, acts, found, header, children }: Props) {
+export function Room({ chat, state, people, acts, found, header, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state, found);
-  const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts, found: found?.message };
+  const ctx = {
+    chat,
+    people,
+    reactions: state.reactions,
+    approvals: state.approvals,
+    acts,
+    found: found?.message,
+  };
   return (
     <>
       <div className="room-scroll" ref={scroll}>
@@ -94,6 +105,7 @@ export function Room({ state, people, acts, found, header, children }: Props) {
 }
 
 interface Ctx {
+  chat: string;
   people: People;
   reactions: Reaction[];
   approvals: Approval[];
@@ -108,23 +120,56 @@ function holds(item: Item, message?: string) {
   return (!!message && has) || undefined;
 }
 
-/** The person's message: a bubble at the right, with its replies under it when it has any. */
+/**
+ * The person's message: a bubble at the right, its files' tiles under the words, with its replies under it when it has
+ * any. Files alone sit without a bubble, the time under them.
+ */
 function You({ said, ctx }: { said: Said; ctx: Ctx }) {
+  const { words, files } = split(said.message.body as string);
+  const tiles = files.length > 0 && <PathTiles chat={ctx.chat} paths={files} />;
+  const time = <span className="room-time"> {clock(said.message.time)}</span>;
   return (
     <div className="room-item">
-      <div className="room-you" data-found={holds(said, ctx.found)}>
-        <Picked message={said.message} />
-        <span className="room-time"> {clock(said.message.time)}</span>
-      </div>
+      {words ? (
+        <div className="room-you" data-found={holds(said, ctx.found)}>
+          <Picked message={said.message} words={words} />
+          {time}
+          {tiles}
+        </div>
+      ) : (
+        <div className="room-you-files" data-found={holds(said, ctx.found)}>
+          {tiles}
+          {time}
+        </div>
+      )}
       <Reactions said={[said.message]} ctx={ctx} />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
 }
 
+/** An agent's words: markdown, with each picture or file it names as a tile where it stands. */
+function Words({ text, className, ctx }: { text: string; className: string; ctx: Ctx }) {
+  const pieces = parts(text);
+  if (pieces.every((p) => 'words' in p))
+    return <Markdown className={className} text={text} names={ctx.people.names} />;
+  return (
+    <div className={`${className} room-pieces`}>
+      {pieces.map((p, i) =>
+        'words' in p ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a message's pieces keep their order
+          <Markdown key={i} text={p.words} names={ctx.people.names} />
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a message's pieces keep their order
+          <PathTiles key={i} chat={ctx.chat} paths={p.files} />
+        ),
+      )}
+    </div>
+  );
+}
+
 /** The person's words, each name they picked from the "@" list in blue. */
-function Picked({ message }: { message: Message }) {
-  const text = message.body as string;
+function Picked({ message, words: text }: { message: Message; words: string }) {
   const picks = [...(message.picks ?? [])].sort((a, b) => a.at - b.at);
   const out: ReactNode[] = [];
   let from = 0;
@@ -162,7 +207,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           <span className="room-grow" />
           <State card={card} />
         </header>
-        {card.text && <Markdown className="room-body" text={card.text} names={ctx.people.names} />}
+        {card.text && <Words className="room-body" text={card.text} ctx={ctx} />}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Foot said={card.said} last={card.last} ctx={ctx} />
@@ -331,7 +376,8 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
 
 /** One reply in a thread: a small picture, the name and time, the words. */
 function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
-  if (item.kind === 'said')
+  if (item.kind === 'said') {
+    const { words, files } = split(item.message.body as string);
     return (
       <div className="room-reply mine" data-found={holds(item, ctx.found)}>
         <span />
@@ -339,13 +385,17 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           <div className="room-line">
             <b>You</b> <span className="room-time">{clock(item.message.time)}</span>
           </div>
-          <p>
-            <Picked message={item.message} />
-          </p>
+          {words && (
+            <p>
+              <Picked message={item.message} words={words} />
+            </p>
+          )}
+          {files.length > 0 && <PathTiles chat={ctx.chat} paths={files} />}
           <Reactions said={[item.message]} ctx={ctx} />
         </div>
       </div>
     );
+  }
   const agent = item.turn.agent as string;
   const running = working(item);
   return (
@@ -360,7 +410,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             <span className="room-time">{clock(item.turn.created)}</span>
           )}
         </div>
-        {item.text && <Markdown className="room-said" text={item.text} names={ctx.people.names} />}
+        {item.text && <Words className="room-said" text={item.text} ctx={ctx} />}
         <Foot said={item.said} last={item.last} ctx={ctx} />
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>
