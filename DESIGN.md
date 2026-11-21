@@ -127,9 +127,10 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
   the normal 16px root size (0037). A new chat's box
   keeps the column's content width. A new chat centres the face of who its message goes to (the assistant, or
-  the picked project's lead; none without one) at 56px over a greeting by the computer's clock, "Good morning,
-  Sam" (05:00), "Good afternoon" (12:00), "Good evening" (17:00), "Still up, Sam?" (00:00), the person's name
-  from Settings > General; while the @ list is open they sit at the column's top.
+  the picked project's lead; none without one) at 56px over one line. With no project it is a greeting by the
+  computer's clock, "Good morning, Sam" (05:00), "Good afternoon" (12:00), "Good evening" (17:00), "Still up,
+  Sam?" (00:00), the person's name from Settings > General; with a project picked it is "What should we build
+  in <the project's name>?". While the @ list is open they sit at the column's top.
 - Workspace starts at 40% of available width, initially clamped to 360 to 760px.
   Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
   chat at least 360px: when the window narrows, the workspace gives way first, down to
