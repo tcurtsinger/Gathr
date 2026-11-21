@@ -33,11 +33,12 @@ mod imp {
 
     use crate::Error;
 
-    const SEAL: &str = "Add-Type -AssemblyName System.Security; $h = [Console]::In.ReadToEnd().Trim(); \
+    // Without Stop, a failure ends with nothing on stdout and exit 0: an empty blob stored as the
+    // key, or a key DPAPI can't read (the data moved to another PC or user) read as an empty one.
+    const SEAL: &str = "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.Security; \
+        $h = [Console]::In.ReadToEnd().Trim(); \
         $b = [byte[]]($h -split '(..)' -ne '' | ForEach-Object { [Convert]::ToByte($_, 16) }); \
         [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect($b, $null, 'CurrentUser'))";
-    // Without Stop, a key DPAPI can't read (the data moved to another PC or user) ends with
-    // nothing on stdout and exit 0, which reads as an empty key.
     const UNSEAL: &str = "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.Security; \
         $b = [Convert]::FromBase64String([Console]::In.ReadToEnd().Trim()); \
         $x = [Security.Cryptography.ProtectedData]::Unprotect($b, $null, 'CurrentUser'); \
@@ -58,9 +59,12 @@ mod imp {
             .collect()
     }
 
-    /// PowerShell's answer to `script` with `input` on its stdin.
+    /// PowerShell's answer to `script` with `input` on its stdin. Windows' own copy by its full path:
+    /// a key goes into it, so it's never whichever `powershell.exe` the PATH finds first.
     fn powershell(script: &str, input: &str) -> Result<String, String> {
-        let mut command = Command::new("powershell.exe");
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        let own = r"System32\WindowsPowerShell\v1.0\powershell.exe";
+        let mut command = Command::new(std::path::PathBuf::from(root).join(own));
         command
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .stdin(Stdio::piped())
@@ -83,6 +87,9 @@ mod imp {
     pub fn seal(_id: &str, key: &str) -> Result<Vec<u8>, Error> {
         let sealed = powershell(SEAL, &hex(key.as_bytes()))
             .map_err(|e| Error::Other(format!("The key wasn't sealed: {e}")))?;
+        if sealed.is_empty() {
+            return Err(Error::Other("The key wasn't sealed".into()));
+        }
         Ok(sealed.into_bytes())
     }
 

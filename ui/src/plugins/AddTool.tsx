@@ -11,13 +11,15 @@ interface Props {
 
 /**
  * Add a tool: its link, and its name unless the tool's own will do. Gathr asks the tool what it needs; one that
- * wants a key gets the Key field, and one that signs in through the browser is turned down for now.
+ * wants a key gets the Key field; so does one that signs in through the browser, which Gathr can't do yet.
  */
 export function AddTool({ onBack, onAdded }: Props) {
   const [link, setLink] = useState('');
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [needsKey, setNeedsKey] = useState(false);
+  /** It signs in through the browser: some such tools take a key as well, so the Key field is still offered. */
+  const [signsIn, setSignsIn] = useState(false);
   const [checking, setChecking] = useState(false);
   /** Why, under the field it's about. */
   const [why, setWhy] = useState<{ field: 'link' | 'key'; text: string } | null>(null);
@@ -29,12 +31,10 @@ export function AddTool({ onBack, onAdded }: Props) {
       (answer) => {
         setChecking(false);
         if (answer.tool) onAdded(answer.tool.id);
-        else if (answer.needs === 'key') setNeedsKey(true);
-        else
-          setWhy({
-            field: 'link',
-            text: 'This tool signs in through your browser, which Gathr can’t do yet.',
-          });
+        else {
+          setNeedsKey(true);
+          setSignsIn(answer.needs === 'sign_in');
+        }
       },
       (f: Failure) => {
         setChecking(false);
@@ -66,6 +66,7 @@ export function AddTool({ onBack, onAdded }: Props) {
           onChange={(e) => {
             setLink(e.target.value);
             setNeedsKey(false);
+            setSignsIn(false);
             setWhy(null);
           }}
           aria-invalid={why?.field === 'link' || undefined}
@@ -94,7 +95,13 @@ export function AddTool({ onBack, onAdded }: Props) {
               autoFocus
             />
           </label>
-          {under('key') || <p className="muted">The key stays in Gathr. Agents never see it.</p>}
+          {under('key') || (
+            <p className="muted">
+              {signsIn
+                ? 'This tool signs in through your browser, which Gathr can’t do yet. If it also takes a key, enter one.'
+                : 'The key stays in Gathr. Agents never see it.'}
+            </p>
+          )}
         </>
       )}
       <footer className="agent-actions">
