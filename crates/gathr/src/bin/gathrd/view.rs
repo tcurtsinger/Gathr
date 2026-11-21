@@ -1,6 +1,7 @@
 //! A page as it looks (`gathr::view`): the window asks for a view of a page in a chat's folders, or
 //! in Designs for the Designs screen, and its sealed frame loads the page and the files beside it by
-//! the view's key alone, outside `/api`. The Designs screen's list of every design is here too.
+//! the view's key alone, outside `/api`; a design's tab in a chat asks with `notes`, and its page is
+//! served with the script for notes. The Designs screen's list of every design is here too.
 
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use gathr::designs;
 use gathr::view::Views;
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::api::{State, Trace};
@@ -29,15 +31,30 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/view/{key}/{*rest}", get(serve))
 }
 
+#[derive(Deserialize)]
+struct Opening {
+    path: String,
+    /// For a design's tab in the chat: the page is served with the script for notes.
+    #[serde(default)]
+    notes: bool,
+}
+
 /// A view of the file at `path` in the chat's folders: the address the frame opens it at.
 async fn open(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Path(chat): Path<String>,
-    Query(q): Query<Shown>,
+    Query(q): Query<Opening>,
 ) -> Answer {
-    let roots = tree_of(&s, &t, &chat, "Page failed").await?.roots();
-    let opened = tokio::task::spawn_blocking(move || VIEWS.open(&roots, &q.path)).await;
+    let tree = tree_of(&s, &t, &chat, "Page failed").await?;
+    let roots = tree.roots();
+    let designs = tree.designs.map(|d| d.path);
+    let opened = tokio::task::spawn_blocking(move || match (q.notes, designs) {
+        (true, Some(designs)) => VIEWS.note(&designs, &q.path),
+        (true, None) => None,
+        (false, _) => VIEWS.open(&roots, &q.path),
+    })
+    .await;
     let Ok(Some((key, name))) = opened else {
         let why = "it isn't a file in this chat's folders";
         return Err(fail(StatusCode::NOT_FOUND, "Page failed", why, &t.0));
@@ -115,7 +132,13 @@ async fn serve(
     })
     .await;
     let read = match found {
-        Ok(Some(path)) => tokio::fs::read(&path).await.ok().map(|bytes| (path, bytes)),
+        Ok(Some((path, noted))) => tokio::fs::read(&path).await.ok().map(|mut bytes| {
+            // After the page's own end: the browser still runs it, after the page's own scripts.
+            if noted {
+                bytes.extend_from_slice(gathr::view::NOTES.as_bytes());
+            }
+            (path, bytes)
+        }),
         _ => None,
     };
     // Only the kinds of file a page loads (pages, styles, scripts, pictures, fonts, media, data):

@@ -118,6 +118,40 @@
 .room-words {
   white-space: pre-wrap;
 }
+/* A note on a design: its pin's number, the design and option, and the part, quiet above the person's words. */
+.room-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: -2px -6px 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  font-size: 12.5px;
+}
+.room-note-where {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted-foreground);
+}
+.room-note-where b {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--attention);
+  color: #fff;
+  font-size: 10.5px;
+}
+.room-note-where svg {
+  width: 13px;
+  height: 13px;
+}
+.room-note-part {
+  font-weight: 500;
+}
 /* The person's files: their tiles under the words in the bubble; alone, at the right with the time under them. */
 .room-you .file-tiles {
   margin: 8px 0 2px;

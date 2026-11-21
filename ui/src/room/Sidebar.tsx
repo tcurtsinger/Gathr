@@ -91,7 +91,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
 }
 
 /** The panel beside the chat: Home first, always there, then Files, Design and each open file or design as tabs. */
-export function RoomSidebar(props: { chat: string; room: RoomState; onAnswer: OnAnswer }) {
+export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
       <ResizeHandle label="Resize chat sidebar" side="left" name="--workspace-width" min={360} max={widest} />
@@ -100,7 +100,15 @@ export function RoomSidebar(props: { chat: string; room: RoomState; onAnswer: On
   );
 }
 
-function Panel({ chat, room, onAnswer }: { chat: string; room: RoomState; onAnswer: OnAnswer }) {
+interface PanelProps {
+  chat: string;
+  room: RoomState;
+  onAnswer: OnAnswer;
+  /** Sends a note on a design, as the chat's own send does. */
+  onNote: (text: string, agent?: string) => void;
+}
+
+function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
   const order = [
     HOME,
@@ -225,6 +233,7 @@ function Panel({ chat, room, onAnswer }: { chat: string; room: RoomState; onAnsw
               room={room}
               onShow={(page) => show(chat, { ...f, page })}
               onAnswer={onAnswer}
+              onNote={onNote}
             />
           ) : (
             <FileTab chat={chat} file={f} />

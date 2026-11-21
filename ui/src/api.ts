@@ -557,11 +557,15 @@ export const api = {
   words,
   pdf,
   sheets,
-  /** A view of an HTML page in the chat's folders: the address its sealed frame loads it and the files beside it at. */
-  view: (chat: string, path: string) =>
-    call<{ address: string }>('POST', `/api/chats/${chat}/view?path=${encodeURIComponent(path)}`).then(
-      (v) => v.address,
-    ),
+  /**
+   * A view of an HTML page in the chat's folders: the address its sealed frame loads it and the files beside it at.
+   * With `notes`, for a design's tab: a page of a design only, served with the script for notes.
+   */
+  view: (chat: string, path: string, notes = false) =>
+    call<{ address: string }>(
+      'POST',
+      `/api/chats/${chat}/view?path=${encodeURIComponent(path)}${notes ? '&notes=true' : ''}`,
+    ).then((v) => v.address),
   /** Every design, by its part of Designs, the part with the newest design first. */
   designs: () => call<{ parts: DesignPart[] }>('GET', '/api/designs').then((d) => d.parts),
   /** A view of a page in Designs, as `view` is of a chat's: one per design while the service keeps it. */

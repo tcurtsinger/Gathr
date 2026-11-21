@@ -71,6 +71,29 @@
   flex: none;
 }
 
+/* The note box by a clicked part of the page. */
+.design-tab {
+  position: relative;
+}
+.design-note {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 25%);
+}
+.design-note > span {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 /* Two options side by side, each in its own frame under its letter, its label and its Pick; the one shown in the bar
    is outlined. */
 .design-side {
