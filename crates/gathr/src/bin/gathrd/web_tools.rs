@@ -1,6 +1,6 @@
 //! Tools on the web for the Plugins screen (`gathr::web_tools`). Each one's state and actions are
-//! asked from it when shown; nothing of it is kept but its row. No answer carries a key: at most
-//! whether one is set. Each change is sent live as `tools`.
+//! asked from it when shown; nothing of it is kept but its row. No answer carries a key or a sign-in:
+//! at most whether one is set. Each change is sent live as `tools`.
 
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
-use gathr::web_tools::{self, Problem, Tool};
+use gathr::web_tools::{self, Access, Problem, Tool};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -27,24 +27,35 @@ fn state(answer: &Result<web_tools::Remote, Problem>) -> &'static str {
     match answer {
         Ok(_) => "connected",
         Err(Problem::NotReachable) => "not_reachable",
+        Err(Problem::SignIn) => "sign_in",
         Err(_) => "key_refused",
     }
 }
 
-/// A tool's key as read for connecting: `Err` when it was sealed but can't be unsealed (the data
-/// moved to another PC or user, the Keychain item gone), which shows that tool as key refused.
-type Key = Result<Option<String>, ()>;
+/// What a tool is connected with, as read: `Err` when it was sealed but can't be unsealed (the data
+/// moved to another PC or user, the Keychain item gone), which shows that tool as key refused, or
+/// as to sign in again.
+type Key = Result<Access, ()>;
 
-/// Every tool with its key, read for connecting; the keys stay in this process. One key that can't
-/// be read never fails the others.
+/// The state of a tool whose key or sign-in can't be read.
+fn unread(tool: &Tool) -> Problem {
+    match tool.signed_in {
+        true => Problem::SignIn,
+        false => Problem::KeyRefused,
+    }
+}
+
+/// Every tool with its key or sign-in, read for connecting; they stay in this process. One that
+/// can't be read never fails the others.
 async fn saved(s: &State, t: &Trace) -> Result<Vec<(Tool, Key)>, crate::routes::Fail> {
-    let read = s.writer.call(|conn| {
+    let writer = s.writer.clone();
+    let read = s.writer.call(move |conn| {
         let tools = web_tools::list(conn)?;
         Ok::<_, gathr::Error>(
             tools
                 .into_iter()
                 .map(|tool| {
-                    let key = web_tools::key(conn, &tool.id).map_err(|_| ());
+                    let key = web_tools::access(conn, &tool.id, &writer).map_err(|_| ());
                     (tool, key)
                 })
                 .collect::<Vec<_>>(),
@@ -74,9 +85,9 @@ async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -
         asked.spawn(async move {
             let state = match (tool.enabled, key) {
                 (false, _) => None,
-                (true, Err(())) => Some("key_refused"),
+                (true, Err(())) => Some(state(&Err(unread(&tool)))),
                 (true, Ok(key)) => Some(state(
-                    &web_tools::connect(&tool.link, key.as_deref(), web_tools::STATE).await,
+                    &web_tools::connect(&tool.link, &key, web_tools::STATE).await,
                 )),
             };
             let mut shown = json!(tool);
@@ -109,8 +120,8 @@ async fn one(
         ));
     };
     let connected = match key {
-        Ok(key) => web_tools::connect(&tool.link, key.as_deref(), web_tools::CONNECT).await,
-        Err(()) => Err(Problem::KeyRefused),
+        Ok(key) => web_tools::connect(&tool.link, &key, web_tools::CONNECT).await,
+        Err(()) => Err(unread(&tool)),
     };
     let actions = match &connected {
         Ok(remote) => web_tools::actions(remote, web_tools::CONNECT).await.ok(),
@@ -150,7 +161,8 @@ async fn add(
         .key
         .map(|k| k.trim().to_string())
         .filter(|k| !k.is_empty());
-    let remote = match web_tools::connect(&link, key.as_deref(), web_tools::CONNECT).await {
+    let access = key.clone().map_or(Access::Open, Access::Key);
+    let remote = match web_tools::connect(&link, &access, web_tools::CONNECT).await {
         Ok(remote) => remote,
         Err(Problem::NeedsKey) => return Ok(Json(json!({ "needs": "key" }))),
         Err(Problem::SignIn) => return Ok(Json(json!({ "needs": "sign_in" }))),
@@ -199,7 +211,8 @@ async fn change(
                 &t.0,
             ));
         };
-        let why = match web_tools::connect(&tool.link, Some(key), web_tools::CONNECT).await {
+        let access = Access::Key(key.clone());
+        let why = match web_tools::connect(&tool.link, &access, web_tools::CONNECT).await {
             Ok(_) => None,
             Err(Problem::NotReachable) => Some("The tool can't be reached."),
             Err(_) => Some("The key was refused."),
@@ -222,7 +235,7 @@ async fn change(
     told(&s, answer)
 }
 
-/// Removes the tool and its key.
+/// Removes the tool, its key and its sign-in.
 async fn remove(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,

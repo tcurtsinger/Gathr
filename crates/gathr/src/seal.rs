@@ -1,21 +1,22 @@
-//! A tool's key, sealed for this computer's user, never kept as text on disk: with DPAPI on Windows,
-//! in the Keychain on a Mac (the database then holds only a marker). Any program running as the same
-//! user can still unseal it, an agent in Full mode included: the window says no more than that the
-//! key stays in Gathr.
+//! A tool's key or sign-in, sealed for this computer's user, never kept as text on disk: with DPAPI on
+//! Windows, in the Keychain on a Mac (the database then holds only a marker). Any program running as
+//! the same user can still unseal it, an agent in Full mode included: the window says no more than
+//! that the key stays in Gathr.
 
 use crate::Error;
 
-/// What's stored for `key`, the key of the tool `id`.
+/// What's stored for `key`, kept under the name `id`: a tool's id for its key, another name for its
+/// sign-in, so neither overwrites the other in the Keychain.
 pub fn seal(id: &str, key: &str) -> Result<Vec<u8>, Error> {
     imp::seal(id, key)
 }
 
-/// The key back from what `seal` stored for the tool `id`.
+/// The text back from what `seal` stored under `id`.
 pub fn unseal(id: &str, sealed: &[u8]) -> Result<String, Error> {
     imp::unseal(id, sealed)
 }
 
-/// Forgets the tool's key where `seal` put it outside the database.
+/// Forgets what `seal` kept under `id` outside the database.
 pub fn forget(id: &str) {
     imp::forget(id)
 }
@@ -44,7 +45,10 @@ mod imp {
         $x = [Security.Cryptography.ProtectedData]::Unprotect($b, $null, 'CurrentUser'); \
         -join ($x | ForEach-Object { $_.ToString('x2') })";
 
-    static UNSEALED: Mutex<Option<HashMap<Vec<u8>, String>>> = Mutex::new(None);
+    /// The last one unsealed under each name, with what was stored: a sign-in is sealed again at
+    /// each renewal, so it's kept by name, not by its sealed bytes, which would grow without end.
+    static UNSEALED: Mutex<Option<Unsealed>> = Mutex::new(None);
+    type Unsealed = HashMap<String, (Vec<u8>, String)>;
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -93,10 +97,10 @@ mod imp {
         Ok(sealed.into_bytes())
     }
 
-    pub fn unseal(_id: &str, sealed: &[u8]) -> Result<String, Error> {
+    pub fn unseal(id: &str, sealed: &[u8]) -> Result<String, Error> {
         let mut unsealed = UNSEALED.lock().unwrap_or_else(|e| e.into_inner());
         let known = unsealed.get_or_insert_with(HashMap::new);
-        if let Some(key) = known.get(sealed) {
+        if let Some((_, key)) = known.get(id).filter(|(was, _)| was == sealed) {
             return Ok(key.clone());
         }
         let text = powershell(UNSEAL, &String::from_utf8_lossy(sealed))
@@ -104,11 +108,16 @@ mod imp {
         let key = unhex(&text)
             .and_then(|b| String::from_utf8(b).ok())
             .ok_or_else(|| Error::Other("The key wasn't unsealed".into()))?;
-        known.insert(sealed.to_vec(), key.clone());
+        known.insert(id.to_string(), (sealed.to_vec(), key.clone()));
         Ok(key)
     }
 
-    pub fn forget(_id: &str) {}
+    pub fn forget(id: &str) {
+        let mut unsealed = UNSEALED.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(known) = unsealed.as_mut() {
+            known.remove(id);
+        }
+    }
 }
 /// Not compiled here (Windows only): CI builds it on a Mac.
 #[cfg(target_os = "macos")]

@@ -359,8 +359,10 @@ export interface WebTool {
   link: string;
   enabled: boolean;
   has_key: boolean;
+  /** Whether it signed in through the browser: never the sign-in. */
+  signed_in: boolean;
   /** Asked of it when listed; none while it's disabled. */
-  state: 'connected' | 'not_reachable' | 'key_refused' | null;
+  state: 'connected' | 'not_reachable' | 'key_refused' | 'sign_in' | null;
 }
 
 /** One thing a tool lets an agent do, with the first line of its description. */
@@ -548,6 +550,10 @@ export const api = {
   changeTool: (id: string, change: { enabled?: boolean; key?: string }) =>
     call<WebTool>('PATCH', `/api/tools/${id}`, change),
   removeTool: (id: string) => call<unknown>('DELETE', `/api/tools/${id}`),
+  /** Opens the tool's sign-in page in the browser; its end comes live as `tools` with this `sign_in`. */
+  signInTool: (tool: { link: string; name?: string } | { tool: string }) =>
+    call<{ sign_in: string; url: string }>('POST', '/api/tools/sign-in', tool),
+  cancelToolSignIn: (signIn: string) => call<unknown>('DELETE', `/api/tools/sign-in/${signIn}`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>

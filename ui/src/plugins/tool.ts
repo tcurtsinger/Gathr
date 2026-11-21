@@ -15,6 +15,8 @@ export function stateOf(tool: WebTool): { words: string; tone?: 'attention' | 'd
   switch (tool.state) {
     case 'key_refused':
       return { words: 'Key refused', tone: 'attention' };
+    case 'sign_in':
+      return { words: 'Sign in again', tone: 'attention' };
     case 'not_reachable':
       return { words: 'Not reachable', tone: 'danger' };
     default:

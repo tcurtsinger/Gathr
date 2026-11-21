@@ -97,9 +97,14 @@ export function SignInFailed({
 }
 
 /** The sign-in page in the person's browser, for when it didn't open there by itself. */
-function OpenPage({ url }: { url: string }) {
+export function OpenPage({ url, small }: { url: string; small?: boolean }) {
   return (
-    <Button type="button" onClick={() => window.open(url, '_blank', 'noreferrer')}>
+    <Button
+      type="button"
+      variant={small ? 'outline' : undefined}
+      size={small ? 'sm' : undefined}
+      onClick={() => window.open(url, '_blank', 'noreferrer')}
+    >
       Open sign-in page
     </Button>
   );
