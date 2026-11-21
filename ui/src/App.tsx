@@ -15,6 +15,7 @@ import { Corner, useCard } from './components/Corner';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
 import { DeleteConfirm } from './DeleteConfirm';
+import { Designs } from './designs/Designs';
 import { kept, keep as remember } from './kept';
 import { listen } from './live';
 import { NewProject } from './NewProject';
@@ -24,6 +25,7 @@ import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
 import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
+import { openDesign } from './room/Sidebar';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
@@ -55,7 +57,7 @@ export function App() {
   // What a project's Delete couldn't remove yet.
   const [left, setLeft] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
-  // Agents or Plugins, in place of the chat list and the chat until Home or a chat is opened.
+  // Agents, Plugins or Designs, in place of the chat list and the chat until Home or a chat is opened.
   const [opened, setOpened] = useState<Opened>('home');
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
@@ -218,7 +220,7 @@ export function App() {
     setFresh(null);
     setOpened('home');
   };
-  // What the main area showed this run, a chat's id, '' for New, 'agents' or 'plugins', for Back and Forward.
+  // What the main area showed this run, a chat's id, '' for New, or a screen's name, for Back and Forward.
   // Opening something after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
   const [trail, setTrail] = useState<{ list: string[]; at: number }>({ list: [], at: -1 });
   const shown = opened !== 'home' ? opened : (selected ?? (fresh ? '' : null));
@@ -353,6 +355,15 @@ export function App() {
       />
       {opened === 'agents' && <Agents onAssistant={loadYou} />}
       {opened === 'plugins' && <Plugins />}
+      {opened === 'designs' && (
+        <Designs
+          onChat={(chat, design, page) => {
+            openDesign(chat, design.path, design.name, page);
+            setSidebars((all) => ({ ...all, [chat]: true }));
+            openChat(chat);
+          }}
+        />
+      )}
       {opened === 'home' && (
         <Sidebar
           chats={chats}
@@ -452,8 +463,9 @@ export function App() {
 /** What the app only loads or reloads by itself says nothing when it fails: the live socket reloads it. */
 const quiet = () => {};
 
-/** Agents' and Plugins' places in Back and Forward are their names: never a chat's id. */
-const away = (key: string): key is Exclude<Opened, 'home'> => key === 'agents' || key === 'plugins';
+/** The screens' places in Back and Forward are their names: never a chat's id. */
+const away = (key: string): key is Exclude<Opened, 'home'> =>
+  key === 'agents' || key === 'plugins' || key === 'designs';
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */
 function neighbour(chat: Chat, list: Chat[]): Chat | undefined {

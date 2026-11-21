@@ -220,6 +220,21 @@ export interface FileEntry {
   /** When it last changed, in milliseconds since 1970. */
   modified?: number | null;
 }
+/** A design: a folder of HTML pages, one per option, its pages in their names' order. */
+export interface Design {
+  name: string;
+  path: string;
+  pages: string[];
+  /** When its newest page changed, in milliseconds since 1970. */
+  modified: number;
+}
+/** A part of Designs: a project's, with its newest chat that isn't archived, or Chats. Its designs newest first. */
+export interface DesignPart {
+  folder: string;
+  project: { id: string; name: string } | null;
+  chat: string | null;
+  designs: Design[];
+}
 /** Why a file isn't shown as text: it's gone, too large, or not text. */
 export type Unshown = 'gone' | 'large' | 'cant';
 const UNSHOWN: Record<number, Unshown> = { 404: 'gone', 413: 'large', 415: 'cant' };
@@ -545,6 +560,13 @@ export const api = {
   /** A view of an HTML page in the chat's folders: the address its sealed frame loads it and the files beside it at. */
   view: (chat: string, path: string) =>
     call<{ address: string }>('POST', `/api/chats/${chat}/view?path=${encodeURIComponent(path)}`).then(
+      (v) => v.address,
+    ),
+  /** Every design, by its part of Designs, the part with the newest design first. */
+  designs: () => call<{ parts: DesignPart[] }>('GET', '/api/designs').then((d) => d.parts),
+  /** A view of a page in Designs, as `view` is of a chat's: one per design while the service keeps it. */
+  designView: (path: string) =>
+    call<{ address: string }>('POST', `/api/designs/view?path=${encodeURIComponent(path)}`).then(
       (v) => v.address,
     ),
   search: (q: string) =>

@@ -17,6 +17,7 @@ pub mod crash_log;
 pub mod data;
 pub mod db;
 pub mod deleting;
+pub mod designs;
 pub mod diag;
 pub mod documents;
 pub mod ends;

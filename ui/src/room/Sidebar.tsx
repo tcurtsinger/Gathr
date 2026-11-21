@@ -48,6 +48,10 @@ function show(chat: string, file: Opened) {
   change(chat, { ...tabs, open, at: file.path });
 }
 
+/** Opens a design of the chat's project in its own tab, as its Designs tab does, at the option page. */
+export const openDesign = (chat: string, path: string, name: string, page?: string) =>
+  show(chat, { path, crumbs: [name], design: true, page });
+
 /**
  * Opens a file the chat names (a link, a tile, a file on a question) as the tree would: a full path, or one in
  * `agent`'s folder, its crumbs from the chat's top folder it is in. A page of a design opens the design at that

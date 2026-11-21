@@ -1,0 +1,78 @@
+/* The Designs screen's own parts, on the frame every screen has (screen.css), as the picked drawing (B) has them. */
+.screen-nav .chatrow .designs-count {
+  flex: none;
+  mask-image: none;
+}
+.designs-search {
+  flex: 0 1 300px;
+}
+.designs-group h2 span {
+  margin-left: 4px;
+}
+.designs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 22px 16px;
+  margin-top: 6px;
+}
+.designs-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+/* The card is the click: its name's button covers it. */
+.designs-card > button {
+  min-height: 0;
+  margin-top: 8px;
+  padding: 0;
+  overflow: hidden;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.designs-card > button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+.designs-card > button:hover {
+  background: none;
+}
+.designs-card .muted {
+  font-size: 13px;
+}
+/* The first page at four times the card's width, shrunk to it. */
+.designs-preview {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.designs-card:hover .designs-preview {
+  border-color: var(--control);
+}
+.designs-preview .pageframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 400%;
+  height: 400%;
+  transform: scale(0.25);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.designs-page {
+  display: flex;
+  height: max(360px, calc(100vh - 230px));
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
