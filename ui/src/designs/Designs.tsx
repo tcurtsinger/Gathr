@@ -34,7 +34,7 @@ function ago(time: number, now: number) {
  * The Designs screen, in place of the chat list and the chat: every design by project, each a card with its first
  * page as it looks, searched by name. A card opens the design large here, with its options and Open in chat.
  */
-export function Designs({ onChat }: { onChat: (chat: string, design: Design) => void }) {
+export function Designs({ onChat }: { onChat: (chat: string, design: Design, page: string) => void }) {
   const [parts, setParts] = useState<DesignPart[]>();
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
@@ -181,7 +181,7 @@ interface OpenedProps {
   part: DesignPart;
   design: Design;
   onBack: () => void;
-  onChat: (chat: string, design: Design) => void;
+  onChat: (chat: string, design: Design, page: string) => void;
 }
 
 /** A design opened from its card: its name and facts, A, B, C for its options, its page as it looks. */
@@ -214,7 +214,7 @@ function Opened({ part, design, onBack, onChat }: OpenedProps) {
             </fieldset>
           )}
           {chat && (
-            <Button type="button" variant="outline" size="sm" onClick={() => onChat(chat, design)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => onChat(chat, design, page)}>
               Open in chat
             </Button>
           )}

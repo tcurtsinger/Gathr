@@ -10,6 +10,8 @@ import { Board } from './Board';
 import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
+import { isPage } from './PageFrame';
+import type { OnAnswer } from './Question';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
@@ -37,23 +39,36 @@ function change(chat: string, next: Tabs) {
   for (const heed of heard) heed();
 }
 
-/** The one way a file or a design opens: in its own tab, or the tab it already has. */
+/** The one way a file or a design opens: in its own tab, or the tab it already has, at the option asked for. */
 function show(chat: string, file: Opened) {
   const tabs = tabsOf(chat);
   const known = tabs.open.some((f) => f.path === file.path);
-  change(chat, { ...tabs, open: known ? tabs.open : [...tabs.open, file], at: file.path });
+  const again = (f: Opened) => (f.path === file.path ? { ...file, page: file.page ?? f.page } : f);
+  const open = known ? tabs.open.map(again) : [...tabs.open, file];
+  change(chat, { ...tabs, open, at: file.path });
 }
 
-/** Opens a design of the chat's project in its own tab, as its Designs tab does. */
-export const openDesign = (chat: string, path: string, name: string) =>
-  show(chat, { path, crumbs: [name], design: true });
+/** Opens a design of the chat's project in its own tab, as its Designs tab does, at the option page. */
+export const openDesign = (chat: string, path: string, name: string, page?: string) =>
+  show(chat, { path, crumbs: [name], design: true, page });
 
 /**
  * Opens a file the chat names (a link, a tile, a file on a question) as the tree would: a full path, or one in
- * `agent`'s folder, its crumbs from the chat's top folder it is in. The service says whether it may be shown.
+ * `agent`'s folder, its crumbs from the chat's top folder it is in. A page of a design opens the design at that
+ * option. The service says whether it may be shown.
  */
 export async function openTab(chat: string, path: string, agent?: string) {
-  show(chat, place(await api.tree(chat), path, agent));
+  const tree = await api.tree(chat);
+  const file = place(tree, path, agent);
+  const designs = tree.designs && steps(tree.designs.path);
+  const parts = steps(file.path);
+  const same = (a: string, b: string) => (windows(file.path) ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const inDesign =
+    designs && parts.length === designs.length + 2 && designs.every((p, i) => same(p, parts[i]));
+  if (!tree.designs || !inDesign || !isPage(file.path)) return show(chat, file);
+  const name = parts[designs.length];
+  const folder = `${tree.designs.path}${windows(file.path) ? '\\' : '/'}${name}`;
+  show(chat, { path: folder, crumbs: [name], design: true, page: file.path });
 }
 
 function place(tree: FileTree, path: string, agent?: string): Opened {
@@ -76,16 +91,16 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
 }
 
 /** The panel beside the chat: Home first, always there, then Files, Design and each open file or design as tabs. */
-export function RoomSidebar({ chat, room }: { chat: string; room: RoomState }) {
+export function RoomSidebar(props: { chat: string; room: RoomState; onAnswer: OnAnswer }) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
       <ResizeHandle label="Resize chat sidebar" side="left" name="--workspace-width" min={360} max={widest} />
-      <Panel key={chat} chat={chat} room={room} />
+      <Panel key={props.chat} {...props} />
     </aside>
   );
 }
 
-function Panel({ chat, room }: { chat: string; room: RoomState }) {
+function Panel({ chat, room, onAnswer }: { chat: string; room: RoomState; onAnswer: OnAnswer }) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
   const order = [
     HOME,
@@ -203,7 +218,17 @@ function Panel({ chat, room }: { chat: string; room: RoomState }) {
       {tabs.open.map((f) =>
         view(
           f.path,
-          f.design ? <DesignTab chat={chat} design={f} room={room} /> : <FileTab chat={chat} file={f} />,
+          f.design ? (
+            <DesignTab
+              chat={chat}
+              design={f}
+              room={room}
+              onShow={(page) => show(chat, { ...f, page })}
+              onAnswer={onAnswer}
+            />
+          ) : (
+            <FileTab chat={chat} file={f} />
+          ),
         ),
       )}
     </>

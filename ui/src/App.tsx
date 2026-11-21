@@ -357,8 +357,8 @@ export function App() {
       {opened === 'plugins' && <Plugins />}
       {opened === 'designs' && (
         <Designs
-          onChat={(chat, design) => {
-            openDesign(chat, design.path, design.name);
+          onChat={(chat, design, page) => {
+            openDesign(chat, design.path, design.name, page);
             setSidebars((all) => ({ ...all, [chat]: true }));
             openChat(chat);
           }}

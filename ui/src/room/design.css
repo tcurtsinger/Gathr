@@ -45,7 +45,67 @@
   margin: 0 6px 0 8px;
 }
 .design-options button {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
   padding: 2px 9px;
   font-size: 12px;
   font-weight: 600;
+}
+.design-options svg,
+.design-mark svg,
+.design-picked svg {
+  width: 13px;
+  height: 13px;
+  color: var(--free);
+}
+.design-bar > button,
+.design-bar > .design-picked {
+  flex: none;
+  margin-left: 6px;
+}
+.design-bar > [aria-pressed="true"] {
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+.design-mark {
+  flex: none;
+}
+
+/* Two options side by side, each in its own frame under its letter, its label and its Pick; the one shown in the bar
+   is outlined. */
+.design-side {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+}
+.design-option {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.design-option[data-shown] {
+  border-color: var(--attention);
+}
+.design-option-head {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.design-option-head > span {
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

@@ -17,6 +17,8 @@ export interface Opened {
   crumbs: string[];
   /** A design's folder, shown as a design rather than as a file. */
   design?: boolean;
+  /** The design's option shown, by its page's path: the first when unset. */
+  page?: string;
 }
 
 /** The Files tab: the project's folder, then Shared, the project's Designs and each agent's folder for this chat. */
