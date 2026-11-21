@@ -1,7 +1,7 @@
 import { File as FileIcon, X } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Dialog } from './Dialog';
-import { fileName, isPicture } from './files';
+import { fileName, isPicture, OpenFile } from './files';
 import { IconButton } from './IconButton';
 import './files.css';
 
@@ -14,13 +14,16 @@ interface Props {
   /** The picture to show: none for another kind of file. */
   src?: string;
   onRemove?: () => void;
+  /** Opens a file that isn't a picture, in the chat's panel. */
+  onOpen?: () => void;
 }
 
 /**
  * The one tile a file shows as, everywhere: a square, a picture cropped to fill it, or a file icon with the name along
- * its foot. A click on a picture opens it large; a picture that can't be loaded shows as a file.
+ * its foot. A click on a picture opens it large, on another file opens it in the chat's panel; a picture that can't be
+ * loaded shows as a file.
  */
-export function FileTile({ name, src, onRemove }: Props) {
+export function FileTile({ name, src, onRemove, onOpen }: Props) {
   const [broken, setBroken] = useState(false);
   const [open, setOpen] = useState(false);
   const tile = useRef<HTMLButtonElement>(null);
@@ -40,6 +43,11 @@ export function FileTile({ name, src, onRemove }: Props) {
           onClick={() => setOpen(true)}
         >
           <img src={shown} alt={name} onError={() => setBroken(true)} />
+        </button>
+      ) : onOpen ? (
+        <button type="button" className="file-face" aria-label={`Open ${name}`} onClick={onOpen}>
+          <FileIcon aria-hidden="true" />
+          <span className="file-name">{name}</span>
         </button>
       ) : (
         <div className="file-face" role="img" aria-label={name}>
@@ -72,12 +80,18 @@ export function FileTiles({ children }: { children: ReactNode }) {
 
 /** Tiles for paths in a chat's message: each picture served from the chat's folders. */
 export function PathTiles({ chat, paths }: { chat: string; paths: string[] }) {
+  const open = useContext(OpenFile);
   return (
     <FileTiles>
-      {paths.map((p, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the same file may be named twice in one message
-        <FileTile key={i} name={fileName(p)} src={isPicture(p) ? pictureUrl(chat, p) : undefined} />
-      ))}
+      {paths.map((p, i) =>
+        isPicture(p) ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the same file may be named twice in one message
+          <FileTile key={i} name={fileName(p)} src={pictureUrl(chat, p)} />
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the same file may be named twice in one message
+          <FileTile key={i} name={fileName(p)} onOpen={open && (() => open(p))} />
+        ),
+      )}
     </FileTiles>
   );
 }
