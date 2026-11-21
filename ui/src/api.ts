@@ -200,6 +200,26 @@ export interface BoardLine {
   state: 'to_do' | 'doing' | 'in_review' | 'done';
 }
 
+/** A folder at the top of a chat's tree: the project's own, Shared, or an agent's for this chat. */
+export interface FilePart {
+  name: string;
+  path: string;
+  agent?: string;
+}
+export interface FileTree {
+  project: FilePart | null;
+  shared: FilePart | null;
+  agents: FilePart[];
+}
+export interface FileEntry {
+  name: string;
+  path: string;
+  folder: boolean;
+}
+/** Why a file isn't shown as text: it's gone, too large, or not text. */
+export type Unshown = 'gone' | 'large' | 'cant';
+const UNSHOWN: Record<number, Unshown> = { 404: 'gone', 413: 'large', 415: 'cant' };
+
 /** A chat whose title holds the query (0035). `time` is its last activity. */
 export interface ChatHit {
   chat: string;
@@ -425,11 +445,32 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
   }
   const answer = await response.json().catch(() => null);
-  if (!response.ok || answer === null) {
-    const why = answer?.why ?? (answer === null ? `${path}: invalid JSON (HTTP ${response.status})` : null);
-    throw new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
-  }
+  if (!response.ok || answer === null) throw refusal(path, response, answer);
   return answer as T;
+}
+
+function refusal(
+  path: string,
+  response: Response,
+  answer: { error?: string; why?: string; ref?: string } | null,
+) {
+  const why = answer?.why ?? (answer === null ? `${path}: invalid JSON (HTTP ${response.status})` : null);
+  return new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
+}
+
+/** A file's words, or why they aren't shown. */
+async function words(chat: string, file: string): Promise<{ text: string } | { unshown: Unshown }> {
+  const path = `/api/chats/${chat}/file?path=${encodeURIComponent(file)}`;
+  let response: Response;
+  try {
+    response = await fetch(path);
+  } catch {
+    throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
+  }
+  if (response.ok) return { text: await response.text() };
+  const unshown = UNSHOWN[response.status];
+  if (unshown) return { unshown };
+  throw refusal(path, response, await response.json().catch(() => null));
 }
 
 /** Saves each file in the chat's folder, in order: their saved names. */
@@ -456,6 +497,14 @@ export const api = {
   saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   board: (chat: string) => call<{ lines: BoardLine[]; agents: number }>('GET', `/api/chats/${chat}/board`),
+  /** The chat's tree: its top folders. */
+  tree: (chat: string) => call<FileTree>('GET', `/api/chats/${chat}/files`),
+  /** One folder of the chat's tree: folders first, then files. */
+  folder: (chat: string, path: string) =>
+    call<{ entries: FileEntry[] }>('GET', `/api/chats/${chat}/files?path=${encodeURIComponent(path)}`).then(
+      (f) => f.entries,
+    ),
+  words,
   search: (q: string) =>
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),

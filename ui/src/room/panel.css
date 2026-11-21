@@ -1,0 +1,171 @@
+/* The chat's panel: Home with the board, the Files tab's tree, and a file's tab. */
+.home {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 14px;
+}
+.home > h2 {
+  margin: 0 20px 8px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.home > .board {
+  padding-top: 0;
+}
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 84px;
+  margin: 0 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.home-tile:hover {
+  background: var(--hover-tint);
+}
+.home-tile svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+
+.tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 8px 12px;
+  font-size: 13px;
+}
+.tree > h3 {
+  margin: 10px 6px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.tree-empty {
+  margin: 10px 6px;
+  color: var(--muted-foreground);
+}
+.tree-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px 0 calc(4px + var(--depth) * 14px);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.tree-row:hover {
+  background: var(--hover-tint);
+}
+.tree-row > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tree-row svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  stroke-width: 1.5;
+}
+.tree-row > .tree-chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--muted-foreground);
+  transition: rotate 0.1s;
+}
+.tree-chevron[data-open="true"] {
+  rotate: 90deg;
+}
+
+.filetab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.filetab-path {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.filetab-path > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.filetab-path strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.filetab-text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre;
+  tab-size: 4;
+}
+.filetab-picture {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 16px;
+}
+.filetab-picture > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.filetab-none {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.filetab-none > svg {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 6px;
+  stroke-width: 1.25;
+  color: var(--foreground);
+}
+.filetab-none > strong {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}

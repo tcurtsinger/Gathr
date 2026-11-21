@@ -68,11 +68,30 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.workspace-tab:has(.workspace-close) > [role="tab"] {
+  padding-right: 4px;
+}
+.workspace-tab > .workspace-close {
+  margin-right: 5px;
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+}
 .workspace-tablist svg {
   width: 14px;
   height: 14px;
   flex: none;
   stroke-width: 1.5;
+}
+/* The file tabs after Home and Files, which stay put: they scroll sideways, to the open one. */
+.workspace-files {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
 }
 .workspace-view {
   display: flex;
@@ -81,4 +100,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+.workspace-view[hidden] {
+  display: none;
 }
