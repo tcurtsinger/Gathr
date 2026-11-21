@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Engine, type Failure } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { Accounts, engines } from './Accounts';
+import { Group, Page, Row } from './Row';
 import './engines.css';
 
 type Open = (ref: string) => void;
@@ -10,15 +11,15 @@ type Open = (ref: string) => void;
 /** Settings > Engines (settings-entry/v5): the accounts, then each engine's program once. */
 export function Engines({ onReference }: { onReference: Open }) {
   return (
-    <section aria-labelledby="engines-title">
+    <Page title="Engines" line="The accounts your agents sign in with, and each engine’s version.">
       <Accounts onReference={onReference} />
-      <div className="engine-list">
-        <h3>Engines</h3>
+      <Group title="Versions" />
+      <div className="settings-rows settings-top">
         {engines.map(([id, name]) => (
           <Program key={id} id={id} name={name} onReference={onReference} />
         ))}
       </div>
-    </section>
+    </Page>
   );
 }
 
@@ -47,6 +48,8 @@ function Program({ id, name, onReference }: { id: string; name: string; onRefere
 
   const copy = engine?.copy;
   const shown = failure ?? (copy?.failed && { error: 'Update failed', ...copy.failed });
+  const notice = shown && <FailureNotice failure={shown} onReference={onReference} />;
+  if (!engine) return notice;
   const status = checking
     ? 'Checking'
     : copy?.state === 'off'
@@ -54,34 +57,29 @@ function Program({ id, name, onReference }: { id: string; name: string; onRefere
       : copy?.checked && copy.version && !copy.failed
         ? 'Up to date'
         : '';
+  const version = copy?.version ?? (engine.found ? '' : 'Not installed');
   return (
-    <>
-      {shown && <FailureNotice failure={shown} onReference={onReference} />}
-      {engine && (
+    <Row
+      name={<span id={title}>{name}</span>}
+      line={
         <>
-          <div className="settingrow">
-            <h4 id={title}>{name}</h4>
-            <span className="muted">{copy?.version ?? (engine.found ? '' : 'Not installed')}</span>
-          </div>
-          <div className="settingrow">
-            <span className="muted" role="status">
-              {status}
-            </span>
-            {copy?.state !== 'off' && (
-              <Button
-                type="button"
-                variant="outline"
-                aria-describedby={title}
-                disabled={checking}
-                onClick={check}
-              >
-                Check
-              </Button>
-            )}
-          </div>
+          {version}
+          {version && status && ' · '}
+          <span role="status">{status}</span>
+        </>
+      }
+      after={
+        <>
+          {notice}
           {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
         </>
+      }
+    >
+      {copy?.state !== 'off' && (
+        <Button type="button" variant="outline" aria-describedby={title} disabled={checking} onClick={check}>
+          Check
+        </Button>
       )}
-    </>
+    </Row>
   );
 }

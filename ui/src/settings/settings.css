@@ -1,114 +1,330 @@
+/* Settings (the owner's pick A, 2026-11-21): no header bar, the pages in groups at the left, each page a narrow
+   column of flat rows between hairlines. */
 .settings-panel {
+  --settings-nav: #292929;
+  --hair: oklch(0.985 0.002 106 / 8.5%);
+  --faint: oklch(0.6 0.004 106);
+  --field: oklch(0.985 0.002 106 / 3%);
+  --current: color-mix(in oklab, var(--foreground) 8%, transparent);
   width: min(1024px, calc(100vw - 64px));
   height: min(760px, calc(100dvh - 96px));
+  border: 0;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 24px 64px #0000005c;
+}
+html.light .settings-panel {
+  --settings-nav: oklch(0.973 0.002 106);
+  --hair: oklch(0.92 0.004 106);
+  --faint: oklch(0.62 0.006 106);
+  --field: #fff;
+}
+.settings-panel .dialog-x {
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
 }
 .settings-body {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: clamp(220px, 23.5%, 240px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
-.settings-categories {
-  padding: 20px 12px;
-  border-right: 1px solid var(--border);
-}
-.settings-categories button {
-  width: 100%;
-  margin-bottom: 4px;
-  text-align: left;
-}
-.settings-categories button[aria-current] {
-  background: var(--raised);
-}
+
 .settings-page {
   min-width: 0;
   min-height: 0;
   overflow: auto;
 }
-.settings-page > section {
-  padding: 24px;
+/* A page: a centred column (or the whole width, for Turns), a title and one line under it. */
+.settings-col {
+  width: 550px;
+  max-width: calc(100% - 64px);
+  margin: 0 auto;
+  padding: 44px 0 28px;
 }
-.settings-page h3 {
-  margin: 0 0 28px;
-  font-size: 18px;
-  font-weight: 600;
-}
-.settingrow {
+.settings-wide {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  height: 100%;
+  padding: 40px 36px 0;
+}
+:is(.settings-col, .settings-wide) {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.settings-head h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 32px;
+  letter-spacing: -0.012em;
+  overflow-wrap: anywhere;
+}
+.settings-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.settings-head > [data-slot="button"] {
+  margin-top: 2px;
+}
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  min-height: 0;
+  margin: -6px 0 12px -3px;
+  padding: 0 3px 0 0;
+  color: var(--muted);
+}
+.settings-back svg {
+  width: 15px;
+  height: 15px;
+}
+.settings-group {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border);
-}
-.settingrow h4 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-/* Who a setting applies to, beside its control. */
-.setting-scope {
-  margin-left: auto;
+  height: 28px;
+  margin: 26px 0 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-weight: 500;
 }
-@media (max-width: 767px) {
-  .settings-panel {
-    width: calc(100vw - 24px);
-    height: calc(100dvh - 48px);
-  }
-  .settings-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  .settings-categories {
-    display: flex;
-    gap: 8px;
-    padding: 8px 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .settings-categories button {
-    width: auto;
-  }
-  .settings-page > section {
-    padding: 16px;
-  }
+.settings-group h4 {
+  margin: 0;
+  font: inherit;
 }
-/* A setting's name and its ?. */
-.setting-label {
+.settings-group-line {
+  font-weight: 450;
+}
+.settings-empty {
+  margin: 0;
+  padding: 14px 0;
+  color: var(--muted);
+}
+.settings-foot {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
-/* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another. */
-.agent-folder-now {
+.settings-foot [role="status"] {
+  margin-right: auto;
+}
+
+/* The rows (Row.tsx): a hairline between each, and one over the first where a page or a group asks for it. */
+.settings-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-rows > * + * {
+  border-top: 1px solid var(--hair);
+}
+.settings-top {
+  border-top: 1px solid var(--hair);
+}
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  min-height: 60px;
+  padding: 9px 0;
+}
+.setting-words {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  margin-left: auto;
 }
-.agent-folder-now code {
+.setting-name {
+  font-weight: 500;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.setting-line {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* What follows a row (a notice, a sign-in, an open editor) takes its whole width. */
+.setting > :not(.setting-words, .setting-control) {
+  grid-column: 1 / -1;
+}
+:is(.settings-col, .settings-wide) .notice {
+  min-height: 0;
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+
+/* The app's one button, dropdown, field and switch, drawn smaller here, as the mock-up has them. */
+:is(.settings-col, .settings-wide) [data-slot="button"] {
+  height: 28px;
+  gap: 6px;
+  padding: 0 12px;
+  border-color: var(--input);
+  font-size: 13px;
+}
+:is(.settings-col, .settings-wide) [data-slot="button"] svg:first-child:not(:last-child) {
+  width: 14px;
+  height: 14px;
+  margin-left: -3px;
+}
+:is(.settings-col, .settings-wide) .settings-more {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--muted);
+}
+:is(.settings-col, .settings-wide) .dropdown {
+  height: 28px;
+  min-width: 120px;
+  min-height: 0;
+  padding: 0 7px 0 10px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--input);
+  background: var(--field);
+  font-size: 13px;
+}
+:is(.settings-col, .settings-wide) .dropdown > svg {
+  width: 14px;
+  height: 14px;
+}
+:is(.settings-col, .settings-wide) input:where(:not([data-slot])) {
+  height: 28px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--input);
+  background: var(--field);
+  font-size: 13px;
+}
+.setting-control .switch {
+  width: 32px;
+  height: 18px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--input);
+}
+.setting-control .switch span {
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+}
+.setting-control .switch[aria-checked="true"] {
+  background: var(--attention);
+}
+.setting-control .switch[aria-checked="true"] span {
+  left: 16px;
+  background: #fff;
+}
+#person-name {
+  width: 180px;
+}
+#assistant,
+#auto_compact {
+  width: 150px;
+}
+#handoff_limit {
+  width: 186px;
+}
+
+/* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another under the row. */
+.agent-folder-now {
+  max-width: 150px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .agent-folder-edit {
-  display: flex;
-  flex: 1 1 360px;
-  flex-direction: column;
+  display: grid;
   gap: 8px;
+  padding: 2px 0 8px;
 }
 .agent-folder-edit small {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
 }
-/* Under the field it belongs to: the row's padding spaces it, not a reply's margins. */
-.agent-folder .notice {
-  flex-basis: 100%;
+
+.friction .setting-name {
+  font-weight: 450;
+}
+
+/* The left column: the word Settings, then the pages under quiet group names. */
+.settings-side {
+  overflow: auto;
+  padding: 14px 10px;
+  background: var(--settings-nav);
+}
+.settings-side h2 {
   margin: 0;
+  padding: 0 10px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.settings-pages p {
+  margin: 0;
+  padding: 14px 10px 4px;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.settings-pages:first-child p {
+  padding-top: 6px;
+}
+.settings-pages button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 28px;
+  min-height: 0;
+  padding: 0 10px;
+  font-size: 13px;
+  text-align: left;
+}
+.settings-side .settings-pages svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  stroke-width: 1.75;
+}
+.settings-pages button[aria-current] {
+  background: var(--current);
+  font-weight: 500;
+}
+.settings-pages button[aria-current] svg {
+  color: var(--foreground);
 }

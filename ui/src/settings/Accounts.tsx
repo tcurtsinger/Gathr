@@ -1,10 +1,20 @@
+import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
+import { DialogMenuContent } from '../components/DialogMenu';
 import { Dropdown } from '../components/Dropdown';
+import { IconButton } from '../components/IconButton';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
+import { Group, Row } from './Row';
 import { SignInFailed, SignInWaiting } from './SignIn';
 
 /** The engines Gathr can run, as the service names them. */
@@ -28,7 +38,7 @@ export function Accounts({ onReference }: { onReference: Open }) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   /** The form, open to add (no account) or to rename one. */
-  const [form, setForm] = useState<{ account?: Account; opener: HTMLElement } | null>(null);
+  const [form, setForm] = useState<{ account?: Account; opener: HTMLElement | null } | null>(null);
   /** Gets focus once an account is removed, as its row goes. */
   const addButton = useRef<HTMLButtonElement>(null);
 
@@ -40,23 +50,26 @@ export function Accounts({ onReference }: { onReference: Open }) {
     });
   }, [load]);
 
-  const open = (opener: HTMLElement, account?: Account) => {
+  const open = (opener: HTMLElement | null, account?: Account) => {
     setFailure(null);
     setForm({ account, opener });
   };
   const close = () => {
-    form?.opener.focus();
+    form?.opener?.focus();
     setForm(null);
   };
 
   return (
     <>
-      <div className="account-heading">
-        <h3 id="engines-title">Accounts</h3>
-        <Button type="button" variant="outline" ref={addButton} onClick={(e) => open(e.currentTarget)}>
-          Add
-        </Button>
-      </div>
+      <Group
+        title="Accounts"
+        right={
+          <Button type="button" variant="outline" ref={addButton} onClick={(e) => open(e.currentTarget)}>
+            <Plus />
+            Add
+          </Button>
+        }
+      />
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       {form && (
         // A new form for each account, so one account's draft never carries to another.
@@ -67,19 +80,21 @@ export function Accounts({ onReference }: { onReference: Open }) {
           onFailure={setFailure}
         />
       )}
-      {accounts?.length === 0 && <p className="muted">No accounts</p>}
-      <ul className="account-list">
-        {accounts?.map((account) => (
-          <AccountRow
-            key={account.id}
-            account={account}
-            onRename={(opener) => open(opener, account)}
-            onRemoved={() => addButton.current?.focus()}
-            onFailure={setFailure}
-            onReference={onReference}
-          />
-        ))}
-      </ul>
+      {accounts?.length === 0 && <p className="settings-empty">No accounts</p>}
+      {accounts && accounts.length > 0 && (
+        <ul className="settings-rows settings-top">
+          {accounts.map((account) => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              onRename={(opener) => open(opener, account)}
+              onRemoved={() => addButton.current?.focus()}
+              onFailure={setFailure}
+              onReference={onReference}
+            />
+          ))}
+        </ul>
+      )}
     </>
   );
 }
@@ -116,7 +131,7 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
 
   return (
     <form className="account-form" aria-labelledby={title} onSubmit={submit}>
-      <h4 id={title}>{account ? 'Rename account' : 'Add account'}</h4>
+      <h5 id={title}>{account ? 'Rename account' : 'Add account'}</h5>
       <div className="account-field">
         <label htmlFor={`${title}engine`}>Engine</label>
         <Dropdown
@@ -127,7 +142,7 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
           choices={engines.map(([id, label]) => ({ value: id, label }))}
         />
       </div>
-      <label>
+      <label className="account-field">
         Name
         <input
           value={name}
@@ -153,7 +168,7 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
 
 interface RowProps {
   account: Account;
-  onRename: (opener: HTMLElement) => void;
+  onRename: (opener: HTMLElement | null) => void;
   onRemoved: () => void;
   onFailure: (f: Failure) => void;
   onReference: Open;
@@ -162,7 +177,7 @@ interface RowProps {
 function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: RowProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  /** Focus goes back to Remove when its question is cancelled. */
+  /** Focus goes back to the menu's button when Remove's question is cancelled. */
   const cancelled = useRef(false);
   const name = useId();
   const id = account.id;
@@ -206,56 +221,112 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
   );
 
   return (
-    <li className="account-row">
-      <div>
-        <strong id={name}>{account.name}</strong>
-        <small>
-          {engineName(account.engine)} / {state}
-        </small>
-      </div>
-      {confirming ? (
-        <ConfirmRemove
-          name={account.name}
-          onCancel={() => {
-            cancelled.current = true;
-            setConfirming(false);
-          }}
-          onRemove={() => {
-            setConfirming(false);
-            act('Removing', api.removeAccount(id).then(onRemoved));
-          }}
-        />
-      ) : (
-        <div className="account-actions">
-          <Button
-            type="button"
-            variant="outline"
-            aria-describedby={name}
-            onClick={(e) => onRename(e.currentTarget)}
-          >
-            Rename
-          </Button>
-          {!busy && action}
-          {!busy && (
-            <Button
-              type="button"
-              variant="outline"
-              aria-describedby={name}
-              ref={(b) => {
-                if (b && cancelled.current) b.focus();
-                cancelled.current = false;
-              }}
-              onClick={() => setConfirming(true)}
-            >
-              Remove
-            </Button>
-          )}
-        </div>
-      )}
-      {failed && (
-        <SignInFailed account={id} failed={failed} onFailure={onFailure} onReference={onReference} />
-      )}
-      {waiting && <SignInWaiting account={account} waiting={waiting} onFailure={onFailure} />}
+    <li>
+      <Row
+        name={<span id={name}>{account.name}</span>}
+        line={`${engineName(account.engine)} · ${state}`}
+        after={
+          <>
+            {failed && (
+              <SignInFailed account={id} failed={failed} onFailure={onFailure} onReference={onReference} />
+            )}
+            {waiting && <SignInWaiting account={account} waiting={waiting} onFailure={onFailure} />}
+          </>
+        }
+      >
+        {confirming ? (
+          <ConfirmRemove
+            name={account.name}
+            onCancel={() => {
+              cancelled.current = true;
+              setConfirming(false);
+            }}
+            onRemove={() => {
+              setConfirming(false);
+              act('Removing', api.removeAccount(id).then(onRemoved));
+            }}
+          />
+        ) : (
+          <>
+            {!busy && action}
+            <AccountMenu
+              account={account}
+              busy={busy !== null}
+              focus={cancelled}
+              onRename={onRename}
+              onRemove={() => setConfirming(true)}
+            />
+          </>
+        )}
+      </Row>
     </li>
+  );
+}
+
+/** An account's More: Rename, then Remove (not while something is under way), as a tool's More in Plugins. */
+function AccountMenu({
+  account,
+  busy,
+  focus,
+  onRename,
+  onRemove,
+}: {
+  account: Account;
+  busy: boolean;
+  /** Set when Remove's question was cancelled: its button takes focus back as it shows again. */
+  focus: React.RefObject<boolean>;
+  onRename: (opener: HTMLElement | null) => void;
+  onRemove: () => void;
+}) {
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const place = useCallback(
+    (b: HTMLButtonElement | null) => {
+      trigger.current = b;
+      setHost(b?.closest('dialog') ?? null);
+      if (b && focus.current) b.focus();
+      focus.current = false;
+    },
+    [focus],
+  );
+  // What was picked opens its own form or question, which takes focus: it opens once the menu has closed, in place
+  // of focus going back to the menu's button.
+  const picked = useRef<(() => void) | null>(null);
+  const pick = (then: () => void) => () => {
+    picked.current = then;
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton ref={place} aria-label={`More for ${account.name}`} className="settings-more">
+          <MoreHorizontal />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DialogMenuContent
+        host={host}
+        align="end"
+        sideOffset={8}
+        onCloseAutoFocus={(e) => {
+          if (!picked.current) return;
+          e.preventDefault();
+          picked.current();
+          picked.current = null;
+        }}
+      >
+        <DropdownMenuItem onSelect={pick(() => onRename(trigger.current))}>
+          <Pencil />
+          Rename
+        </DropdownMenuItem>
+        {!busy && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={pick(onRemove)}>
+              <Trash2 />
+              Remove
+            </DropdownMenuItem>
+          </>
+        )}
+      </DialogMenuContent>
+    </DropdownMenu>
   );
 }

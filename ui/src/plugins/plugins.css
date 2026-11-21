@@ -265,6 +265,15 @@
   margin-right: auto;
   font-size: 13px;
 }
+.tool-use-key {
+  margin-right: auto;
+}
+.tool-sign-in {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .tool-spinner {
   width: 14px;
   height: 14px;

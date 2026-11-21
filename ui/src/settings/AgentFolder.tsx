@@ -1,12 +1,12 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
-import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
 import { desktop } from '../desktop';
 import { report } from '../report';
+import { Row } from './Row';
 
-/** Settings > General's Agent folder (M1): every project's Shared folder and one folder per agent, in one place. */
+/** Settings > Teamwork's Agent folder (M1): every project's Shared folder and one folder per agent, in one place. */
 export function AgentFolder({ onReference }: { onReference: (ref: string) => void }) {
   const [folder, setFolder] = useState<string | null>(null);
   // What the person typed while editing; null when not editing. A refused folder stays as typed.
@@ -81,56 +81,59 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
   };
 
   if (folder === null) return null;
-  return (
-    <div className="settingrow agent-folder">
-      <span className="setting-label">
-        {typed === null ? <span>Agent folder</span> : <label htmlFor="agent-folder">Agent folder</label>}
-        <Help label="About agent folder">
-          <p>Each project gets a Shared folder and one folder per agent. Changes apply to new work.</p>
-        </Help>
+  const editor = typed !== null && (
+    <form
+      className="agent-folder-edit"
+      onSubmit={save}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }}
+    >
+      <span className="pathline">
+        <input
+          id="agent-folder"
+          value={typed}
+          autoComplete="off"
+          spellCheck={false}
+          aria-describedby="agent-folder-scope"
+          aria-invalid={failure !== null}
+          // biome-ignore lint/a11y/noAutofocus: Change opens the field to type the folder.
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        <Button type="button" variant="ghost" onClick={close}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving || !typed.trim()}>
+          {saving ? 'Saving' : 'Save'}
+        </Button>
       </span>
-      {typed === null ? (
-        <span className="agent-folder-now">
-          <code title={folder}>{folder}</code>
+      <small id="agent-folder-scope">Applies to new work. Current work stays where it is.</small>
+    </form>
+  );
+  return (
+    <Row
+      name={typed === null ? 'Agent folder' : <label htmlFor="agent-folder">Agent folder</label>}
+      line="Each project gets a Shared folder and one per agent."
+      after={
+        <>
+          {editor}
+          {failure && <FailureNotice failure={failure} onReference={onReference} />}
+        </>
+      }
+    >
+      {typed === null && (
+        <>
+          <code className="agent-folder-now">{folder}</code>
           <Button type="button" variant="outline" ref={change} aria-busy={saving} onClick={pick}>
             Change
           </Button>
-        </span>
-      ) : (
-        <form
-          className="agent-folder-edit"
-          onSubmit={save}
-          onKeyDown={(e) => {
-            if (e.key !== 'Escape') return;
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-          }}
-        >
-          <span className="pathline">
-            <input
-              id="agent-folder"
-              value={typed}
-              autoComplete="off"
-              spellCheck={false}
-              aria-describedby="agent-folder-scope"
-              aria-invalid={failure !== null}
-              // biome-ignore lint/a11y/noAutofocus: Change opens the field to type the folder.
-              autoFocus
-              onFocus={(e) => e.currentTarget.select()}
-              onChange={(e) => setTyped(e.target.value)}
-            />
-            <Button type="button" variant="ghost" onClick={close}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving || !typed.trim()}>
-              {saving ? 'Saving' : 'Save'}
-            </Button>
-          </span>
-          <small id="agent-folder-scope">Applies to new work. Current work stays where it is.</small>
-        </form>
+        </>
       )}
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
-    </div>
+    </Row>
   );
 }

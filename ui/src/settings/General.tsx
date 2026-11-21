@@ -7,12 +7,15 @@ import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
 import { AgentFolder } from './AgentFolder';
 import { AppVersion } from './AppVersion';
-import { Assistant } from './Assistant';
 import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
+import { Page, Row } from './Row';
+import { YourName } from './YourName';
 
-/** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
-export function General({ onReference }: { onReference: (ref: string) => void }) {
+type Open = (ref: string) => void;
+
+/** Settings > General (startup/v1): the person's name, what Gathr does on this computer, and its version. */
+export function General({ onReference }: { onReference: Open }) {
   const [theme, setShown] = useState(savedTheme);
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
@@ -53,53 +56,64 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   };
 
   return (
-    <section aria-labelledby="general-title">
-      <h3 id="general-title">General</h3>
+    <Page title="General" line="Your name, the look of Gathr and its version.">
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
-      <div className="settingrow">
-        <label htmlFor="theme">Theme</label>
-        <span className="setting-scope" id="theme-scope">
-          This computer
-        </span>
-        <Dropdown
-          id="theme"
-          aria-describedby="theme-scope"
-          value={theme}
-          onChange={(v) => {
-            const next = v as Theme;
-            setTheme(next);
-            setShown(next);
-          }}
-          choices={[
-            { value: 'system', label: 'System' },
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-        />
-      </div>
-      {on !== null && (
-        <div className="settingrow">
-          <span id="startup-label">Open at login</span>
-          <span className="setting-scope" id="startup-scope">
-            This computer
-          </span>
-          <span className="visually-hidden" role="status">
-            {saving ? 'Saving' : ''}
-          </span>
-          <Switch
-            on={on}
-            labelledBy="startup-label"
-            describedBy="startup-scope"
-            disabled={saving}
-            onChange={change}
+      <div className="settings-rows">
+        <YourName onReference={onReference} />
+        <Row
+          name={<label htmlFor="theme">Theme</label>}
+          line="Applies on this computer only."
+          lineId="theme-line"
+        >
+          <Dropdown
+            id="theme"
+            aria-describedby="theme-line"
+            value={theme}
+            onChange={(v) => {
+              const next = v as Theme;
+              setTheme(next);
+              setShown(next);
+            }}
+            choices={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
           />
-        </div>
-      )}
-      <Assistant onReference={onReference} />
-      <AgentFolder onReference={onReference} />
-      <HandoffLimit onReference={onReference} />
-      <AutoCompact onReference={onReference} />
-      <AppVersion onReference={onReference} />
-    </section>
+        </Row>
+        {on !== null && (
+          <Row
+            name={<span id="startup-label">Open at login</span>}
+            line="Opens Gathr when you sign in to this computer."
+            lineId="startup-line"
+          >
+            <span className="visually-hidden" role="status">
+              {saving ? 'Saving' : ''}
+            </span>
+            <Switch
+              on={on}
+              labelledBy="startup-label"
+              describedBy="startup-line"
+              disabled={saving}
+              onChange={change}
+            />
+          </Row>
+        )}
+        <AppVersion onReference={onReference} />
+      </div>
+    </Page>
+  );
+}
+
+/** Settings > Teamwork: how agents work together. Which one is the assistant is picked on the Agents screen. */
+export function Teamwork({ onReference }: { onReference: Open }) {
+  return (
+    <Page title="Teamwork" line="How your agents work together.">
+      <div className="settings-rows">
+        <HandoffLimit onReference={onReference} />
+        <AutoCompact onReference={onReference} />
+        <AgentFolder onReference={onReference} />
+      </div>
+    </Page>
   );
 }

@@ -104,7 +104,7 @@ test('the team keeps one Supervisor and at least one agent; a new Supervisor or 
   expect(sent.map((s) => s.body)).toEqual([{ members: [{ agent: 'a', role: 'supervisor' }] }]);
 });
 
-test('Delete asks with what the service counts, then deletes the project and shows the next', async () => {
+test('Delete asks with what the service counts, then deletes the project and shows the list', async () => {
   let projects = [project, { ...project, id: 'q', name: 'Made-up other' }];
   const deleted: string[] = [];
   const answer = (body: unknown) => new Response(JSON.stringify(body));
@@ -126,6 +126,7 @@ test('Delete asks with what the service counts, then deletes the project and sho
   await confirm.getByRole('button', { name: 'Delete' }).click();
 
   await expect.element(confirm).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('heading', { name: 'Made-up other' })).toBeVisible();
+  await expect.element(screen.getByText('Made-up other')).toBeVisible();
+  await expect.element(screen.getByText('Made-up project')).not.toBeInTheDocument();
   expect(deleted).toEqual(['/api/projects/p']);
 });

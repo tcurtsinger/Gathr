@@ -2,27 +2,31 @@ import { ChevronLeft, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
+import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
+import { host } from './tool';
 
 interface Props {
   onBack: () => void;
   /** The tool was added: its id, once the list has it. */
   onAdded: (id: string) => void;
+  onReference: (ref: string) => void;
 }
 
 /**
- * Add a tool: its link, and its name unless the tool's own will do. Gathr asks the tool what it needs; one that
- * wants a key gets the Key field; so does one that signs in through the browser, which Gathr can't do yet.
+ * Add a tool: its link, and its name unless the tool's own will do. Gathr asks the tool what it needs: one that
+ * wants a key gets the Key field; one that signs in through the browser gets Sign in, and Use a key for one that
+ * takes a key as well.
  */
-export function AddTool({ onBack, onAdded }: Props) {
+export function AddTool({ onBack, onAdded, onReference }: Props) {
   const [link, setLink] = useState('');
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
-  const [needsKey, setNeedsKey] = useState(false);
-  /** It signs in through the browser: some such tools take a key as well, so the Key field is still offered. */
-  const [signsIn, setSignsIn] = useState(false);
+  const [needs, setNeeds] = useState<'key' | 'sign_in' | null>(null);
   const [checking, setChecking] = useState(false);
   /** Why, under the field it's about. */
   const [why, setWhy] = useState<{ field: 'link' | 'key'; text: string } | null>(null);
+  const signIn = useToolSignIn(onAdded);
+  const needsKey = needs === 'key';
   const add = () => {
     setChecking(true);
     setWhy(null);
@@ -31,10 +35,7 @@ export function AddTool({ onBack, onAdded }: Props) {
       (answer) => {
         setChecking(false);
         if (answer.tool) onAdded(answer.tool.id);
-        else {
-          setNeedsKey(true);
-          setSignsIn(answer.needs === 'sign_in');
-        }
+        else setNeeds(answer.needs ?? 'key');
       },
       (f: Failure) => {
         setChecking(false);
@@ -44,12 +45,57 @@ export function AddTool({ onBack, onAdded }: Props) {
     );
   };
   const under = (field: 'link' | 'key') => why?.field === field && <p className="tool-why">{why.text}</p>;
+  const footer = () => {
+    if (signIn.waiting) return <ToolSignInWaiting url={signIn.waiting.url} onCancel={signIn.cancel} />;
+    const cancel = (
+      <Button type="button" size="sm" variant="outline" onClick={onBack}>
+        Cancel
+      </Button>
+    );
+    if (signIn.failed) return cancel;
+    if (needs === 'sign_in')
+      return (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="tool-use-key"
+            onClick={() => setNeeds('key')}
+          >
+            Use a key
+          </Button>
+          {cancel}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => signIn.start({ link: link.trim(), name: name.trim() || undefined })}
+          >
+            Sign in
+          </Button>
+        </>
+      );
+    return (
+      <>
+        {checking && (
+          <span className="tool-checking muted">
+            <LoaderCircle aria-hidden="true" className="tool-spinner" />
+            Checking the link
+          </span>
+        )}
+        {cancel}
+        <Button type="submit" size="sm" disabled={checking || !link.trim() || (needsKey && !key.trim())}>
+          {needsKey ? 'Connect' : 'Add'}
+        </Button>
+      </>
+    );
+  };
   return (
     <form
       className="new-skill tool-form"
       onSubmit={(e) => {
         e.preventDefault();
-        add();
+        if (needs !== 'sign_in') add();
       }}
     >
       <button type="button" className="screen-back" onClick={onBack}>
@@ -65,9 +111,9 @@ export function AddTool({ onBack, onAdded }: Props) {
           value={link}
           onChange={(e) => {
             setLink(e.target.value);
-            setNeedsKey(false);
-            setSignsIn(false);
+            setNeeds(null);
             setWhy(null);
+            signIn.cancel();
           }}
           aria-invalid={why?.field === 'link' || undefined}
           spellCheck={false}
@@ -95,29 +141,23 @@ export function AddTool({ onBack, onAdded }: Props) {
               autoFocus
             />
           </label>
-          {under('key') || (
-            <p className="muted">
-              {signsIn
-                ? 'This tool signs in through your browser, which Gathr can’t do yet. If it also takes a key, enter one.'
-                : 'The key stays in Gathr. Agents never see it.'}
-            </p>
-          )}
+          {under('key') || <p className="muted">The key stays in Gathr. Agents never see it.</p>}
         </>
       )}
-      <footer className="agent-actions">
-        {checking && (
-          <span className="tool-checking muted">
-            <LoaderCircle aria-hidden="true" className="tool-spinner" />
-            Checking the link
-          </span>
-        )}
-        <Button type="button" size="sm" variant="outline" onClick={onBack}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={checking || !link.trim() || (needsKey && !key.trim())}>
-          {needsKey ? 'Connect' : 'Add'}
-        </Button>
-      </footer>
+      {needs === 'sign_in' && !signIn.waiting && !signIn.failed && (
+        <p className="muted">
+          {name.trim() || host(link.trim())} signs in with your account, in your browser.
+        </p>
+      )}
+      {signIn.failed && (
+        <ToolSignInFailed
+          why={signIn.failed.why}
+          reference={signIn.failed.ref}
+          onRetry={signIn.retry}
+          onReference={onReference}
+        />
+      )}
+      <footer className="agent-actions">{footer()}</footer>
     </form>
   );
 }

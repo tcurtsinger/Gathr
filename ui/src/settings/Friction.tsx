@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type Failure, type FrictionReport } from '../api';
 import { FailureNotice } from '../components/Notice';
+import { Page, Row } from './Row';
 
 const when = (time: string) =>
   new Date(time).toLocaleString([], {
@@ -17,7 +18,7 @@ const facts = (f: FrictionReport) =>
     .filter(Boolean)
     .join(' · ');
 
-/** Settings > Diagnostics: what agents reported got in their way (0048), newest first. */
+/** Settings > Friction: what agents reported got in their way (0048), newest first. */
 export function Friction() {
   const [list, setList] = useState<FrictionReport[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -26,20 +27,18 @@ export function Friction() {
   }, []);
 
   return (
-    <section className="friction" aria-labelledby="friction-title">
-      <h3 id="friction-title">Friction</h3>
+    <Page title="Friction" line="What agents reported got in their way, newest first.">
       {failure && <FailureNotice failure={failure} />}
-      {list?.length === 0 && <p className="empty">No friction reported yet</p>}
+      {list?.length === 0 && <p className="settings-empty">No friction reported yet</p>}
       {list && list.length > 0 && (
-        <ul>
+        <ul className="settings-rows settings-top friction">
           {list.map((f) => (
             <li key={f.id}>
-              <p>{f.what}</p>
-              <p className="muted">{facts(f)}</p>
+              <Row name={f.what} line={facts(f)} />
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Page>
   );
 }

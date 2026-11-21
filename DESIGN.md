@@ -49,7 +49,7 @@ workspace. `background` is the chat. `card` is what stands on the chat: an appro
 notice. A message is no card: it stands in a bubble, the foreground at 8% over the chat
 ([0072](docs/archive/decisions/0072-the-chat-reads-like-a-team-chat.md)). In dark the chat is darkest and the frame lighter ([0068](docs/archive/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
-(the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
+(the composer, popovers, the dialog) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
 `accent-surface`, a menu's highlight, is lighter than the popover. Light is a white chat with a
 light-grey frame and cards and a border dark enough to see. Each step differs
@@ -238,7 +238,7 @@ Agents show their picture beside their name: Gathr's own drawing of a shape (twe
 Flower, Hexagon, Pebble, Shield, Drop, Star, Diamond, Bubble, Leaf), a pair of eyes (twelve: Lines, Glance, Side,
 Squint, Dots, Rings, Ovals, Happy, Rest, Wink, Calm, Quirk) and a line colour (twelve, Red to Grey), lines only on
 no background, the same everywhere: 56 in Settings and the new chat, 28 on a card, 24 in the @ list and a
-project's team, 20 on a reply, in the To line and in General's Assistant pick. Each colour has a light value for
+project's team, 20 on a reply, in the To line and in the Agents screen's Assistant pick. Each colour has a light value for
 the dark theme and a deep one for the light theme (OKLCH 0.80 and 0.50, the same hue). The line is 3 in the 48
 box and never under 1.5px; at 20 and under the Cloud draws six bumps and the Hexagon sharper corners. An agent
 with nothing picked has all three worked out from its id, so it always looks the same. The picture is hidden
@@ -276,30 +276,30 @@ Restore asks nothing; its failure uses the shared referenced Notice.
 
 ### Settings, accounts and agents
 
-Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:
-at most 1024 by 760px, 32px horizontal and 48px vertical clearance, a fixed header,
-a 200px category rail and an X at top right (the shared icon button, 16px from the top
-and right, named Close Settings; 0023). Below 768px categories move above
-content. Escape/the X return focus and preserve the chat's draft and position.
-Apply the new shared tokens, type and controls within that layout.
+Settings is the centred dialog (0023), laid out as the owner's pick A of 2026-11-21 ("flat rows"): at most 1024
+by 760px, 32px horizontal and 48px vertical clearance, no header bar. A left column (220 to 240px, a shade off the
+dialog) has the word Settings at its top, then the pages in three groups under quiet 12px headings, each with a
+16px lucide icon: App (General, Engines), Team (Teamwork, Projects) and Diagnostics (Turns, Friction). A
+28px X (the shared icon button, named Close Settings) floats 12px from the dialog's top and right. Each page is a
+550px column centred in the content side: a 24px regular-weight title with one muted line under it, then each
+setting as a row between hairlines, its name and one muted line at the left and one compact 28px control at the
+right. There is no ? Help in these pages: what it said is the line under the setting. Escape/the X return focus
+and preserve the chat's draft and position.
 
-General starts with Theme for This computer: System (default, follows the system's
-setting), Light or Dark, applied at once without a reload. Then Open at login for
-This computer, applied immediately with Switch. The window keeps the theme and the
-navigation and workspace widths across restarts. General ends with the version.
+General has Your name, then Theme (System, the default, follows the system's setting; Light or Dark), applied at
+once without a reload, and Open at login, applied immediately with Switch, both for this computer only. The window
+keeps the theme and the navigation and workspace widths across restarts. General ends with the version.
 
-Agent folder follows Open at login: the current path, Change and shared ? Help.
-It belongs to the service host, with no This computer label. In the desktop
-window, Change opens the system folder picker at the current folder. Selecting a
-folder saves immediately; cancelling saves nothing. Browsers and failed pickers
-use the path editor: Save/Enter saves; Cancel/Escape returns focus to Change
-without closing Settings. A refused save shows its reason and error reference;
-the path editor also preserves the typed input. Help explains each project's
-Shared and per-agent folders and that changes apply to new work. Current work
-stays where it is.
+Teamwork has Pause after, Auto-compact and the Agent folder: the current path and Change. It
+belongs to the service host. In the desktop window, Change opens the system folder picker at the current folder.
+Selecting a folder saves immediately; cancelling saves nothing. Browsers and failed pickers use the path editor
+under the row: Save/Enter saves; Cancel/Escape returns focus to Change without closing Settings. A refused save
+shows its reason and error reference; the path editor also preserves the typed input. Changes apply to new work.
+Current work stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
-path. A new Gathr has no accounts and does not reuse external logins. Agents is a screen of its own, as Plugins is:
+path. An account's row has Sign in or Sign out, and its More menu has Rename and Remove. A new Gathr has no
+accounts and does not reuse external logins. Agents is a screen of its own, as Plugins is:
 every agent in its sidebar, the list with the Assistant dropdown and Add, and one page per agent with Name,
 Description, Account, Model, Effort and Approvals as rows, each with one line under its name and no ? Help. The
 page's 56px picture sits in a 64px box with a pencil on its corner; the box opens Shuffle, which picks a new shape,
@@ -316,17 +316,17 @@ chat-specific, with one Supervisor for two to five members and an optional,
 distinct Reviewer. Edit agent opens that agent's page on the Agents screen.
 
 Approvals is Ask, Edits, Auto (new-agent default) or Full, per 0029. The line under
-its name is the chosen mode's sentence. Elsewhere in Settings, the shared ? opens an in-window popover; Escape
-closes Help before Settings and preserves focus. Switch remains the existing
+its name is the chosen mode's sentence. The window has no ? Help anywhere. Switch remains the existing
 accessible immediate setting, with pending save and referenced failure states.
 
-Projects (0043, option B) lists projects beside the open project's page. A project's page has
-its name, folder and default team in one draft with one Save. A project's More in the sidebar has Project settings, which
-opens Projects at that project, then Delete after a separator. Projects has Delete, the outlined danger Button,
-at the left of the form's foot; an agent's page has it at the right of its header.
+Projects lists the projects, each row its folder and its team's faces; a row opens the project's own page, with a
+back link to the list, as a tool's page in Plugins. A project's page has its name, folder and default team in one
+draft, Delete (the outlined danger Button) at the title's right, and Cancel and Save at its foot. A project's
+More in the sidebar has Project settings, which opens that project's page, then Delete after a separator. An
+agent's page has Delete at the right of its header.
 
-Diagnostics stays a Settings category: a 210px turn list beside the independently
-scrolling timeline. Failure links open its matching turn and reset conflicting
+Turns (Diagnostics) is a Settings page the whole width of the content side: a 214px turn list beside the
+independently scrolling timeline. Friction, what agents reported got in their way, is a page of its own. Failure links open its matching turn and reset conflicting
 filters. Preserve category/filter state and make long turns usable. No normal
 header Diagnostics action. The prototype's component gallery is a reference tool.
 

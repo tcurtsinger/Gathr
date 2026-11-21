@@ -223,6 +223,7 @@ export function Plugins({ onReference }: Props) {
                       <Plug aria-hidden="true" className="plugins-nav-icon" />
                       <span>{t.name}</span>
                       {t.enabled && t.state === 'key_refused' && dot('attention', 'Key refused')}
+                      {t.enabled && t.state === 'sign_in' && dot('attention', 'Sign in again')}
                       {t.enabled && t.state === 'not_reachable' && dot('danger', 'Not reachable')}
                     </button>
                   </div>
@@ -271,6 +272,7 @@ export function Plugins({ onReference }: Props) {
             onEnable={enableTool}
             onChangeKey={changeKey}
             onRemove={(tool, opener) => setRemoving({ tool, opener })}
+            onReference={onReference}
           />
         )}
         {view.page === 'new' && (
@@ -284,6 +286,7 @@ export function Plugins({ onReference }: Props) {
           <AddTool
             onBack={() => setView({ page: 'list' })}
             onAdded={(id) => loadTools().then(() => openTool(id))}
+            onReference={onReference}
           />
         )}
         {view.page === 'list' && (
@@ -349,7 +352,9 @@ export function Plugins({ onReference }: Props) {
           body={
             'skill' in removing
               ? `Its folder is deleted, with all its files: ${removing.skill.path}`
-              : 'Its key is deleted too.'
+              : removing.tool.signed_in
+                ? 'Its sign-in is deleted too.'
+                : 'Its key is deleted too.'
           }
           verb="Remove"
           danger

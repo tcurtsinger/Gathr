@@ -298,14 +298,15 @@ export function App() {
   };
   const openReference = (reference: string) =>
     setSettings((s) => ({
-      page: 'diagnostics',
+      page: 'turns',
       chat: chat?.id,
       title: chat?.title,
       reference,
       opener: s?.opener ?? (document.activeElement as HTMLElement),
     }));
-  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed.
-  const notice = failure && (
+  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed. All the
+  // app itself does is load and reload: a service that's away (an update's hand-over) shows nothing.
+  const notice = failure && !failure.away && (
     <div className="reading app-failure">
       <FailureNotice
         failure={failure}
@@ -463,7 +464,9 @@ export function App() {
       )}
       <SettingsPanel
         target={settings}
-        onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}
+        onPage={(page) =>
+          setSettings((s) => s && { ...s, page, project: undefined, turn: undefined, reference: undefined })
+        }
         onReference={openReference}
         onClose={() => {
           setSettings(null);

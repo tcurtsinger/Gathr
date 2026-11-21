@@ -1,4 +1,4 @@
-/* New project: the one dialog (components/Dialog.tsx), with Settings > Agents' fields. */
+/* New project: the one dialog (components/Dialog.tsx), with the shared form fields (app.css). */
 .new-project {
   width: min(480px, calc(100vw - 32px));
 }

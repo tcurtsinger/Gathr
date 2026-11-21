@@ -60,7 +60,7 @@ test('Escape cancels the edit without closing Settings, and saves nothing', asyn
   let closed = 0;
   const screen = await render(
     <SettingsPanel
-      target={{ page: 'general', opener: null }}
+      target={{ page: 'teamwork', opener: null }}
       onPage={() => {}}
       onReference={() => {}}
       onClose={() => closed++}
