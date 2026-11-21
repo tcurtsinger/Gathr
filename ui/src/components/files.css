@@ -25,7 +25,7 @@
   background: color-mix(in oklab, var(--foreground) 6%, var(--background));
   color: var(--muted-foreground);
 }
-button.file-face {
+button.file-face:has(img) {
   cursor: zoom-in;
 }
 .file-face img {

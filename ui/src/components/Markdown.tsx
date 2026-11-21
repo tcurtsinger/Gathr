@@ -1,7 +1,8 @@
 import { code } from '@streamdown/code';
-import { type ComponentProps, useMemo } from 'react';
+import { type ComponentProps, type MouseEvent, useContext, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown';
+import { linkedFile, OpenFile } from './files';
 import './markdown.css';
 
 interface Node {
@@ -50,7 +51,18 @@ function mentions(names: readonly string[]) {
   return walk;
 }
 
-const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText];
+const FILE = '#file:';
+/** A link to a file carries its path as an in-page address, which Harden lets through: it drops a file's own. */
+function fileLinks() {
+  const walk = (node: Node & { url?: string }) => {
+    const path = node.type === 'link' && node.url ? linkedFile(node.url) : undefined;
+    if (path) node.url = FILE + encodeURIComponent(path);
+    node.children?.forEach(walk);
+  };
+  return walk;
+}
+
+const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText, fileLinks];
 // With no raw HTML left, rehype-raw and the sanitizer have nothing to do, and rehype-raw re-parses
 // every reply through parse5. Harden still drops unsafe link and image URLs (javascript: and the like): a link it
 // drops shows as its own words, with none of Harden's "[blocked]" after them and no hover line.
@@ -59,20 +71,31 @@ const rehypePlugins = [[harden, { ...hardening, linkBlockPolicy: 'text-only' }]]
   typeof Streamdown
 >['rehypePlugins'];
 
-// A link leaves the window for the person's browser; an in-page one (a footnote) stays in the reply. A link to a
-// file on this computer (`X:\…` is dropped by Harden; `/Users/…` would open on Gathr's own address) shows as its
-// words until Gathr has a file viewer for it to open in.
-const components = {
-  a: ({ node: _, ...props }: ComponentProps<'a'> & { node?: unknown }) =>
-    // Harden adds target="_blank" to every link, so an in-page one drops it.
-    props.href?.startsWith('#') ? (
-      <a {...props} target={undefined} rel={undefined} />
-    ) : props.href?.startsWith('/') ? (
-      <span>{props.children}</span>
-    ) : (
-      <a {...props} target="_blank" rel="noreferrer" />
-    ),
-};
+// A link leaves the window for the person's browser; an in-page one (a footnote) stays in the reply; a file opens
+// in the chat's panel, and outside a chat shows as its words.
+function Link({ node: _, ...props }: ComponentProps<'a'> & { node?: unknown }) {
+  const open = useContext(OpenFile);
+  if (props.href?.startsWith(FILE)) {
+    const path = decodeURIComponent(props.href.slice(FILE.length));
+    if (!open) return <span>{props.children}</span>;
+    const click = (e: MouseEvent) => {
+      e.preventDefault();
+      open(path);
+    };
+    return (
+      <a href={props.href} onClick={click}>
+        {props.children}
+      </a>
+    );
+  }
+  // Harden adds target="_blank" to every link, so an in-page one drops it.
+  return props.href?.startsWith('#') ? (
+    <a {...props} target={undefined} rel={undefined} />
+  ) : (
+    <a {...props} target="_blank" rel="noreferrer" />
+  );
+}
+const components = { a: Link };
 
 // Code blocks keep Streamdown's language label, Copy and Download, as in the prototype; tables have none.
 // Shiki colours a block once its language loads; until then it shows plain.

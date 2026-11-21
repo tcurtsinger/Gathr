@@ -1,5 +1,6 @@
 import { File as FileIcon, Files, House, X } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
+import { api, type FileTree } from '../api';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
@@ -15,8 +16,64 @@ interface Tabs {
 }
 const HOME = 'home';
 const FILES = 'files';
-// Each chat's tabs, while the window is open.
+const FRESH: Tabs = { files: false, open: [], at: HOME };
+// Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
+const heard = new Set<() => void>();
+const tabsOf = (chat: string) => kept.get(chat) ?? FRESH;
+const listen = (heed: () => void) => {
+  heard.add(heed);
+  return () => heard.delete(heed);
+};
+function change(chat: string, next: Tabs) {
+  kept.set(chat, next);
+  for (const heed of heard) heed();
+}
+
+/** The one way a file opens: in its own tab, or the tab it already has. */
+function show(chat: string, file: Opened) {
+  const tabs = tabsOf(chat);
+  const known = tabs.open.some((f) => f.path === file.path);
+  change(chat, { ...tabs, open: known ? tabs.open : [...tabs.open, file], at: file.path });
+}
+
+/**
+ * Opens a file the chat names (a link, a tile, a file on a question) as the tree would: a full path, or one in
+ * `agent`'s folder, its crumbs from the chat's top folder it is in. The service says whether it may be shown.
+ */
+export async function openTab(chat: string, path: string, agent?: string) {
+  show(chat, place(await api.tree(chat), path, agent));
+}
+
+const windows = (path: string) => /^[A-Za-z]:/.test(path);
+/** The path's parts, `.` and `..` followed. */
+function steps(path: string) {
+  const out: string[] = [];
+  for (const s of path.split(/[\\/]/).filter(Boolean)) {
+    if (s === '..') out.pop();
+    else if (s !== '.') out.push(s);
+  }
+  return out;
+}
+
+function place(tree: FileTree, path: string, agent?: string): Opened {
+  const full = windows(path) || path.startsWith('/');
+  const base = full ? undefined : tree.agents.find((a) => a.agent === agent)?.path;
+  const at = base ? `${base}/${path}` : path;
+  if (!full && !base) return { path, crumbs: steps(path) };
+  const parts = steps(at);
+  if (windows(at)) parts[0] = parts[0].toUpperCase();
+  const whole = windows(at) ? parts.join('\\') : `/${parts.join('/')}`;
+  const same = (a: string, b: string) => (windows(at) ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const tops = [tree.project, tree.shared, ...tree.agents].flatMap((t) => (t ? [t] : []));
+  // The deepest top folder it is in names it.
+  const top = tops
+    .map((t) => ({ name: t.name, parts: steps(t.path) }))
+    .filter((t) => t.parts.length < parts.length && t.parts.every((p, i) => same(p, parts[i])))
+    .sort((a, b) => b.parts.length - a.parts.length)[0];
+  const crumbs = top ? [top.name, ...parts.slice(top.parts.length)] : [parts.at(-1) ?? whole];
+  return { path: whole, crumbs };
+}
 
 /** The panel beside the chat: Home first, always there, then Files and each open file as tabs. */
 export function RoomSidebar({ chat }: { chat: string }) {
@@ -29,21 +86,13 @@ export function RoomSidebar({ chat }: { chat: string }) {
 }
 
 function Panel({ chat }: { chat: string }) {
-  const [tabs, setTabs] = useState<Tabs>(() => kept.get(chat) ?? { files: false, open: [], at: HOME });
-  const change = (next: Tabs) => {
-    kept.set(chat, next);
-    setTabs(next);
-  };
+  const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
   const order = [HOME, ...(tabs.files ? [FILES] : []), ...tabs.open.map((f) => f.path)];
-  const go = (at: string) => change({ ...tabs, at });
+  const go = (at: string) => change(chat, { ...tabs, at });
   const close = (key: string) => {
     const i = order.indexOf(key);
     const at = key === tabs.at ? (order[i + 1] ?? order[i - 1]) : tabs.at;
-    change({ files: tabs.files && key !== FILES, open: tabs.open.filter((f) => f.path !== key), at });
-  };
-  const open = (file: Opened) => {
-    const known = tabs.open.some((f) => f.path === file.path);
-    change({ ...tabs, open: known ? tabs.open : [...tabs.open, file], at: file.path });
+    change(chat, { files: tabs.files && key !== FILES, open: tabs.open.filter((f) => f.path !== key), at });
   };
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string, closable = true) => (
@@ -87,7 +136,7 @@ function Panel({ chat }: { chat: string }) {
           <button
             type="button"
             className="home-tile"
-            onClick={() => change({ ...tabs, files: true, at: FILES })}
+            onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
           >
             <Files aria-hidden="true" />
             Files
@@ -96,7 +145,7 @@ function Panel({ chat }: { chat: string }) {
           <Board chat={chat} />
         </div>,
       )}
-      {tabs.files && view(FILES, <Tree chat={chat} onOpen={open} />)}
+      {tabs.files && view(FILES, <Tree chat={chat} onOpen={(file) => show(chat, file)} />)}
       {tabs.open.map((f) => view(f.path, <FileTab chat={chat} file={f} />))}
     </>
   );

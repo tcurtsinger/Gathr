@@ -19,6 +19,7 @@ import { Composer, type Person } from '../components/Composer';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { FileTiles, LocalTile } from '../components/FileTile';
+import { OpenFile } from '../components/files';
 import { kept, type Picked } from '../components/mention';
 import { ProjectPick } from '../components/ProjectPick';
 import { WorkspaceToggle } from '../components/workspace';
@@ -27,7 +28,7 @@ import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
 import { Questions } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
-import { RoomSidebar } from './Sidebar';
+import { openTab, RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -132,6 +133,11 @@ export function RoomView(props: Props) {
       () => setRefused(undefined),
       (f: Failure) => setRefused(f),
     );
+  // A file the chat names opens in its panel, which opens for it.
+  const openFile = (path: string, agent?: string) => {
+    props.onSidebar(true);
+    attempt(() => openTab(chat.id, path, agent));
+  };
   const thisChat: PauseScope = { scope: 'chat', target: chat.id };
   const stop = () => attempt(() => props.onPause('stop', thisChat));
   const run = runOf(props.pauses, chat.id);
@@ -146,7 +152,7 @@ export function RoomView(props: Props) {
   };
 
   return (
-    <>
+    <OpenFile.Provider value={openFile}>
       <TopLine>
         <div className="room-title">
           <h1>{chat.title}</h1>
@@ -254,7 +260,7 @@ export function RoomView(props: Props) {
         </Room>
       </main>
       {sidebar && <RoomSidebar chat={chat.id} />}
-    </>
+    </OpenFile.Provider>
   );
 }
 

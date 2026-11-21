@@ -21,6 +21,8 @@ pub struct AskPerson {
     why: Option<String>,
     /// For a choice: your pick first, each with a few words on it.
     choices: Option<Vec<ChoiceIn>>,
+    /// Files for the person to open with it: full paths, in this chat's folders.
+    files: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -31,7 +33,7 @@ pub struct ChoiceIn {
 
 #[tool_router(router = person_router, vis = "pub(super)")]
 impl Tools {
-    /// `what` with `why` below it and the choices, nothing else. The window hears the chat's
+    /// `what` with `why` below it, a line per file, and the choices. The window hears the chat's
     /// questions whole, and the chat now needs the person.
     #[tool(description = "Ask the person for input or action. The answer wakes you here.")]
     async fn ask_person(
@@ -59,10 +61,18 @@ impl Tools {
                 detail: c.detail,
             })
             .collect();
+        let (files, data) = (
+            ask.files.unwrap_or_default(),
+            self.chats.data.path().to_path_buf(),
+        );
         let asked = self
             .chats
             .writer
             .call(move |c| {
+                // Each file as the line a person's message names its files with.
+                let roots = gathr::files::tree(c, &data, &chat)?.roots();
+                let lines = gathr::files::attached(&roots, &files)?;
+                let question = gathr::files::with_lines(&question, &lines);
                 let id = gathr::questions::ask(c, (&chat, &agent), &question, &choices)?;
                 Ok::<_, Error>((id, gathr::questions::of_chat(c, &chat)?))
             })
