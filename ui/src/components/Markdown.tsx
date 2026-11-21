@@ -52,15 +52,23 @@ function mentions(names: readonly string[]) {
 
 const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText];
 // With no raw HTML left, rehype-raw and the sanitizer have nothing to do, and rehype-raw re-parses
-// every reply through parse5. Harden still drops unsafe link and image URLs (javascript: and the like).
-const rehypePlugins = [defaultRehypePlugins.harden];
+// every reply through parse5. Harden still drops unsafe link and image URLs (javascript: and the like): a link it
+// drops shows as its own words, with none of Harden's "[blocked]" after them and no hover line.
+const [harden, hardening] = defaultRehypePlugins.harden as [unknown, object];
+const rehypePlugins = [[harden, { ...hardening, linkBlockPolicy: 'text-only' }]] as ComponentProps<
+  typeof Streamdown
+>['rehypePlugins'];
 
-// A link leaves the window for the person's browser; an in-page one (a footnote) stays in the reply.
+// A link leaves the window for the person's browser; an in-page one (a footnote) stays in the reply. A link to a
+// file on this computer (`X:\…` is dropped by Harden; `/Users/…` would open on Gathr's own address) shows as its
+// words until Gathr has a file viewer for it to open in.
 const components = {
   a: ({ node: _, ...props }: ComponentProps<'a'> & { node?: unknown }) =>
     // Harden adds target="_blank" to every link, so an in-page one drops it.
     props.href?.startsWith('#') ? (
       <a {...props} target={undefined} rel={undefined} />
+    ) : props.href?.startsWith('/') ? (
+      <span>{props.children}</span>
     ) : (
       <a {...props} target="_blank" rel="noreferrer" />
     ),
