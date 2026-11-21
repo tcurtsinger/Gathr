@@ -86,6 +86,8 @@ export function RoomView(props: Props) {
   const [asking, setAsking] = useState<number | null>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
   const fresh = !chat.id;
+  // A new chat in a project asks what to build there, under its lead's face; with no project, the greeting.
+  const project = props.projects.find((p) => p.id === chat.project)?.name;
   const members = fresh ? (props.projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
   const team = useMemo(() => peopleOf(members, known), [members, known]);
   // A new chat with no project: a message that names nobody goes to the assistant.
@@ -195,7 +197,11 @@ export function RoomView(props: Props) {
             fresh ? (
               <div className="room-greeting">
                 {ahead && <Face agent={{ id: ahead.id, name: ahead.name }} size={56} />}
-                <p>{greeting(new Date().getHours(), props.you.person_name)}</p>
+                <p>
+                  {project
+                    ? `What should we build in ${project}?`
+                    : greeting(new Date().getHours(), props.you.person_name)}
+                </p>
               </div>
             ) : (
               failure && (
