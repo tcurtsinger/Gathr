@@ -1,6 +1,7 @@
 //! The agent folder (0034): one folder, set in Settings > General, that holds every project's work:
 //! `<root>/<Project>/Shared` for the team's kept files and `<root>/<Project>/<Agent>` for each
-//! agent's worktrees and its engines' temporary files. Agents write there without asking; Gathr's
+//! agent's worktrees and its engines' temporary files, and `<root>/Skills` for every agent's skills
+//! (`skills`). Agents write in their own folders and Shared without asking; Gathr's
 //! data folder (logins, the database, engine copies) is never one of them. Gathr records each
 //! folder it makes before making it, and only ever removes what it recorded.
 
@@ -182,11 +183,23 @@ pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<
         .optional()?
         .flatten();
     let project = match project {
-        Some(id) => named(conn, "projects", &id, &root, &[NO_PROJECT])?,
+        Some(id) => named(
+            conn,
+            "projects",
+            &id,
+            &root,
+            &[NO_PROJECT, crate::skills::FOLDER],
+        )?,
         None => NO_PROJECT.to_string(),
     };
     let project = root.join(project);
-    let agent = named(conn, "agents", agent, &project, &[SHARED])?;
+    let agent = named(
+        conn,
+        "agents",
+        agent,
+        &project,
+        &[SHARED, crate::skills::FOLDER],
+    )?;
     Ok(Place {
         root,
         agent: project.join(agent),
@@ -197,7 +210,13 @@ pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<
 /// The project's own folder in the agent folder, `<agent folder>/<Project>`, named the first time.
 pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<PathBuf, Error> {
     let root = real(&root(conn, data)?);
-    Ok(root.join(named(conn, "projects", project, &root, &[NO_PROJECT])?))
+    Ok(root.join(named(
+        conn,
+        "projects",
+        project,
+        &root,
+        &[NO_PROJECT, crate::skills::FOLDER],
+    )?))
 }
 
 /// The Shared folder of `chat`'s project, the one folder all its agents read on both engines.

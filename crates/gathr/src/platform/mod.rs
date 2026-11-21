@@ -101,15 +101,31 @@ pub fn open_browser(url: &str) -> Result<(), String> {
         }
         None => std::process::Command::new("/usr/bin/open"),
     };
+    command.arg(url);
+    outlive(command).map_err(|e| format!("The browser didn't open: {e}"))
+}
+
+/// Opens the folder `dir` in the system's file manager: Explorer on Windows, Finder on the Mac.
+pub fn open_folder(dir: &Path) -> Result<(), String> {
+    let mut command = match cfg!(windows) {
+        true => {
+            let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+            std::process::Command::new(PathBuf::from(root).join("explorer.exe"))
+        }
+        false => std::process::Command::new("/usr/bin/open"),
+    };
+    command.arg(dir);
+    outlive(command).map_err(|e| format!("{} didn't open: {e}", dir.display()))
+}
+
+/// Starts `command` to outlive Gathr, waited for on a thread of its own.
+fn outlive(mut command: std::process::Command) -> std::io::Result<()> {
     command
-        .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     no_window(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("The browser didn't open: {e}"))?;
+    let mut child = command.spawn()?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });

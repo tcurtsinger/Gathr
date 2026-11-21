@@ -29,6 +29,7 @@ mod search;
 mod serve;
 mod settings;
 mod sign_in;
+mod skills;
 mod startup;
 mod team;
 mod tools;

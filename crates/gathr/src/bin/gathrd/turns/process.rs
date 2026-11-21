@@ -124,11 +124,13 @@ impl Task {
         let folder = assigned.folder.as_path();
         let making = crate::cleanup::hold().await;
         let place = self.workspace(&assigned, trace).await?;
+        // Claude Code reads only where its rules allow; Codex reads anywhere.
+        let read: Vec<PathBuf> = place.read.iter().chain(&place.skills).cloned().collect();
         let given = command::Assigned {
             model: assigned.model.as_deref(),
             effort: assigned.effort.as_deref(),
             approvals: assigned.approvals,
-            read: &place.read,
+            read: &read,
         };
         let hook = format!(
             "http://127.0.0.1:{}{}",
@@ -155,7 +157,13 @@ impl Task {
             from_before: place.from_before,
         };
         let pass = self
-            .pass_for(&assigned, worktree, given, place.read.clone(), trace)
+            .pass_for(
+                &assigned,
+                worktree,
+                given,
+                (place.read.clone(), place.skills),
+                trace,
+            )
             .await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
@@ -281,7 +289,7 @@ impl Task {
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
         place: Place,
-        read: Vec<PathBuf>,
+        (read, skills): (Vec<PathBuf>, Option<PathBuf>),
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
@@ -292,7 +300,10 @@ impl Task {
         let facts = self
             .chats
             .writer
-            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree, own, read))
+            .call(move |conn| {
+                let folders = (worktree, own, read, skills);
+                briefing::facts(conn, &chat, agent.as_deref(), folders)
+            })
             .await;
         let facts = match facts {
             Some(read) => read.map_err(|e| e.to_string()),

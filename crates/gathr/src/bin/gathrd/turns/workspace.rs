@@ -29,6 +29,8 @@ pub(super) struct Workspace {
     /// (its teammates' folders and worktrees, Shared) and the project's own; never one that leads
     /// into the data folder.
     pub read: Vec<PathBuf>,
+    /// The Skills folder, every agent's to read, once it's made; never one in the data folder.
+    pub skills: Option<PathBuf>,
     /// `cwd` is where Gathr put the agent's work before the agent folder, in the data folder.
     pub from_before: bool,
     /// Where its temporary files go (TEMP, TMP, TMPDIR).
@@ -103,6 +105,7 @@ impl Task {
                 place: None,
                 beside: Vec::new(),
                 read: Vec::new(),
+                skills: None,
                 from_before: true,
                 scratch: None,
             });
@@ -153,6 +156,8 @@ impl Task {
                 .collect(),
             None => Vec::new(),
         };
+        let skills = Some(found.place.root.join(gathr::skills::FOLDER))
+            .filter(|dir| dir.is_dir() && !refused(dir, false));
         let kind = match found.project {
             Some(_) => "worktree",
             None => "folder",
@@ -180,6 +185,7 @@ impl Task {
             place: Some(found.place),
             beside,
             read,
+            skills,
             from_before,
             scratch: Some(scratch),
         })

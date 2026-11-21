@@ -108,8 +108,8 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
   "Start failed" page keeps the system's title bar.
-- The rail: Home at the top, a mark of where you are (the window has one place, so it is not a button),
-  drawn as current (32px, 8px radius, foreground 9%), its centre on the word mark's line. At the foot,
+- The rail: Home at the top, its centre on the word mark's line, and Plugins under it, 6px apart; the
+  screen that is open is drawn as current (32px, 8px radius, foreground 9%). At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
   while it installs), above the Settings cog. Icons 18px at 1.75 stroke; Update 20px at 2.
 - Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px (a browser

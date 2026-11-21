@@ -41,7 +41,7 @@ Agents use Gathr's in-process MCP server to read chat history, react, set a boar
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
-The Agent folder contains each project's Shared folder and per-agent working folders.
+The Agent folder contains each project's Shared folder and per-agent working folders, and the Skills folder every agent reads.
 The service owns worktrees, engine-lifetime temp folders and cleanup, preserving work still in use.
 It supplies allowed folders to the engines and file-write guard; the limits in 0029 still apply.
 [0034](archive/decisions/0034-agent-folder.md).
