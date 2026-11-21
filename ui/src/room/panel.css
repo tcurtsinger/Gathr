@@ -6,14 +6,87 @@
   min-height: 0;
   padding-top: 14px;
 }
-.home > h2 {
+.home h2 {
   margin: 0 20px 8px;
   color: var(--muted-foreground);
   font-size: 12.5px;
   font-weight: 500;
 }
-.home > .board {
+.home .board {
   padding-top: 0;
+}
+
+/* Home's "Find a file" and the tree's "Filter files", with the files they find in place of what is under them. */
+.find-box {
+  flex: none;
+  margin: 8px 8px 2px;
+  background: var(--background);
+}
+.home > .find-box {
+  height: 40px;
+  margin: 0 20px 18px;
+}
+.find-rest {
+  display: contents;
+}
+.find-rest[hidden] {
+  display: none;
+}
+.find-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 6px 8px 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.home > .find-list {
+  margin: -10px 20px 16px;
+}
+.find-list > [role="option"] {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 7px;
+  text-align: left;
+}
+.find-list > [aria-selected="true"] {
+  background: var(--hover-tint);
+}
+.find-list svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  stroke-width: 1.5;
+  color: var(--muted-foreground);
+}
+.find-list span {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.find-list small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.find-list > p {
+  margin: 6px 10px;
+  color: var(--muted-foreground);
 }
 .home-tile {
   display: flex;

@@ -237,6 +237,130 @@ pub fn listing(roots: &[PathBuf], path: &str) -> Option<Vec<Entry>> {
     Some(entries)
 }
 
+/// The most files a search answers.
+pub const FOUND: usize = 50;
+
+/// A file whose name holds the words searched for: its path, and its place in the tree from the top
+/// folder's name down to its own name.
+#[derive(Debug, Serialize)]
+pub struct Found {
+    pub path: PathBuf,
+    pub crumbs: Vec<String>,
+}
+
+/// The files of `tree` whose name holds `words`, case ignored: a name that starts with them first,
+/// then by name, at most `FOUND`. In a git checkout git lists them, so what the project ignores (its
+/// builds, its packages) is never read; any other folder is walked. `.git` and links that lead out of
+/// the tree are left out. The top folders are read at once.
+pub async fn find(tree: &Tree, words: &str) -> Vec<Found> {
+    let words = words.trim().to_lowercase();
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let parts: Vec<&Part> = tree
+        .project
+        .iter()
+        .chain(&tree.shared)
+        .chain(&tree.agents)
+        .collect();
+    let mut reads = tokio::task::JoinSet::new();
+    for (i, part) in parts.iter().enumerate() {
+        let (root, words) = (part.path.clone(), words.clone());
+        reads.spawn(async move {
+            let listed = match git_files(&root).await {
+                Some(listed) => listed,
+                None => tokio::task::spawn_blocking(move || walk(&root))
+                    .await
+                    .unwrap_or_default(),
+            };
+            let hit = |rel: String| {
+                let name = rel.rsplit('/').next().unwrap_or_default().to_lowercase();
+                let at = name.find(&words)?;
+                Some((at != 0, name, i, rel))
+            };
+            listed.into_iter().filter_map(hit).collect::<Vec<_>>()
+        });
+    }
+    let mut hits: Vec<_> = reads.join_all().await.into_iter().flatten().collect();
+    hits.sort();
+    let roots = tree.roots();
+    hits.into_iter()
+        .filter_map(|(_, _, i, rel)| {
+            let part = parts[i];
+            let path = rel.split('/').fold(part.path.clone(), |p, s| p.join(s));
+            inside(&roots, &path.to_string_lossy())?.is_file().then(|| {
+                let steps = rel.split('/').map(String::from);
+                let crumbs = std::iter::once(part.name.clone()).chain(steps).collect();
+                Found { path, crumbs }
+            })
+        })
+        .take(FOUND)
+        .collect()
+}
+
+/// The files git knows in the checkout at `root` (tracked, and new ones it doesn't ignore), each as
+/// its path from `root` with `/` between steps; none when `root` isn't a checkout or git fails.
+async fn git_files(root: &Path) -> Option<Vec<String>> {
+    if !root.join(".git").exists() {
+        return None;
+    }
+    let env: crate::platform::env::Vars = std::env::vars_os()
+        .filter(|(k, _)| {
+            let k = k.to_string_lossy();
+            !crate::platform::env::LOCAL_GIT_VARS
+                .iter()
+                .any(|v| v.eq_ignore_ascii_case(&k))
+        })
+        .collect();
+    let args = [
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+    ];
+    let limit = std::time::Duration::from_secs(30);
+    let ran = crate::run::run(Path::new("git"), &args, root, &env, limit).await;
+    let ran = ran.ok().filter(|r| r.code == Some(0))?;
+    let mut listed: Vec<String> = ran
+        .out
+        .split('\0')
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    // A file in a merge is listed once per side.
+    listed.dedup();
+    Some(listed)
+}
+
+/// The files under `root`, each as its path from it with `/` between steps, never inside `.git` or
+/// through a link.
+fn walk(root: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    let mut folders = vec![(root.to_path_buf(), String::new())];
+    while let Some((dir, at)) = folders.pop() {
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read.flatten() {
+            let (Ok(kind), name) = (entry.file_type(), entry.file_name()) else {
+                continue;
+            };
+            let name = name.to_string_lossy();
+            let here = match at.is_empty() {
+                true => name.to_string(),
+                false => format!("{at}/{name}"),
+            };
+            if kind.is_dir() && name != ".git" {
+                folders.push((entry.path(), here));
+            } else if kind.is_file() {
+                files.push(here);
+            }
+        }
+    }
+    files
+}
+
 /// Why a file isn't shown as text.
 #[derive(Debug, PartialEq)]
 pub enum Unshown {
@@ -323,6 +447,75 @@ mod tests {
             Err(Unshown::Gone),
             "a file elsewhere"
         );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn a_search_finds_files_by_name_only_in_the_chats_folders() {
+        let base = std::env::temp_dir().join(format!("gathr-find-{}", crate::ids::span_id()));
+        let (shared, project) = (base.join("Shared"), base.join("shop"));
+        let elsewhere = base.join("Elsewhere");
+        for dir in [
+            shared.join(".git"),
+            project.join("src"),
+            project.join("build"),
+            elsewhere.clone(),
+        ] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        // Shared isn't a checkout: it is walked, and its `.git` and a link out of it are passed by.
+        std::fs::write(shared.join("export-plan.md"), "").unwrap();
+        std::fs::write(shared.join(".git").join("export-head"), "").unwrap();
+        std::fs::write(elsewhere.join("export-secret.md"), "").unwrap();
+        #[cfg(windows)]
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(shared.join("out"))
+            .arg(&elsewhere)
+            .output()
+            .unwrap();
+        #[cfg(windows)]
+        assert!(made.status.success(), "mklink: {made:?}");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&elsewhere, shared.join("out")).unwrap();
+        // The project is: what it ignores isn't listed.
+        let git = |args: &[&str]| {
+            let ran = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&project)
+                .output()
+                .unwrap();
+            assert!(ran.status.success(), "git {args:?}: {ran:?}");
+        };
+        git(&["init", "--quiet"]);
+        std::fs::write(project.join(".gitignore"), "build/\n").unwrap();
+        std::fs::write(project.join("src").join("ORDER-EXPORT.ts"), "").unwrap();
+        std::fs::write(project.join("build").join("export.js"), "").unwrap();
+        let part = |path: &Path, name: &str| Part {
+            name: name.into(),
+            path: folders::real(path),
+            agent: None,
+        };
+        let tree = Tree {
+            project: Some(part(&project, "shop")),
+            shared: Some(part(&shared, "Shared")),
+            agents: Vec::new(),
+        };
+        let found = find(&tree, " Export").await;
+        let crumbs: Vec<Vec<&str>> = found
+            .iter()
+            .map(|f| f.crumbs.iter().map(String::as_str).collect())
+            .collect();
+        assert_eq!(
+            crumbs,
+            [
+                vec!["Shared", "export-plan.md"],
+                vec!["shop", "src", "ORDER-EXPORT.ts"]
+            ],
+            "starts with the words first; never .git, a link out, or what git ignores"
+        );
+        assert!(found[0].path.is_file());
+        assert!(find(&tree, "  ").await.is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 }

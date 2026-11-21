@@ -166,9 +166,11 @@ async fn tree_of(
 #[derive(Deserialize)]
 struct Folder {
     path: Option<String>,
+    find: Option<String>,
 }
 
-/// Without a path, the tree's top folders; with one, that folder's folders and files.
+/// Without a path, the tree's top folders; with one, that folder's folders and files; with `find`,
+/// the files whose name holds its words.
 async fn tree(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -176,6 +178,9 @@ async fn tree(
     Query(q): Query<Folder>,
 ) -> Answer {
     let tree = tree_of(&s, &t, &chat, "Files failed").await?;
+    if let Some(words) = q.find {
+        return Ok(Json(json!({ "found": files::find(&tree, &words).await })));
+    }
     let Some(path) = q.path else {
         return Ok(Json(json!(tree)));
     };

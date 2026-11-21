@@ -53,6 +53,33 @@ input:where(:not([data-slot])) {
   border: 1px solid var(--control);
   border-radius: 7px;
 }
+/* The one search box: an icon, then the words. Plugins' search and the chat panel's file boxes. */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+}
+.search-box svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  outline: none;
+  box-shadow: none;
+}
 /* Tailwind's reset clears the browser's own margin: auto that centres a modal dialog. */
 dialog:modal {
   margin: auto;
