@@ -62,7 +62,11 @@ async fn serve(
         Ok(Some(path)) => tokio::fs::read(&path).await.ok().map(|bytes| (path, bytes)),
         _ => None,
     };
-    let Some((path, bytes)) = read else {
+    // Only the kinds of file a page loads (pages, styles, scripts, pictures, fonts, media, data):
+    // whatever else sits beside it stays unread.
+    let known =
+        |path: &std::path::Path| crate::ui::content_type(path) != "application/octet-stream";
+    let Some((path, bytes)) = read.filter(|(path, _)| known(path)) else {
         let why = "it isn't a file of this page";
         return Err(fail(StatusCode::NOT_FOUND, "Page failed", why, &t.0));
     };

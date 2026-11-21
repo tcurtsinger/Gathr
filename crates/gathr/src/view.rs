@@ -37,11 +37,17 @@ impl Views {
     }
 
     /// The file at `rest` in the folder of the view `key`, once links and `..` are followed: none when
-    /// the key isn't open or the file isn't in that folder or below it. Blocks on the disk.
+    /// the key isn't open or the file isn't in that folder or below it. Never a file or folder whose
+    /// name starts with a dot (`.env`, `.git`): a page loads from the web, so what it can read it can
+    /// send out. Blocks on the disk.
     pub fn file(&self, key: &str, rest: &str) -> Option<PathBuf> {
         let folder = self.lock().iter().find(|(k, _)| k == key)?.1.clone();
         let found = folders::real(&std::fs::canonicalize(folder.join(rest)).ok()?);
-        (found.starts_with(&folder) && found.is_file()).then_some(found)
+        let below = found.strip_prefix(&folder).ok()?;
+        let hidden = below
+            .components()
+            .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
+        (!hidden && found.is_file()).then_some(found)
     }
 }
 
@@ -65,6 +71,9 @@ mod tests {
         std::fs::write(page.join("index.html"), "<p>hi</p>").unwrap();
         std::fs::write(page.join("assets").join("site.css"), "p{}").unwrap();
         std::fs::write(shared.join("notes.md"), "above the page").unwrap();
+        std::fs::create_dir_all(page.join(".git")).unwrap();
+        std::fs::write(page.join(".env"), "KEY=made-up").unwrap();
+        std::fs::write(page.join(".git").join("config.json"), "{}").unwrap();
         std::fs::write(elsewhere.join("secret.md"), "another chat's").unwrap();
         #[cfg(windows)]
         let made = std::process::Command::new("cmd")
@@ -88,6 +97,11 @@ mod tests {
             "a file beside it"
         );
         assert!(views.file("0f0f", "index.html").is_none(), "an unknown key");
+        assert!(views.file(&key, ".env").is_none(), "a dot-file");
+        assert!(
+            views.file(&key, ".git/config.json").is_none(),
+            "inside a dot-folder"
+        );
         assert!(views.file(&key, "../notes.md").is_none(), "'..'");
         assert!(
             views.file(&key, "..\\notes.md").is_none(),
