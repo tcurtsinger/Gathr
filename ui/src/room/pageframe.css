@@ -1,0 +1,8 @@
+/* A page keeps its own colours: one that sets no background is white, as in a browser, in either theme. */
+.pageframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}

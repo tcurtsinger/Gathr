@@ -7,6 +7,7 @@ import { pictureUrl } from '../components/FileTile';
 import { isPicture, OpenFile } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { FileBody, hasLook } from './FileBody';
+import { isPage, PageFrame } from './PageFrame';
 import { PdfBody } from './PdfBody';
 import { SheetBody } from './SheetBody';
 
@@ -143,7 +144,10 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
   }, [chat, file.path, picture, Document]);
   const unshow = useCallback((unshown: Unshown) => setShown({ unshown }), []);
   const text = shown && 'text' in shown ? shown.text : undefined;
-  const unshown = broken ? 'gone' : shown && 'unshown' in shown ? shown.unshown : undefined;
+  const page = isPage(name);
+  const said = broken ? 'gone' : shown && 'unshown' in shown ? shown.unshown : undefined;
+  // A page too large to show as text still shows as it looks, by its address; only its Source and Copy go.
+  const unshown = page && said !== 'gone' ? undefined : said;
   const kind = KINDS[ending];
   const copy = (words: string) =>
     navigator.clipboard.writeText(words).catch(() => setFailure(new Failure('Copy failed', null, null)));
@@ -158,7 +162,7 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
           {file.crumbs.slice(0, -1).map((c) => `${c} / `)}
           <strong>{name}</strong>
         </span>
-        {text !== undefined && hasLook(name) && (
+        {text !== undefined && (hasLook(name) || page) && (
           <IconButton
             aria-label="Source"
             aria-pressed={source}
@@ -190,6 +194,8 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
         </div>
       ) : Document ? (
         <Document chat={chat} path={file.path} onUnshown={unshow} onFailure={setFailure} />
+      ) : page && shown && !source ? (
+        <PageFrame chat={chat} path={file.path} name={name} />
       ) : picture ? (
         <div className="filetab-picture">
           <img src={pictureUrl(chat, file.path)} alt={name} onError={() => setBroken(true)} />

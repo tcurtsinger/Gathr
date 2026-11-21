@@ -538,6 +538,11 @@ export const api = {
   words,
   pdf,
   sheets,
+  /** A view of an HTML page in the chat's folders: the address its sealed frame loads it and the files beside it at. */
+  view: (chat: string, path: string) =>
+    call<{ address: string }>('POST', `/api/chats/${chat}/view?path=${encodeURIComponent(path)}`).then(
+      (v) => v.address,
+    ),
   search: (q: string) =>
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),

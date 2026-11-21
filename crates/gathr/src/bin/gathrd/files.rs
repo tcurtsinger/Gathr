@@ -97,8 +97,8 @@ pub async fn lines(
 }
 
 #[derive(Deserialize)]
-struct Shown {
-    path: String,
+pub struct Shown {
+    pub path: String,
 }
 
 /// A picture from one of the chat's folders, for the window's tiles and viewer.

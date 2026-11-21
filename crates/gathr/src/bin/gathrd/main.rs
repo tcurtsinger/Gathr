@@ -38,6 +38,7 @@ mod tools;
 mod turns;
 mod ui;
 mod updates;
+mod view;
 mod web_tools;
 
 use std::net::{Ipv4Addr, SocketAddr};
