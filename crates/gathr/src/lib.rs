@@ -6,6 +6,7 @@ pub mod agents;
 pub mod app;
 pub mod approvals;
 pub mod archive;
+pub mod assistant;
 pub mod background;
 pub mod board;
 pub mod carry;

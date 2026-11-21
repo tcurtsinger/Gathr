@@ -29,6 +29,8 @@ pub struct Agent {
     pub background: Option<String>,
     /// A picture the person gave it, as a data URL the window made; shown instead of the drawn face.
     pub picture: Option<String>,
+    /// One line on what it does, shown in the @ list and told to the other agents.
+    pub description: Option<String>,
 }
 
 /// What the agent may do without asking (0029). Gathr asks before a push or a write outside the
@@ -81,6 +83,7 @@ pub struct Change {
     /// `#rrggbb` in either case: kept in upper case.
     pub background: Option<Option<String>>,
     pub picture: Option<Option<String>>,
+    pub description: Option<Option<String>>,
 }
 
 impl Agent {
@@ -103,6 +106,11 @@ impl Agent {
         let background = change.background.map(|b| b.map(|b| b.to_ascii_uppercase()));
         next.background = background.unwrap_or(next.background);
         next.picture = change.picture.unwrap_or(next.picture);
+        let description = change.description.map(|d| {
+            let d = d.map(|d| d.trim().to_string());
+            d.filter(|d| !d.is_empty())
+        });
+        next.description = description.unwrap_or(next.description);
         next
     }
 }
@@ -124,6 +132,7 @@ pub enum Refused {
     Gender,
     Skin,
     Background,
+    Description,
 }
 
 impl Refused {
@@ -141,6 +150,7 @@ impl Refused {
             Refused::Gender => "Choose Man or Woman",
             Refused::Skin => "Choose a skin tone from 1 to 6",
             Refused::Background => "Choose a background as #RRGGBB",
+            Refused::Description => "A description is one line of up to 80 characters",
             Refused::Pushes => {
                 "Full approvals decide which pushes ask, which only the person changes"
             }
@@ -154,7 +164,7 @@ pub type Saved = Result<Result<Agent, Refused>, Error>;
 /// without a face seed (by hand, or by a test) is drawn from its name.
 const COLUMNS: &str =
     "SELECT id, name, account_id, model, effort, approvals, coalesce(face_seed, name), gender, skin,
-                         background, picture FROM agents WHERE removed_ts IS NULL";
+                         background, picture, description FROM agents WHERE removed_ts IS NULL";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -169,6 +179,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
         skin: r.get(8)?,
         background: r.get(9)?,
         picture: r.get(10)?,
+        description: r.get(11)?,
     })
 }
 
@@ -224,8 +235,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
     };
     let added = conn.execute(
         "INSERT INTO agents (id, name, name_key, account_id, model, effort, approvals, created_ts,
-                             face_seed, gender, skin, background, picture)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                             face_seed, gender, skin, background, picture, description)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             agent.id,
             name,
@@ -239,7 +250,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
             agent.gender,
             agent.skin,
             agent.background,
-            agent.picture
+            agent.picture,
+            agent.description
         ],
     );
     saved(added.map(|_| Agent { name, ..agent }))
@@ -280,7 +292,7 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     let updated = conn.execute(
         "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
          approvals = ?7, face_seed = ?8, gender = ?9, skin = ?10,
-         background = ?11, picture = ?12 WHERE id = ?1 AND removed_ts IS NULL",
+         background = ?11, picture = ?12, description = ?13 WHERE id = ?1 AND removed_ts IS NULL",
         params![
             agent.id,
             name,
@@ -293,7 +305,8 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
             agent.gender,
             agent.skin,
             agent.background,
-            agent.picture
+            agent.picture,
+            agent.description
         ],
     );
     match saved(updated)? {
@@ -349,7 +362,7 @@ pub fn mark_removed(conn: &Connection, id: &str) -> Result<(), Error> {
          WHERE id = ?1 AND removed_ts IS NULL",
         params![id, ids::now_us()],
     )?;
-    Ok(())
+    crate::assistant::forget(conn, id)
 }
 
 /// The trimmed name, once the name, the face and the account pass.
@@ -382,6 +395,13 @@ fn checked(
     {
         return Ok(Err(Refused::Background));
     }
+    if agent
+        .description
+        .as_deref()
+        .is_some_and(|d| d.chars().count() > DESCRIPTION_MOST || d.contains(['\n', '\r']))
+    {
+        return Ok(Err(Refused::Description));
+    }
     if removing.contains(&agent.account) {
         return Ok(Err(Refused::Removing));
     }
@@ -390,6 +410,9 @@ fn checked(
     }
     Ok(Ok(name))
 }
+
+/// The longest description an agent can have.
+pub const DESCRIPTION_MOST: usize = 80;
 
 /// `#RRGGBB`, upper case: what the database's check holds too.
 fn is_background(text: &str) -> bool {
@@ -427,6 +450,7 @@ mod tests {
             skin: None,
             background: None,
             picture: None,
+            description: None,
         }
     }
 

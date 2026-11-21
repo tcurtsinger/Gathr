@@ -98,15 +98,38 @@ pub fn set_members(
         "DELETE FROM chat_members WHERE chat_id = ?1 AND agent_id NOT IN (SELECT value FROM json_each(?2))",
         params![chat, kept],
     )?;
+    put(&tx, chat, team)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn put(conn: &Connection, chat: &str, team: &[(String, Role)]) -> Result<(), Error> {
     for (agent, role) in team {
-        tx.execute(
+        conn.execute(
             "INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (chat_id, agent_id) DO UPDATE SET role = ?3",
             params![chat, agent, role.as_str(), crate::ids::now_us()],
         )?;
     }
-    tx.commit()?;
     Ok(())
+}
+
+/// Adds `agent` to the chat as a member, its first agent leading, when the team still holds: false
+/// when it wouldn't (a full chat), and nothing is written.
+pub fn seat(conn: &Connection, chat: &str, agent: &str) -> Result<bool, Error> {
+    let mut seats: Vec<(String, Role)> = members(conn, chat)?
+        .into_iter()
+        .map(|m| (m.agent, m.role))
+        .collect();
+    seats.push((agent.to_string(), Role::Member));
+    if !seats.iter().any(|(_, role)| *role == Role::Supervisor) {
+        seats[0].1 = Role::Supervisor;
+    }
+    if refused(&seats).is_some() {
+        return Ok(false);
+    }
+    put(conn, chat, &seats)?;
+    Ok(true)
 }
 
 /// Where a message goes: its agent, every other agent picked in it, and the chat's agents when
@@ -150,8 +173,8 @@ pub fn alone(conn: &Connection, chat: &str) -> Result<bool, Error> {
 
 /// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
 /// chat with no project, its first agent leads it, and the picked agents from outside it join it
-/// (F8b) as members. In a project's chat a pick outside its team refuses the send. Reads only:
-/// `join` writes it.
+/// (F8b) as members; with no agents yet, a message that names nobody goes to the assistant. In a
+/// project's chat a pick outside its team refuses the send. Reads only: `join` writes it.
 pub fn plan(
     conn: &Connection,
     chat: &str,
@@ -164,6 +187,12 @@ pub fn plan(
         [chat],
         |r| r.get(0),
     )?;
+    // A message that names nobody in a new chat with no project goes to the person's assistant.
+    let assistant = match plain && team.is_empty() && sent_to.is_none() && picked.is_empty() {
+        true => crate::assistant::assistant(conn)?,
+        false => None,
+    };
+    let sent_to = sent_to.or(assistant.as_deref());
     let mut others: Vec<String> = Vec::new();
     for agent in picked {
         if Some(agent.as_str()) != sent_to && !others.contains(agent) {
