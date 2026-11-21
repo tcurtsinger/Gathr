@@ -80,6 +80,70 @@ fn a_skill_name_or_path_that_leaves_the_skills_folder_is_refused_and_nothing_out
     assert_eq!(listed["skills"].as_array().unwrap().len(), 1, "{listed}");
 }
 
+/// A zip made of `(path, text)` entries, stored as they are.
+fn zipped(entries: &[(&str, &str)]) -> Vec<u8> {
+    use std::io::Write;
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let stored =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (path, text) in entries {
+        zip.start_file(*path, stored).unwrap();
+        zip.write_all(text.as_bytes()).unwrap();
+    }
+    zip.finish().unwrap().into_inner()
+}
+
+#[test]
+fn a_zip_with_a_path_that_leaves_the_skill_is_refused_whole_and_a_good_one_lands() {
+    let root = TempDir::new();
+    let skills = root.0.join("Skills");
+    std::fs::create_dir_all(&skills).unwrap();
+    let skill_md = "---\nname: waivers\ndescription: Rank waiver pickups\n---\n# Waivers\n";
+
+    for bad in [
+        "waivers/../../Kept.md",
+        "waivers/..\\..\\Kept.md",
+        "/Kept.md",
+        "C:/Kept.md",
+        "C:\\Kept.md",
+        "waivers/./a.md",
+    ] {
+        let zip = zipped(&[("waivers/SKILL.md", skill_md), (bad, "out")]);
+        let refused = gathr::skills::add_zip(&skills, "waivers.skill", &zip);
+        assert!(
+            matches!(refused, Err(gathr::Error::Refused(_))),
+            "{bad}: {refused:?}"
+        );
+        assert_eq!(std::fs::read_dir(&skills).unwrap().count(), 0, "{bad}");
+        let mut left: Vec<String> = std::fs::read_dir(&root.0)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["Skills"], "{bad}");
+    }
+
+    let zip = zipped(&[
+        ("waivers/SKILL.md", skill_md),
+        ("waivers/scripts/rank.py", "print('rank')\n"),
+        ("waivers/.DS_Store", "x"),
+        ("__MACOSX/waivers/._SKILL.md", "x"),
+    ]);
+    let name = gathr::skills::add_zip(&skills, "Waivers Pack.skill", &zip).unwrap();
+    assert_eq!(name, "waivers");
+    let skill = skills.join("waivers");
+    assert_eq!(
+        std::fs::read_to_string(skill.join("SKILL.md")).unwrap(),
+        skill_md
+    );
+    assert_eq!(
+        std::fs::read_to_string(skill.join("scripts").join("rank.py")).unwrap(),
+        "print('rank')\n"
+    );
+    assert!(!skill.join(".DS_Store").exists());
+    assert_eq!(std::fs::read_dir(&skills).unwrap().count(), 1);
+}
+
 #[test]
 fn a_skill_folder_made_by_hand_is_listed_as_it_reads() {
     let data = TempDir::new();

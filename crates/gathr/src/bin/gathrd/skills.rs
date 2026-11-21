@@ -77,8 +77,10 @@ async fn one(
 
 #[derive(Deserialize)]
 struct FromFile {
-    /// A single Markdown file's name, its text the body; without it, the body is a `New`.
+    /// A single Markdown file's name, its text the body; without it or `zip`, the body is a `New`.
     file: Option<String>,
+    /// A zipped skill's file name, the zip the body.
+    zip: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +90,8 @@ struct New {
     text: String,
 }
 
-/// A new skill: written from a name, a description and its text, or from one Markdown file.
+/// A new skill: written from a name, a description and its text, from one Markdown file, or
+/// unpacked from a zip.
 async fn add(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -96,9 +99,10 @@ async fn add(
     body: Bytes,
 ) -> Answer {
     on_skills(&s, &t, "Add failed", true, move |c, dir| {
-        let name = match q.file {
-            Some(file) => skills::add_single(dir, &file, &body)?,
-            None => {
+        let name = match (q.file, q.zip) {
+            (Some(file), _) => skills::add_single(dir, &file, &body)?,
+            (None, Some(zip)) => skills::add_zip(dir, &zip, &body)?,
+            (None, None) => {
                 let new: New = serde_json::from_slice(&body)?;
                 skills::create(dir, &new.name, &new.description, &new.text)?;
                 new.name

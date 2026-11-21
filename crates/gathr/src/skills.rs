@@ -3,10 +3,13 @@
 //! put there by hand counts too. Gathr keeps no copy and no table, only the names the person
 //! disabled, in one setting. Every agent reads them where they sit.
 
+use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
+use zip::ZipArchive;
+use zip::result::ZipError;
 
 use crate::{Error, folders};
 
@@ -16,6 +19,10 @@ pub const SETTING: &str = "skills_off";
 const FILE: &str = "SKILL.md";
 /// The format's longest name.
 const LONGEST: usize = 64;
+/// A zip's unpacked size at most: a small zip can unpack to far more than it weighs.
+const MOST_UNPACKED: u64 = 50 * 1024 * 1024;
+/// A zip's files at most, however small each is.
+const MOST_FILES: usize = 2_000;
 
 #[derive(Debug, Serialize)]
 pub struct Skill {
@@ -266,9 +273,17 @@ pub fn add_file(
 /// A single Markdown file as a skill of its own, its SKILL.md: named by its front matter, else by
 /// the file's name. The name it took.
 pub fn add_single(dir: &Path, file: &str, bytes: &[u8]) -> Result<String, Error> {
-    let text = String::from_utf8_lossy(bytes);
+    let name = named(file, bytes);
+    let path = make(dir, &name)?;
+    std::fs::write(path.join(FILE), bytes)?;
+    Ok(name)
+}
+
+/// A SKILL.md's name: its front matter's, else the file's name without its extension.
+fn named(file: &str, skill_md: &[u8]) -> String {
+    let text = String::from_utf8_lossy(skill_md);
     let named = front(&text).and_then(|(fields, _)| field(&fields, "name").map(String::from));
-    let name = match named.filter(|n| !n.is_empty()) {
+    match named.filter(|n| !n.is_empty()) {
         Some(name) => name,
         None => {
             let last = file.rsplit(['/', '\\']).next().unwrap_or(file);
@@ -276,10 +291,112 @@ pub fn add_single(dir: &Path, file: &str, bytes: &[u8]) -> Result<String, Error>
             let stem = stem.to_string_lossy().to_lowercase();
             stem.replace([' ', '_'], "-")
         }
+    }
+}
+
+/// A zipped skill (a Claude `.skill` file is one) unpacked as a new skill: its one top folder is the
+/// skill and names it, else a SKILL.md at the top is, named as `add_single` names one. Every entry is
+/// checked before anything is written, and a refusal or a failed write leaves no folder. The name it took.
+pub fn add_zip(dir: &Path, file: &str, bytes: &[u8]) -> Result<String, Error> {
+    let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(unreadable)?;
+    // Each file's index and its path's parts.
+    let mut kept: Vec<(usize, Vec<String>)> = Vec::new();
+    for i in 0..zip.len() {
+        let entry = zip.by_index_raw(i).map_err(unreadable)?;
+        let name = entry.name().map_err(unreadable)?.into_owned();
+        if entry.encrypted() {
+            return Err(Error::Refused("This zip is encrypted".into()));
+        }
+        if entry.is_symlink() {
+            return Err(Error::Refused(format!("This zip holds a link: {name}")));
+        }
+        let parts: Vec<&str> = name
+            .trim_end_matches(['/', '\\'])
+            .split(['/', '\\'])
+            .collect();
+        // Left out, as a folder upload leaves them: a Mac's __MACOSX and hidden files.
+        let hidden =
+            |p: &&str| (p.starts_with('.') && !matches!(*p, "." | "..")) || *p == "__MACOSX";
+        let outside = entry.enclosed_name().is_none()
+            || parts.iter().any(|p| !hidden(p) && plain(p).is_err());
+        if outside {
+            return Err(Error::Refused(format!(
+                "This zip can't be unpacked: {name} would land outside the skill"
+            )));
+        }
+        if !entry.is_dir() && !parts.iter().any(hidden) {
+            kept.push((i, parts.into_iter().map(String::from).collect()));
+        }
+    }
+    if kept.len() > MOST_FILES {
+        return Err(Error::Refused(format!(
+            "This zip has more than {MOST_FILES} files"
+        )));
+    }
+    let top = match kept.first() {
+        Some((_, parts)) if parts.len() > 1 => Some(parts[0].clone()),
+        _ => None,
+    };
+    let top = top.filter(|t| kept.iter().all(|(_, p)| p.len() > 1 && p[0] == *t));
+    if top.is_some() {
+        for (_, parts) in &mut kept {
+            parts.remove(0);
+        }
+    }
+    let Some(&(at, _)) = kept.iter().find(|(_, p)| p.len() == 1 && p[0] == FILE) else {
+        return Err(Error::Refused(
+            "This zip isn't a skill: it has no SKILL.md".into(),
+        ));
+    };
+    let name = match top {
+        Some(top) => top,
+        None => {
+            let mut skill_md = Vec::new();
+            let entry = zip.by_index(at).map_err(unreadable)?;
+            entry.take(MOST_UNPACKED).read_to_end(&mut skill_md)?;
+            named(file, &skill_md)
+        }
     };
     let path = make(dir, &name)?;
-    std::fs::write(path.join(FILE), bytes)?;
-    Ok(name)
+    let unpacked = unpack(&mut zip, &kept, &path);
+    if unpacked.is_err() {
+        let _ = std::fs::remove_dir_all(&path);
+    }
+    unpacked.map(|()| name)
+}
+
+/// Writes the kept files into the new skill's folder, counting what's written against the cap.
+fn unpack(
+    zip: &mut ZipArchive<Cursor<&[u8]>>,
+    kept: &[(usize, Vec<String>)],
+    skill: &Path,
+) -> Result<(), Error> {
+    let mut left = MOST_UNPACKED;
+    for (i, parts) in kept {
+        let path = parts
+            .iter()
+            .fold(skill.to_path_buf(), |p, part| p.join(part));
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let entry = zip.by_index(*i).map_err(unreadable)?;
+        let wrote = std::io::copy(
+            &mut entry.take(left + 1),
+            &mut std::fs::File::create(&path)?,
+        )?;
+        if wrote > left {
+            return Err(Error::Refused(format!(
+                "This zip unpacks to more than {} MB",
+                MOST_UNPACKED >> 20
+            )));
+        }
+        left -= wrote;
+    }
+    Ok(())
+}
+
+fn unreadable(e: ZipError) -> Error {
+    Error::Refused(format!("This zip can't be read: {e}"))
 }
 
 /// Deletes the skill's folder and all it holds.

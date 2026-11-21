@@ -200,6 +200,7 @@ export function Plugins({ onReference }: Props) {
                 )}
                 <AddMenu
                   onFolder={(files) => added(api.addSkillFolder(files))}
+                  onZip={(file) => added(api.addSkillZip(file))}
                   onFile={(file) => added(api.addSkillFile(file))}
                   onNew={() => setView({ page: 'new' })}
                 />
@@ -250,13 +251,15 @@ export function Plugins({ onReference }: Props) {
 
 interface AddProps {
   onFolder: (files: File[]) => void;
+  onZip: (file: File) => void;
   onFile: (file: File) => void;
   onNew: () => void;
 }
 
-/** Add: a skill from a folder, from one Markdown file, or written here. */
-function AddMenu({ onFolder, onFile, onNew }: AddProps) {
+/** Add: a skill from a folder, from a zip, from one Markdown file, or written here. */
+function AddMenu({ onFolder, onZip, onFile, onNew }: AddProps) {
   const folder = useRef<HTMLInputElement>(null);
+  const zip = useRef<HTMLInputElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const picked = (input: HTMLInputElement, take: (files: File[]) => void) => {
     const files = [...(input.files ?? [])];
@@ -274,6 +277,7 @@ function AddMenu({ onFolder, onFile, onNew }: AddProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={6}>
           <DropdownMenuItem onSelect={() => folder.current?.click()}>From a folder</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => zip.current?.click()}>From a zip</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => file.current?.click()}>From a file</DropdownMenuItem>
           <DropdownMenuItem onSelect={onNew}>New skill</DropdownMenuItem>
         </DropdownMenuContent>
@@ -287,6 +291,13 @@ function AddMenu({ onFolder, onFile, onNew }: AddProps) {
         type="file"
         hidden
         onChange={(e) => picked(e.currentTarget, onFolder)}
+      />
+      <input
+        ref={zip}
+        type="file"
+        accept=".zip,.skill"
+        hidden
+        onChange={(e) => picked(e.currentTarget, ([f]) => onZip(f))}
       />
       <input
         ref={file}
