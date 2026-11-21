@@ -21,7 +21,7 @@ pub(super) struct Workspace {
     /// The project folder, when the engine works in a worktree of it.
     pub project: Option<String>,
     pub env: Fresh,
-    /// The agent's own folder and its project's Shared; none for a turn to no agent.
+    /// The agent's own folder, its project's Shared and Designs; none for a turn to no agent.
     pub place: Option<Place>,
     /// Of those, the ones it writes in without asking: never one that leads into the data folder.
     pub beside: Vec<PathBuf>,
@@ -142,7 +142,8 @@ impl Task {
         if let Some((dir, _)) = must.into_iter().find(|&(dir, old)| refused(dir, old)) {
             return Err(format!("{} wasn't used: {IN_DATA}", dir.display()));
         }
-        let beside = [&found.place.agent, &found.place.shared]
+        let place = &found.place;
+        let beside = [&place.agent, &place.shared, &place.designs]
             .into_iter()
             .filter(|dir| !refused(dir, false))
             .cloned()
@@ -165,7 +166,8 @@ impl Task {
         let made = [(cwd.as_path(), kind), (&scratch, "scratch")];
         let project = found.project.as_deref();
         self.record_made(&made, (&chat, &agent), project).await?;
-        let mut dirs = vec![&found.place.agent, &found.place.shared, &scratch];
+        // Shared and Designs aren't recorded: they stay when the chat goes.
+        let mut dirs = vec![&place.agent, &place.shared, &place.designs, &scratch];
         if project.is_none() {
             dirs.push(&cwd);
         }

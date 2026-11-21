@@ -1,23 +1,28 @@
-import { File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
+import { File as FileIcon, Files, Filter, House, Palette, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type FileTree } from '../api';
+import { pathSteps as steps, onWindows as windows } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
+import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
+import type { RoomState } from './useRoom';
 import './panel.css';
 
-/** A chat's open tabs, and the one shown: Home, Files, or a file's path. */
+/** A chat's open tabs, and the one shown: Home, Files, Design, or a file's or design's path. */
 interface Tabs {
   files: boolean;
+  design: boolean;
   open: Opened[];
   at: string;
 }
 const HOME = 'home';
 const FILES = 'files';
-const FRESH: Tabs = { files: false, open: [], at: HOME };
+const DESIGN = 'design';
+const FRESH: Tabs = { files: false, design: false, open: [], at: HOME };
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
 const heard = new Set<() => void>();
@@ -31,7 +36,7 @@ function change(chat: string, next: Tabs) {
   for (const heed of heard) heed();
 }
 
-/** The one way a file opens: in its own tab, or the tab it already has. */
+/** The one way a file or a design opens: in its own tab, or the tab it already has. */
 function show(chat: string, file: Opened) {
   const tabs = tabsOf(chat);
   const known = tabs.open.some((f) => f.path === file.path);
@@ -46,17 +51,6 @@ export async function openTab(chat: string, path: string, agent?: string) {
   show(chat, place(await api.tree(chat), path, agent));
 }
 
-const windows = (path: string) => /^[A-Za-z]:/.test(path);
-/** The path's parts, `.` and `..` followed. */
-function steps(path: string) {
-  const out: string[] = [];
-  for (const s of path.split(/[\\/]/).filter(Boolean)) {
-    if (s === '..') out.pop();
-    else if (s !== '.') out.push(s);
-  }
-  return out;
-}
-
 function place(tree: FileTree, path: string, agent?: string): Opened {
   const full = windows(path) || path.startsWith('/');
   const base = full ? undefined : tree.agents.find((a) => a.agent === agent)?.path;
@@ -66,7 +60,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   if (windows(at)) parts[0] = parts[0].toUpperCase();
   const whole = windows(at) ? parts.join('\\') : `/${parts.join('/')}`;
   const same = (a: string, b: string) => (windows(at) ? a.toLowerCase() === b.toLowerCase() : a === b);
-  const tops = [tree.project, tree.shared, ...tree.agents].flatMap((t) => (t ? [t] : []));
+  const tops = [tree.project, tree.shared, tree.designs, ...tree.agents].flatMap((t) => (t ? [t] : []));
   // The deepest top folder it is in names it.
   const top = tops
     .map((t) => ({ name: t.name, parts: steps(t.path) }))
@@ -76,24 +70,34 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: Home first, always there, then Files and each open file as tabs. */
-export function RoomSidebar({ chat }: { chat: string }) {
+/** The panel beside the chat: Home first, always there, then Files, Design and each open file or design as tabs. */
+export function RoomSidebar({ chat, room }: { chat: string; room: RoomState }) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
       <ResizeHandle label="Resize chat sidebar" side="left" name="--workspace-width" min={360} max={widest} />
-      <Panel key={chat} chat={chat} />
+      <Panel key={chat} chat={chat} room={room} />
     </aside>
   );
 }
 
-function Panel({ chat }: { chat: string }) {
+function Panel({ chat, room }: { chat: string; room: RoomState }) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
-  const order = [HOME, ...(tabs.files ? [FILES] : []), ...tabs.open.map((f) => f.path)];
+  const order = [
+    HOME,
+    ...(tabs.files ? [FILES] : []),
+    ...(tabs.design ? [DESIGN] : []),
+    ...tabs.open.map((f) => f.path),
+  ];
   const go = (at: string) => change(chat, { ...tabs, at });
   const close = (key: string) => {
     const i = order.indexOf(key);
     const at = key === tabs.at ? (order[i + 1] ?? order[i - 1]) : tabs.at;
-    change(chat, { files: tabs.files && key !== FILES, open: tabs.open.filter((f) => f.path !== key), at });
+    change(chat, {
+      files: tabs.files && key !== FILES,
+      design: tabs.design && key !== DESIGN,
+      open: tabs.open.filter((f) => f.path !== key),
+      at,
+    });
   };
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string, closable = true) => (
@@ -125,8 +129,15 @@ function Panel({ chat }: { chat: string }) {
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
           {tab(HOME, <House aria-hidden="true" />, 'Home', false)}
           {tabs.files && tab(FILES, <Files aria-hidden="true" />, 'Files')}
+          {tabs.design && tab(DESIGN, <Palette aria-hidden="true" />, 'Design')}
           <div className="workspace-files">
-            {tabs.open.map((f) => tab(f.path, <FileIcon aria-hidden="true" />, f.crumbs.at(-1) ?? f.path))}
+            {tabs.open.map((f) =>
+              tab(
+                f.path,
+                f.design ? <Palette aria-hidden="true" /> : <FileIcon aria-hidden="true" />,
+                f.crumbs.at(-1) ?? f.path,
+              ),
+            )}
           </div>
         </div>
       </div>
@@ -140,14 +151,24 @@ function Panel({ chat }: { chat: string }) {
             onOpen={(f) => show(chat, f)}
           >
             <h2>Open</h2>
-            <button
-              type="button"
-              className="home-tile"
-              onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
-            >
-              <Files aria-hidden="true" />
-              Files
-            </button>
+            <div className="home-tiles">
+              <button
+                type="button"
+                className="home-tile"
+                onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
+              >
+                <Files aria-hidden="true" />
+                Files
+              </button>
+              <button
+                type="button"
+                className="home-tile"
+                onClick={() => change(chat, { ...tabs, design: true, at: DESIGN })}
+              >
+                <Palette aria-hidden="true" />
+                Design
+              </button>
+            </div>
             <h2>Board</h2>
             <Board chat={chat} />
           </Find>
@@ -165,7 +186,21 @@ function Panel({ chat }: { chat: string }) {
             <Tree chat={chat} onOpen={(file) => show(chat, file)} />
           </Find>,
         )}
-      {tabs.open.map((f) => view(f.path, <FileTab chat={chat} file={f} />))}
+      {tabs.design &&
+        view(
+          DESIGN,
+          <Designs
+            chat={chat}
+            room={room}
+            onOpen={(d) => show(chat, { path: d.path, crumbs: [d.name], design: true })}
+          />,
+        )}
+      {tabs.open.map((f) =>
+        view(
+          f.path,
+          f.design ? <DesignTab chat={chat} design={f} room={room} /> : <FileTab chat={chat} file={f} />,
+        ),
+      )}
     </>
   );
 }

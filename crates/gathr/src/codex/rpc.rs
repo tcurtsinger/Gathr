@@ -677,7 +677,9 @@ mod tests {
     /// Codex 0.166.0's `thread/start` answered these back as its sandbox's `writableRoots` (0034).
     #[test]
     fn the_agents_folders_open_the_thread_as_writable_roots() {
-        let folders = vec!["agent-folder".to_string(), "shared".to_string()];
+        let folders = ["agent-folder", "shared", "designs"]
+            .map(String::from)
+            .to_vec();
         let opening = Opening {
             writable: folders.clone(),
             ..opening()

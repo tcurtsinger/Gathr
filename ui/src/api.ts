@@ -209,12 +209,16 @@ export interface FilePart {
 export interface FileTree {
   project: FilePart | null;
   shared: FilePart | null;
+  /** The project's part of Designs: each folder in it is a design. */
+  designs: FilePart | null;
   agents: FilePart[];
 }
 export interface FileEntry {
   name: string;
   path: string;
   folder: boolean;
+  /** When it last changed, in milliseconds since 1970. */
+  modified?: number | null;
 }
 /** Why a file isn't shown as text: it's gone, too large, or not text. */
 export type Unshown = 'gone' | 'large' | 'cant';

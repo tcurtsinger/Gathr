@@ -1,9 +1,11 @@
 //! The agent folder (0034): one folder, set in Settings > General, that holds every project's work:
 //! `<root>/<Project>/Shared` for the team's kept files and `<root>/<Project>/<Agent>` for each
-//! agent's worktrees and its engines' temporary files, and `<root>/Skills` for every agent's skills
-//! (`skills`). Agents write in their own folders and Shared without asking; Gathr's
-//! data folder (logins, the database, engine copies) is never one of them. Gathr records each
-//! folder it makes before making it, and only ever removes what it recorded.
+//! agent's worktrees and its engines' temporary files, `<root>/Skills` for every agent's skills
+//! (`skills`), and `<root>/Designs/<Project>` for the designs a project's agents draw for the
+//! person. Agents write in their own folders, Shared and their project's Designs without asking;
+//! Gathr's data folder (logins, the database, engine copies) is never one of them. Gathr records
+//! each folder it makes before making it, and only ever removes what it recorded: Shared and
+//! Designs are never recorded, so they stay when a chat or project goes.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +18,10 @@ pub const SETTING: &str = "agent_folder";
 /// Where a chat with no project keeps its work, as a project would.
 const NO_PROJECT: &str = "Chats";
 pub const SHARED: &str = "Shared";
+/// Beside Skills: a part per project, named as the project's own folder is.
+pub const DESIGNS: &str = "Designs";
+/// What a project's folder is never named: the agent folder's other parts.
+const NOT_A_PROJECT: [&str; 3] = [NO_PROJECT, crate::skills::FOLDER, DESIGNS];
 /// Longer names make deep worktree paths, which Windows tools still trip on past 260 characters.
 const LONGEST: usize = 40;
 
@@ -163,36 +169,21 @@ fn among(names: &[String], name: &str) -> bool {
         .any(|n| n.to_lowercase() == name.to_lowercase())
 }
 
-/// An agent's folders for a chat: its own, and its project's Shared.
+/// An agent's folders for a chat: its own, its project's Shared and its project's Designs.
 #[derive(Debug, Clone)]
 pub struct Place {
     /// The agent folder, as the disk names it.
     pub root: PathBuf,
     pub agent: PathBuf,
     pub shared: PathBuf,
+    pub designs: PathBuf,
 }
 
 /// Where `agent` works in `chat`, naming the project and agent in the agent folder the first time.
 /// A chat with no project keeps its work in `Chats`, as a project would.
 pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<Place, Error> {
-    let root = real(&root(conn, data)?);
-    let project: Option<String> = conn
-        .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
-            r.get(0)
-        })
-        .optional()?
-        .flatten();
-    let project = match project {
-        Some(id) => named(
-            conn,
-            "projects",
-            &id,
-            &root,
-            &[NO_PROJECT, crate::skills::FOLDER],
-        )?,
-        None => NO_PROJECT.to_string(),
-    };
-    let project = root.join(project);
+    let (root, part) = part_of(conn, data, chat)?;
+    let project = root.join(&part);
     let agent = named(
         conn,
         "agents",
@@ -201,37 +192,47 @@ pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<
         &[SHARED, crate::skills::FOLDER],
     )?;
     Ok(Place {
-        root,
         agent: project.join(agent),
         shared: project.join(SHARED),
+        designs: root.join(DESIGNS).join(part),
+        root,
     })
 }
 
-/// The project's own folder in the agent folder, `<agent folder>/<Project>`, named the first time.
-pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<PathBuf, Error> {
+/// The agent folder, and the name of `chat`'s project's part in it (`Chats` for a chat with no
+/// project), named the first time.
+fn part_of(conn: &Connection, data: &Path, chat: &str) -> Result<(PathBuf, String), Error> {
     let root = real(&root(conn, data)?);
-    Ok(root.join(named(
-        conn,
-        "projects",
-        project,
-        &root,
-        &[NO_PROJECT, crate::skills::FOLDER],
-    )?))
-}
-
-/// The Shared folder of `chat`'s project, the one folder all its agents read on both engines.
-pub fn shared_of(conn: &Connection, data: &Path, chat: &str) -> Result<PathBuf, Error> {
     let project: Option<String> = conn
         .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
             r.get(0)
         })
         .optional()?
         .flatten();
-    let project = match project {
-        Some(id) => project_folder(conn, data, &id)?,
-        None => real(&root(conn, data)?).join(NO_PROJECT),
+    let part = match project {
+        Some(id) => named(conn, "projects", &id, &root, &NOT_A_PROJECT)?,
+        None => NO_PROJECT.to_string(),
     };
-    Ok(project.join(SHARED))
+    Ok((root, part))
+}
+
+/// The project's own folder in the agent folder, `<agent folder>/<Project>`, named the first time.
+pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<PathBuf, Error> {
+    let root = real(&root(conn, data)?);
+    Ok(root.join(named(conn, "projects", project, &root, &NOT_A_PROJECT)?))
+}
+
+/// The Shared folder of `chat`'s project, the one folder all its agents read on both engines.
+pub fn shared_of(conn: &Connection, data: &Path, chat: &str) -> Result<PathBuf, Error> {
+    let (root, part) = part_of(conn, data, chat)?;
+    Ok(root.join(part).join(SHARED))
+}
+
+/// `chat`'s project's part of Designs, `<agent folder>/Designs/<Project>`: its designs, each a
+/// folder of HTML pages.
+pub fn designs_of(conn: &Connection, data: &Path, chat: &str) -> Result<PathBuf, Error> {
+    let (root, part) = part_of(conn, data, chat)?;
+    Ok(root.join(DESIGNS).join(part))
 }
 
 /// The folder name of the project or agent `id` in `table`, chosen once from its name: unique

@@ -88,6 +88,11 @@
   margin: 6px 10px;
   color: var(--muted-foreground);
 }
+.home-tiles {
+  display: flex;
+  gap: 10px;
+  margin: 0 20px 20px;
+}
 .home-tile {
   display: flex;
   flex-direction: column;
@@ -96,7 +101,6 @@
   justify-content: center;
   width: 92px;
   height: 84px;
-  margin: 0 20px 20px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: transparent;
