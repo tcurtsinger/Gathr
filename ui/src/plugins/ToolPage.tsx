@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure, type ToolAction, type WebTool } from '../api';
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
+import { ChangeClientId, given } from './ClientId';
 import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { stateOf } from './tool';
 
@@ -20,14 +21,22 @@ interface Props {
 
 /**
  * A tool's page: its link and state, Change key (Sign in again for one signed in through the browser) and Remove,
- * Enabled, and its actions asked of it now.
+ * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now.
  */
 export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove, onReference }: Props) {
-  const [asked, setAsked] = useState<(WebTool & { actions: ToolAction[] | null }) | null>(null);
+  const [asked, setAsked] = useState<(WebTool & { actions: ToolAction[] | null; redirect?: string }) | null>(
+    null,
+  );
   const changeKey = useRef<HTMLButtonElement>(null);
+  const changeClient = useRef<HTMLButtonElement>(null);
   const remove = useRef<HTMLButtonElement>(null);
+  /** Change Client ID open, with the address the admin's app must have. */
+  const [changing, setChanging] = useState<{ redirect: string; opener: HTMLElement | null } | null>(null);
   // Signed in again: the list's `tools` change asks the page again.
-  const signIn = useToolSignIn(useCallback(() => {}, []));
+  const signIn = useToolSignIn(
+    useCallback(() => {}, []),
+    useCallback((redirect: string) => setChanging({ redirect, opener: null }), []),
+  );
   // Asked again each time the list changes: a new key or a tool back up comes with one.
   const listed = JSON.stringify(tool);
   useEffect(() => {
@@ -119,6 +128,26 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           onChange={(on) => onEnable(tool, on)}
         />
       </div>
+      {tool.client_id && (
+        <div className="tool-client">
+          <span className="skill-enabled-words">
+            <span>Client ID</span>
+            <code className="muted">{tool.client_id}</code>
+          </span>
+          <Button
+            ref={changeClient}
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!asked?.redirect}
+            onClick={() =>
+              asked?.redirect && setChanging({ redirect: asked.redirect, opener: changeClient.current })
+            }
+          >
+            Change
+          </Button>
+        </div>
+      )}
       {actions && (
         <section className="tool-actions">
           <h2>
@@ -136,6 +165,17 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
             ))}
           </ul>
         </section>
+      )}
+      {changing && (
+        <ChangeClientId
+          redirect={changing.redirect}
+          opener={changing.opener}
+          onClose={() => setChanging(null)}
+          onSignIn={(client) => {
+            setChanging(null);
+            signIn.start({ tool: tool.id, ...given(client) });
+          }}
+        />
       )}
     </article>
   );

@@ -10,9 +10,9 @@ type Asked = Parameters<typeof api.signInTool>[0];
 
 /**
  * A tool's sign-in through the browser, from Sign in to its end: waiting for the browser, or failed with why.
- * `onDone` gets the tool that signed in.
+ * `onDone` gets the tool that signed in; `onNeedsClient` the address for its admin, when it needs a Client ID first.
  */
-export function useToolSignIn(onDone: (id: string) => void) {
+export function useToolSignIn(onDone: (id: string) => void, onNeedsClient: (redirect: string) => void) {
   const [waiting, setWaiting] = useState<{ sign_in: string; url: string } | null>(null);
   const [failed, setFailed] = useState<{ why: string; ref?: string } | null>(null);
   const [asked, setAsked] = useState<Asked | null>(null);
@@ -28,9 +28,10 @@ export function useToolSignIn(onDone: (id: string) => void) {
   const start = (tool: Asked) => {
     setFailed(null);
     setAsked(tool);
-    api
-      .signInTool(tool)
-      .then(setWaiting, (f: Failure) => setFailed({ why: f.why ?? f.error, ref: f.ref ?? undefined }));
+    api.signInTool(tool).then(
+      (answer) => ('sign_in' in answer ? setWaiting(answer) : onNeedsClient(answer.redirect)),
+      (f: Failure) => setFailed({ why: f.why ?? f.error, ref: f.ref ?? undefined }),
+    );
   };
   const cancel = () => {
     if (waiting) api.cancelToolSignIn(waiting.sign_in).catch(() => {});

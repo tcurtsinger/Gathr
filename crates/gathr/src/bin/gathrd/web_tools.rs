@@ -8,6 +8,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
+use gathr::tool_sign_in;
 use gathr::web_tools::{self, Access, Problem, Tool};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -101,7 +102,8 @@ async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -
     Ok(Json(json!({ "tools": tools })))
 }
 
-/// One tool, with its state and, when it's connected, its actions.
+/// One tool, with its state and, when it's connected, its actions; one with a Client ID, with the
+/// address its admin gives the app they made.
 async fn one(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -134,6 +136,9 @@ async fn one(
     let mut shown = json!(tool);
     shown["state"] = json!(state);
     shown["actions"] = json!(actions);
+    if tool.client_id.is_some() {
+        shown["redirect"] = json!(crate::tool_sign_in::redirect(&s));
+    }
     Ok(Json(shown))
 }
 
@@ -165,7 +170,17 @@ async fn add(
     let remote = match web_tools::connect(&link, &access, web_tools::CONNECT).await {
         Ok(remote) => remote,
         Err(Problem::NeedsKey) => return Ok(Json(json!({ "needs": "key" }))),
-        Err(Problem::SignIn) => return Ok(Json(json!({ "needs": "sign_in" }))),
+        Err(Problem::SignIn) => {
+            // Where the service takes no app it doesn't know, the admin makes one for Gathr.
+            return Ok(Json(match tool_sign_in::registers(&link).await {
+                Ok(false) => json!({
+                    "needs": "sign_in",
+                    "registers": false,
+                    "redirect": crate::tool_sign_in::redirect(&s),
+                }),
+                _ => json!({ "needs": "sign_in" }),
+            }));
+        }
         Err(Problem::KeyRefused) => return refused("The key was refused."),
         Err(Problem::NotReachable) => return refused("No tool answers at this link."),
     };

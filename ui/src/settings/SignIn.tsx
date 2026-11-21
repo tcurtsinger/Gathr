@@ -110,6 +110,17 @@ export function OpenPage({ url, small }: { url: string; small?: boolean }) {
   );
 }
 
+/** Copies `text` for the person to paste elsewhere, and says so once it has. */
+export function CopyButton({ text, label, small }: { text: string; label: string; small?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => navigator.clipboard.writeText(text).then(() => setCopied(true));
+  return (
+    <Button type="button" variant="outline" size={small ? 'sm' : undefined} onClick={copy}>
+      {copied ? 'Copied' : label}
+    </Button>
+  );
+}
+
 /** A device code: the person enters it on the engine's page, in any browser. */
 function DeviceCode({
   account,
@@ -122,8 +133,6 @@ function DeviceCode({
   code: string;
   onFailure: Fail;
 }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => navigator.clipboard.writeText(code).then(() => setCopied(true));
   return (
     <div className="signin-panel">
       <p>
@@ -132,9 +141,7 @@ function DeviceCode({
       <p className="muted">Enter this code on the sign-in page. Any browser works.</p>
       <div className="signin-actions">
         <code className="device-code">{code}</code>
-        <Button type="button" variant="outline" onClick={copy}>
-          {copied ? 'Copied' : 'Copy code'}
-        </Button>
+        <CopyButton text={code} label="Copy code" />
       </div>
       <div className="signin-actions">
         <OpenPage url={url} />

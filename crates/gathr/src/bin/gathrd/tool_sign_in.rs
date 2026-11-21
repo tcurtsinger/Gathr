@@ -42,6 +42,8 @@ struct Waiting {
     called: String,
     /// The tool signing in again; none for a new one.
     tool: Option<String>,
+    /// The Client ID it signs in with, if any: kept with the tool once it's signed in.
+    client_id: Option<String>,
 }
 
 /// The sign-ins waiting for the browser, by their `state`.
@@ -57,25 +59,50 @@ struct Start {
     name: Option<String>,
     /// A tool already added, to sign in again.
     tool: Option<String>,
+    /// The Client ID an admin made for Gathr, and its secret: given for a new tool, or to change a
+    /// tool's. A tool signing in again without them uses its own.
+    client_id: Option<String>,
+    client_secret: Option<String>,
+}
+
+/// The address the browser comes back to, which an admin gives the app they make for Gathr.
+pub fn redirect(s: &State) -> String {
+    format!("http://127.0.0.1:{}{BACK}", s.port)
 }
 
 /// Starts a sign-in for a new tool at `link`, or for `tool` again, and opens its page in the
-/// browser. Answers the page, for Open sign-in page, and the sign-in's `state`, for Cancel.
+/// browser. Answers the page, for Open sign-in page, and the sign-in's `state`, for Cancel; or, when
+/// the tool needs a Client ID and has none, `registers: false` and the address to give its admin.
 async fn start(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Json(asked): Json<Start>,
 ) -> Answer {
     let refused = |why: &str| Err(fail(StatusCode::CONFLICT, "Sign-in failed", why, &t.0));
-    let name = asked
-        .name
-        .map(|n| n.trim().to_string())
-        .filter(|n| !n.is_empty());
+    let given = |text: Option<String>| text.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+    let name = given(asked.name);
+    let mut client = given(asked.client_id).map(|id| tool_sign_in::Client {
+        id,
+        secret: given(asked.client_secret),
+    });
     let (link, called) = match &asked.tool {
         Some(id) => {
-            let id = id.clone();
-            match s.writer.call(move |conn| web_tools::get(conn, &id)).await {
-                Some(Ok(tool)) => (tool.link, tool.name),
+            let (id, writer) = (id.clone(), s.writer.clone());
+            let read = s.writer.call(move |conn| {
+                let tool = web_tools::get(conn, &id)?;
+                let secret = match web_tools::access(conn, &id, &writer) {
+                    Ok(web_tools::Access::SignIn(sign_in)) => sign_in.client_secret(),
+                    _ => None,
+                };
+                Ok::<_, gathr::Error>((tool, secret))
+            });
+            match read.await {
+                Some(Ok((tool, secret))) => {
+                    if client.is_none() {
+                        client = tool.client_id.map(|id| tool_sign_in::Client { id, secret });
+                    }
+                    (tool.link, tool.name)
+                }
                 Some(Err(e)) => return refused(&e.to_string()),
                 None => return refused("the database didn't answer"),
             }
@@ -88,9 +115,14 @@ async fn start(
             }
         }
     };
-    let back = format!("http://127.0.0.1:{}{BACK}", s.port);
-    let started = match tool_sign_in::start(&link, &back).await {
-        Ok(started) => started,
+    let client_id = client.as_ref().map(|c| c.id.clone());
+    let started = match tool_sign_in::start(&link, &redirect(&s), client).await {
+        Ok(Some(started)) => started,
+        Ok(None) => {
+            return Ok(Json(
+                json!({ "registers": false, "redirect": redirect(&s) }),
+            ));
+        }
         Err(e) => {
             record(&s, &t, &e).await;
             return refused(&e.said(&called));
@@ -106,6 +138,7 @@ async fn start(
         name,
         called,
         tool: asked.tool,
+        client_id,
     };
     waiting()
         .get_or_insert_with(HashMap::new)
@@ -198,11 +231,19 @@ async fn finish(
     let stored = |e: gathr::Error| Refused::Failed(e.to_string());
     let sealed = tool_sign_in::sealed(&id, &text).await.map_err(stored)?;
     let (kept, named, link, again) = (id.clone(), name.clone(), sign_in.link, sign_in.tool);
+    let client_id = sign_in.client_id;
     let saved = s
         .writer
-        .call(move |conn| match again {
-            Some(_) => web_tools::set_sign_in(conn, &kept, &sealed),
-            None => web_tools::add_signed_in(conn, &kept, &named, &link, &sealed).map(|_| ()),
+        .call(move |conn| {
+            let client_id = client_id.as_deref();
+            match again {
+                Some(_) => {
+                    web_tools::set_sign_in(conn, &kept, &sealed)?;
+                    web_tools::set_client_id(conn, &kept, client_id)
+                }
+                None => web_tools::add_signed_in(conn, &kept, &named, &link, &sealed, client_id)
+                    .map(|_| ()),
+            }
         })
         .await;
     saved
