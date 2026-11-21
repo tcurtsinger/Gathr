@@ -107,7 +107,8 @@
       type,
       (e) => {
         if (!on) return;
-        e.preventDefault();
+        // A press still takes the focus into the frame: the window opens its note box with the keys only then.
+        if (type !== 'pointerdown' && type !== 'mousedown') e.preventDefault();
         e.stopImmediatePropagation();
         const part = type === 'click' && partOf(e.composedPath()[0]);
         if (!part) return;

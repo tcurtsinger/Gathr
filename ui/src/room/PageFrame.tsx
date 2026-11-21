@@ -17,8 +17,11 @@ export interface Pin extends Part {
 export interface Notes {
   on: boolean;
   pins: Pin[];
-  /** A part the person clicked, with where it sits in the window. */
-  onPart: (part: Part, at: DOMRect) => void;
+  /**
+   * A part clicked, with where it sits in the window, and whether the frame had the window's focus, as a real click in
+   * it gives it: a page that only says so doesn't.
+   */
+  onPart: (part: Part, at: DOMRect, focused: boolean) => void;
 }
 
 /**
@@ -112,7 +115,7 @@ export function PageFrame({
       if (!got) return;
       const box = f.getBoundingClientRect();
       const [x, y, w, h] = got.rect;
-      n.onPart(got.part, new DOMRect(box.left + x, box.top + y, w, h));
+      n.onPart(got.part, new DOMRect(box.left + x, box.top + y, w, h), document.activeElement === f);
     };
     window.addEventListener('message', hear);
     return () => window.removeEventListener('message', hear);

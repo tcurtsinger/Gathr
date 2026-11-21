@@ -221,6 +221,8 @@ interface Asking {
   letter: string;
   left: number;
   top: number;
+  /** The box takes the keys only after a real click in the page: a page's own claim never moves the person's typing. */
+  focus: boolean;
 }
 
 /** The note box by a clicked part: the person's words, Send or Cancel. Enter sends, Escape cancels. */
@@ -249,7 +251,7 @@ function NoteBox({
         onChange={(e) => setWords(e.target.value)}
         aria-label="Note"
         // biome-ignore lint/a11y/noAutofocus: the box opens at the person's click, to type the note
-        autoFocus
+        autoFocus={at.focus}
       />
       <span>
         <Button type="button" size="xs" variant="ghost" onClick={onCancel}>
@@ -343,13 +345,13 @@ export function DesignTab({ chat, design, room, onShow, onAnswer, onNote }: Prop
       .filter((m) => pathKey(m.note.page) === pathKey(page))
       .map(({ n, settled, note: { kind, words, find } }) => ({ n, settled, kind, words, find }));
   // A part clicked: the note box opens by it, kept inside the tab.
-  const onPart = (i: number) => (part: Part, at: DOMRect) => {
+  const onPart = (i: number) => (part: Part, at: DOMRect, focus: boolean) => {
     const t = tab.current?.getBoundingClientRect();
     if (!t) return;
     const left = Math.max(8, Math.min(at.left - t.left, t.width - NOTE - 8));
     const below = at.bottom - t.top + 8;
     const top = below + NOTE_HIGH < t.height ? below : Math.max(8, at.top - t.top - NOTE_HIGH - 8);
-    setAsking({ part, page: options[i].path, letter: letter(i), left, top });
+    setAsking({ part, page: options[i].path, letter: letter(i), left, top, focus });
   };
   const frame = (i: number) => (
     <PageFrame
