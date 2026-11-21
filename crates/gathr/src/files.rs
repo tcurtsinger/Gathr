@@ -122,7 +122,7 @@ pub fn roots(conn: &Connection, data: &Path, chat: &str) -> Result<Vec<PathBuf>,
 }
 
 /// `path` as the disk names it, when it is inside one of `roots` once links and `..` are followed.
-fn inside(roots: &[PathBuf], path: &str) -> Option<PathBuf> {
+pub(crate) fn inside(roots: &[PathBuf], path: &str) -> Option<PathBuf> {
     let path = Path::new(path);
     if !path.is_absolute() {
         return None;
