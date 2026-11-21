@@ -31,17 +31,24 @@ fn state(answer: &Result<web_tools::Remote, Problem>) -> &'static str {
     }
 }
 
-/// Every tool with its key, read for connecting; the keys stay in this process.
-async fn saved(s: &State, t: &Trace) -> Result<Vec<(Tool, Option<String>)>, crate::routes::Fail> {
+/// A tool's key as read for connecting: `Err` when it was sealed but can't be unsealed (the data
+/// moved to another PC or user, the Keychain item gone), which shows that tool as key refused.
+type Key = Result<Option<String>, ()>;
+
+/// Every tool with its key, read for connecting; the keys stay in this process. One key that can't
+/// be read never fails the others.
+async fn saved(s: &State, t: &Trace) -> Result<Vec<(Tool, Key)>, crate::routes::Fail> {
     let read = s.writer.call(|conn| {
         let tools = web_tools::list(conn)?;
-        tools
-            .into_iter()
-            .map(|tool| {
-                let key = web_tools::key(conn, &tool.id)?;
-                Ok((tool, key))
-            })
-            .collect::<Result<Vec<_>, gathr::Error>>()
+        Ok::<_, gathr::Error>(
+            tools
+                .into_iter()
+                .map(|tool| {
+                    let key = web_tools::key(conn, &tool.id).map_err(|_| ());
+                    (tool, key)
+                })
+                .collect::<Vec<_>>(),
+        )
     });
     match read.await {
         Some(Ok(tools)) => Ok(tools),
@@ -65,11 +72,12 @@ async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -
     let mut asked = tokio::task::JoinSet::new();
     for (i, (tool, key)) in saved(&s, &t).await?.into_iter().enumerate() {
         asked.spawn(async move {
-            let state = match tool.enabled {
-                true => Some(state(
+            let state = match (tool.enabled, key) {
+                (false, _) => None,
+                (true, Err(())) => Some("key_refused"),
+                (true, Ok(key)) => Some(state(
                     &web_tools::connect(&tool.link, key.as_deref(), web_tools::STATE).await,
                 )),
-                false => None,
             };
             let mut shown = json!(tool);
             shown["state"] = json!(state);
@@ -100,7 +108,10 @@ async fn one(
             &t.0,
         ));
     };
-    let connected = web_tools::connect(&tool.link, key.as_deref(), web_tools::CONNECT).await;
+    let connected = match key {
+        Ok(key) => web_tools::connect(&tool.link, key.as_deref(), web_tools::CONNECT).await,
+        Err(()) => Err(Problem::KeyRefused),
+    };
     let actions = match &connected {
         Ok(remote) => web_tools::actions(remote, web_tools::CONNECT).await.ok(),
         Err(_) => None,

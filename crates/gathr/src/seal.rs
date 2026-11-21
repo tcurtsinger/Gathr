@@ -36,7 +36,9 @@ mod imp {
     const SEAL: &str = "Add-Type -AssemblyName System.Security; $h = [Console]::In.ReadToEnd().Trim(); \
         $b = [byte[]]($h -split '(..)' -ne '' | ForEach-Object { [Convert]::ToByte($_, 16) }); \
         [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect($b, $null, 'CurrentUser'))";
-    const UNSEAL: &str = "Add-Type -AssemblyName System.Security; \
+    // Without Stop, a key DPAPI can't read (the data moved to another PC or user) ends with
+    // nothing on stdout and exit 0, which reads as an empty key.
+    const UNSEAL: &str = "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.Security; \
         $b = [Convert]::FromBase64String([Console]::In.ReadToEnd().Trim()); \
         $x = [Security.Cryptography.ProtectedData]::Unprotect($b, $null, 'CurrentUser'); \
         -join ($x | ForEach-Object { $_.ToString('x2') })";
