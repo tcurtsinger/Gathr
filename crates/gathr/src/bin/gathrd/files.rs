@@ -128,7 +128,7 @@ async fn picture(
 }
 
 /// A file's bytes go out as only what they say they are, never run, never kept.
-fn safe(kind: &'static str) -> [(header::HeaderName, &'static str); 4] {
+pub fn safe(kind: &'static str) -> [(header::HeaderName, &'static str); 4] {
     [
         (header::CONTENT_TYPE, kind),
         (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
@@ -141,7 +141,7 @@ fn safe(kind: &'static str) -> [(header::HeaderName, &'static str); 4] {
 }
 
 /// The chat's tree as the window shows it: the folders of this chat only.
-async fn tree_of(
+pub async fn tree_of(
     s: &State,
     t: &Trace,
     chat: &str,

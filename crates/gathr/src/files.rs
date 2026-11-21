@@ -122,7 +122,7 @@ pub fn roots(conn: &Connection, data: &Path, chat: &str) -> Result<Vec<PathBuf>,
 }
 
 /// `path` as the disk names it, when it is inside one of `roots` once links and `..` are followed.
-fn inside(roots: &[PathBuf], path: &str) -> Option<PathBuf> {
+pub(crate) fn inside(roots: &[PathBuf], path: &str) -> Option<PathBuf> {
     let path = Path::new(path);
     if !path.is_absolute() {
         return None;
@@ -368,7 +368,7 @@ pub enum Unshown {
     Gone,
     /// Over `SHOWN`.
     Large,
-    /// Not UTF-8 text.
+    /// Not UTF-8 text, or a PDF or workbook that can't be read (`documents`).
     NotText,
 }
 

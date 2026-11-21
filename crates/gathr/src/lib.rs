@@ -18,6 +18,7 @@ pub mod data;
 pub mod db;
 pub mod deleting;
 pub mod diag;
+pub mod documents;
 pub mod ends;
 pub mod error;
 pub mod event;
