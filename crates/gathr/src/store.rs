@@ -50,9 +50,11 @@ pub fn put_in_project(
 const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
     AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
 
-/// Whether a turn of chat `c` waits to start: queued behind an agent busy elsewhere, or held.
+/// Whether a turn of chat `c` will start by itself soon: queued behind its agent's work elsewhere, or
+/// for an engine download or an update. One held for usage or by a pause isn't: that chat has stopped.
 const QUEUED: &str = "EXISTS (SELECT 1 FROM turns s
-    WHERE s.status IN ('queued', 'waiting_sign_in') AND s.status = 'queued' AND s.chat_id = c.id)";
+    WHERE s.status IN ('queued', 'waiting_sign_in') AND s.status = 'queued' AND s.chat_id = c.id
+      AND coalesce(s.held, '') NOT IN ('usage', 'pause'))";
 
 /// Whether chat `c` waits on the person, as far as the database knows: a turn waits for a sign-in,
 /// or a question to them is open. An approval waiting is the service's to add (it's in no table).

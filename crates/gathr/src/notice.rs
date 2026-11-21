@@ -2,7 +2,7 @@
 //! started needing them since the window was last in front; from its `working`, whether a chat's
 //! agents have all stopped. The app's thread reads the routes and shows what this decides.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -13,12 +13,11 @@ use crate::approvals::GATHR_ASKS;
 pub const EVERY: Duration = Duration::from_secs(5);
 
 /// The chats that need the person and those a turn of runs or waits to start, each with its title;
-/// the chats a pause of their own holds; and whether the whole app is paused.
+/// and whether the whole app is paused.
 #[derive(Debug)]
 pub struct Read {
     pub needs: BTreeMap<String, String>,
     pub working: BTreeMap<String, String>,
-    pub held: BTreeSet<String>,
     pub paused: bool,
 }
 
@@ -27,15 +26,10 @@ pub struct Read {
 pub fn read(chats: Option<&Value>, pauses: Option<&Value>) -> Option<Read> {
     let chats = chats?.as_array()?;
     let pauses = pauses?;
-    let held = pauses["pauses"].as_array().into_iter().flatten();
-    let held = held.filter(|p| p["scope"] == "chat");
     Some(Read {
         needs: titled(chats, |c| c["needs"] == true),
         // A teammate's turn queued behind its agent's work elsewhere is work still to come.
         working: titled(chats, |c| c["working"] == true || c["queued"] == true),
-        held: held
-            .filter_map(|p| Some(p["target"].as_str()?.to_string()))
-            .collect(),
         paused: app_paused(pauses),
     })
 }
@@ -218,7 +212,7 @@ pub fn decide(
     // agent's turn and the teammate it named, no turn of the chat runs for a moment.
     let quiet = |id: &String| {
         let busy = now.working.contains_key(id) || now.needs.contains_key(id);
-        !busy && !now.held.contains(id) && !now.paused && !front && !visited
+        !busy && !now.paused && !front && !visited
     };
     for (id, title) in before.stopping.iter().filter(|(id, _)| quiet(id)) {
         notices.push(Notice::Show {
@@ -266,12 +260,11 @@ mod tests {
     use super::*;
 
     /// A read with chat `c` working or not, and what else holds it.
-    fn read(working: bool, needs: bool, held: bool, paused: bool) -> Read {
+    fn read(working: bool, needs: bool, paused: bool) -> Read {
         let c = || BTreeMap::from([("c".to_string(), "Plan".to_string())]);
         Read {
             working: if working { c() } else { BTreeMap::new() },
             needs: if needs { c() } else { BTreeMap::new() },
-            held: held.then(|| "c".to_string()).into_iter().collect(),
             paused,
         }
     }
@@ -306,8 +299,8 @@ mod tests {
 
     #[test]
     fn a_chat_that_stops_working_is_told_once_at_the_second_read_that_finds_it_stopped() {
-        let off = || read(false, false, false, false);
-        let on = || read(true, false, false, false);
+        let off = || read(false, false, false);
+        let on = || read(true, false, false);
         assert_eq!(told(&[on(), off(), off(), off()], None), [2]);
         // The gap between one agent's turn and the teammate it named.
         assert_eq!(told(&[on(), off(), on(), off()], None), NONE);
@@ -316,15 +309,13 @@ mod tests {
     }
 
     #[test]
-    fn a_stop_is_not_told_when_the_chat_needs_the_person_or_is_paused_or_was_seen() {
-        let on = || read(true, false, false, false);
-        let stop = |needs, held, paused| read(false, needs, held, paused);
-        let off = || stop(false, false, false);
-        assert_eq!(told(&[on(), stop(true, false, false), off()], None), NONE);
-        assert_eq!(told(&[on(), off(), stop(true, false, false)], None), NONE);
-        assert_eq!(told(&[on(), stop(false, true, false), off()], None), NONE);
-        assert_eq!(told(&[on(), off(), stop(false, true, false)], None), NONE);
-        assert_eq!(told(&[on(), off(), stop(false, false, true)], None), NONE);
+    fn a_stop_is_not_told_when_the_chat_needs_the_person_or_the_app_is_paused_or_it_was_seen() {
+        let on = || read(true, false, false);
+        let stop = |needs, paused| read(false, needs, paused);
+        let off = || stop(false, false);
+        assert_eq!(told(&[on(), stop(true, false), off()], None), NONE);
+        assert_eq!(told(&[on(), off(), stop(true, false)], None), NONE);
+        assert_eq!(told(&[on(), off(), stop(false, true)], None), NONE);
         assert_eq!(told(&[on(), off(), off()], Some(1)), NONE);
         assert_eq!(told(&[on(), off(), off()], Some(2)), NONE);
     }
