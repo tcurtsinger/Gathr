@@ -501,6 +501,9 @@ export const api = {
   /** One Markdown file as a skill of its own: named by its front matter, else by the file's name. */
   addSkillFile: (file: File) =>
     call<Skill>('POST', `/api/skills?file=${encodeURIComponent(file.name)}`, file).then((s) => s.name),
+  /** A zipped skill folder, such as a Claude `.skill` file, unpacked as a new skill. */
+  addSkillZip: (file: File) =>
+    call<Skill>('POST', `/api/skills?zip=${encodeURIComponent(file.name)}`, file).then((s) => s.name),
   /** A folder picked with its files, each sent with its path inside it: the skill's name is the folder's. */
   addSkillFolder: async (files: readonly File[]) => {
     const parts = (f: File) => f.webkitRelativePath.split('/');
