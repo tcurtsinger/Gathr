@@ -1,10 +1,10 @@
 import { ChevronRight, CodeXml, Copy, File as FileIcon, FileX, Folder, FolderOpen } from 'lucide-react';
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useContext, useEffect, useState } from 'react';
 import { api, Failure, type FileEntry, type FileTree, type Unshown } from '../api';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { pictureUrl } from '../components/FileTile';
-import { isPicture } from '../components/files';
+import { isPicture, OpenFile } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { FileBody, hasLook } from './FileBody';
 
@@ -135,6 +135,10 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
   const kind = KINDS[name.split('.').pop()?.toLowerCase() ?? ''];
   const copy = (words: string) =>
     navigator.clipboard.writeText(words).catch(() => setFailure(new Failure('Copy failed', null, null)));
+  // A link in the file that isn't a full path is beside the file, not in an agent's folder.
+  const open = useContext(OpenFile);
+  const folder = file.path.replace(/[\\/][^\\/]*$/, '');
+  const beside = open && ((path: string) => open(/^([A-Za-z]:|\/)/.test(path) ? path : `${folder}/${path}`));
   return (
     <div className="filetab">
       <div className="filetab-path">
@@ -177,7 +181,11 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
           <img src={pictureUrl(chat, file.path)} alt={name} onError={() => setBroken(true)} />
         </div>
       ) : (
-        text !== undefined && <FileBody name={name} text={text} source={source} />
+        text !== undefined && (
+          <OpenFile.Provider value={beside}>
+            <FileBody name={name} text={text} source={source} />
+          </OpenFile.Provider>
+        )
       )}
     </div>
   );

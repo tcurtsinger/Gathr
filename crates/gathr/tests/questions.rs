@@ -107,6 +107,58 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     assert_eq!(row.unwrap()["needs"], false, "{listed}");
 }
 
+/// A question's files are stored as the lines a person's message names its files with; a file
+/// outside the chat's folders is refused, and nothing is asked.
+#[test]
+fn a_question_carries_files_of_the_chat_only() {
+    let data = TempDir::new();
+    let (service, chat, lead) = team(&data.0, &turns(&data.0, &[0], 1), &[]);
+    // Let go before the service stops, so it doesn't wait on the held turn.
+    let _go = LetGo(data.0.join("go"));
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Pick a page", "agent": lead }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let auth = format!("Bearer {}", service.info.token);
+    let path = format!("/api/chats/{chat}/files?name=page.html");
+    let auth = [("Authorization", auth.as_str())];
+    let saved = gathr::http::post(service.info.port, &path, &auth, "<p>A</p>").unwrap();
+    assert_eq!(saved.status, 200, "{}", saved.body);
+    let saved: Value = serde_json::from_str(&saved.body).unwrap();
+    let elsewhere = data.0.join("elsewhere.md");
+    std::fs::write(&elsewhere, "out").unwrap();
+
+    let token = first_token(&data.0);
+    let ask = |file: &str| json!({ "what": "Which page?", "files": [file] });
+    let out = ask(&elsewhere.to_string_lossy());
+    let refused = call_tool(service.info.port, &token, "ask_person", out);
+    assert_eq!(refused["isError"], true, "{refused}");
+    assert!(
+        refused
+            .to_string()
+            .contains("isn't a file in this chat's folders"),
+        "{refused}"
+    );
+    let asked = call_tool(
+        service.info.port,
+        &token,
+        "ask_person",
+        ask(saved["path"].as_str().unwrap()),
+    );
+    assert_eq!(asked["isError"], false, "{asked}");
+
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let questions = history["questions"].as_array().unwrap();
+    assert_eq!(questions.len(), 1, "{history}");
+    let stored = questions[0]["question"].as_str().unwrap();
+    assert!(
+        stored.starts_with("Which page?\n\nAttached: ") && stored.ends_with("page.html"),
+        "{stored}"
+    );
+}
+
 /// The lead's question and the person's answer reach a member whose turn opens after.
 #[test]
 fn a_member_hears_the_leads_question_and_the_answer() {

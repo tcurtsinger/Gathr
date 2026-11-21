@@ -1,3 +1,28 @@
+import { createContext } from 'react';
+
+/**
+ * Opens a file a chat names in the chat's panel: a full path, or one in `agent`'s folder. Unset outside a chat,
+ * where a file link shows as its words.
+ */
+export const OpenFile = createContext<((path: string, agent?: string) => void) | undefined>(undefined);
+
+/**
+ * The file a link's address names: a full path (`C:\…`, `C:/…`, `/Users/…`), a `file://` address, or a path in the
+ * agent's folder, without a line (`:42`, `#L42`). None for a web address or a place in the page.
+ */
+export function linkedFile(url: string): string | undefined {
+  if (url.startsWith('#') || url.startsWith('//')) return undefined;
+  let path = url;
+  if (/^file:/i.test(url)) {
+    try {
+      path = decodeURIComponent(url.replace(/^file:(\/\/)?/i, '')).replace(/^\/([A-Za-z]:)/, '$1');
+    } catch {
+      return undefined;
+    }
+  } else if (/^[a-z][a-z0-9+.-]+:/i.test(url)) return undefined;
+  return path.replace(/#L\d.*$/, '').replace(/(:\d+){1,2}$/, '') || undefined;
+}
+
 /** What starts the line naming a file in a message's words (the service's `files::ATTACHED`). */
 export const ATTACHED = 'Attached: ';
 /** At most this many files in one message, each at most `MOST` bytes. */

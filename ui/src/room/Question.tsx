@@ -9,9 +9,8 @@ import { Face } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
-import { Markdown } from '../components/Markdown';
 import { StateMark } from '../components/StateMark';
-import { clock, type People } from './Room';
+import { clock, type People, Words } from './Room';
 import '../components/popover-panel.css';
 
 /** Sends the person's answer: it fails with the service's refusal. */
@@ -59,7 +58,7 @@ export function QuestionCard(props: {
             </span>
           )}
         </header>
-        <Markdown className="room-body" text={q.question} names={people.names} />
+        <Words className="room-body" text={q.question} chat={q.chat} names={people.names} agent={q.agent} />
         {open ? (
           <div className="room-asks">
             <Button type="button" variant="outline" size="sm" data-answer={q.id} onClick={() => onOpen(q.id)}>
@@ -152,7 +151,13 @@ export function Questions(props: {
                 <Face agent={people.face(q.agent)} size={20} />
                 <b>{q.name}</b> <span className="room-time">{clock(q.asked)}</span>
               </div>
-              <Markdown className="room-said" text={q.question} names={people.names} />
+              <Words
+                className="room-said"
+                text={q.question}
+                chat={q.chat}
+                names={people.names}
+                agent={q.agent}
+              />
               <Answer question={q} onAnswer={onAnswer} />
             </section>
           ))}

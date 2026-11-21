@@ -1,10 +1,10 @@
 import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { Face, type FaceOf } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
-import { parts, split } from '../components/files';
+import { OpenFile, parts, split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
@@ -158,24 +158,36 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
   );
 }
 
+interface WordsProps {
+  text: string;
+  className: string;
+  chat: string;
+  names: string[];
+  /** Whose words: a file link that isn't a full path is in its folder. */
+  agent: string;
+}
+
 /** An agent's words: markdown, with each picture or file it names as a tile where it stands. */
-function Words({ text, className, ctx }: { text: string; className: string; ctx: Ctx }) {
+export function Words({ text, className, chat, names, agent }: WordsProps) {
+  const open = useContext(OpenFile);
   const pieces = parts(text);
-  if (pieces.every((p) => 'words' in p))
-    return <Markdown className={className} text={text} names={ctx.people.names} />;
-  return (
+  const words = pieces.every((p) => 'words' in p) ? (
+    <Markdown className={className} text={text} names={names} />
+  ) : (
     <div className={`${className} room-pieces`}>
       {pieces.map((p, i) =>
         'words' in p ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: a message's pieces keep their order
-          <Markdown key={i} text={p.words} names={ctx.people.names} />
+          <Markdown key={i} text={p.words} names={names} />
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: a message's pieces keep their order
-          <PathTiles key={i} chat={ctx.chat} paths={p.files} />
+          <PathTiles key={i} chat={chat} paths={p.files} />
         ),
       )}
     </div>
   );
+  if (!open) return words;
+  return <OpenFile.Provider value={(path) => open(path, agent)}>{words}</OpenFile.Provider>;
 }
 
 /** The person's words, each name they picked from the "@" list in blue. */
@@ -217,7 +229,15 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           <span className="room-grow" />
           <State card={card} />
         </header>
-        {card.text && <Words className="room-body" text={card.text} ctx={ctx} />}
+        {card.text && (
+          <Words
+            className="room-body"
+            text={card.text}
+            chat={ctx.chat}
+            names={ctx.people.names}
+            agent={agent}
+          />
+        )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Foot said={card.said} last={card.last} ctx={ctx} />
@@ -407,7 +427,15 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             <span className="room-time">{clock(item.turn.created)}</span>
           )}
         </div>
-        {item.text && <Words className="room-said" text={item.text} ctx={ctx} />}
+        {item.text && (
+          <Words
+            className="room-said"
+            text={item.text}
+            chat={ctx.chat}
+            names={ctx.people.names}
+            agent={agent}
+          />
+        )}
         <Foot said={item.said} last={item.last} ctx={ctx} />
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>

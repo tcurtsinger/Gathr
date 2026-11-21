@@ -82,6 +82,20 @@ pub fn lines(dir: &Path, names: &[String]) -> Result<String, Error> {
     Ok(lines.join("\n"))
 }
 
+/// The lines naming `paths`, full paths of files in `roots` (a chat's tree); refused when one isn't.
+/// Blocks on the disk.
+pub fn attached(roots: &[PathBuf], paths: &[String]) -> Result<String, Error> {
+    let mut lines = Vec::new();
+    for path in paths {
+        let Some(found) = inside(roots, path).filter(|f| f.is_file()) else {
+            let why = format!("{path} isn't a file in this chat's folders");
+            return Err(Error::Refused(why));
+        };
+        lines.push(format!("{ATTACHED}{}", found.display()));
+    }
+    Ok(lines.join("\n"))
+}
+
 /// `words` with the lines naming the files after them.
 pub fn with_lines(words: &str, lines: &str) -> String {
     match (words.trim().is_empty(), lines.is_empty()) {
