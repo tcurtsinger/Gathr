@@ -221,15 +221,14 @@ same mark at 9px, Working turning as on a face, 8px after its cut title.
 
 New and Search sit above projects and their chats; Search shows no key words, and Ctrl K (Cmd K
 on a Mac) still opens it. Settings and Update are on the rail. Rows are 30px; the word mark's block
-36px, 8px under the frame's top. A chat's row and a project's row are each one 7px-rounded box that greys
-as a whole on hover; their + and More are 24px icons inside it with no box of their own, shown only on
-hover, keyboard focus or while the menu is open, the open chat's row too (C70, C71). A chat with
+36px, 8px under the frame's top. Each project is a small muted header like Chats, with no icon, its chats
+under it; a click folds it, and folded it shows its count. A chat's row is one 7px-rounded box that greys as
+a whole on hover; its More, and a project header's + and More, are 24px icons with no box of their own, shown
+only on hover, keyboard focus or while the menu is open, the open chat's row too (C70, C71). A chat with
 something going on carries one 9px mark 8px after its title, which is cut before it (0040, C65, 0071): the
 faces' own Needs you, Can't run or Working mark, the most pressing of the three, still. The mark never moves
 More. Its name is the mark's word. An agent that only waits, a queued turn and a paused chat with nothing
-running carry no mark. Archived uses Lucide Archive when collapsed and the same icon with its lid
-lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
-hinge (2px 8px), translate it up 1.5px, over 160ms ease-out.
+running carry no mark. Archived is a header like Chats, with no icon.
 Search opens a contextual flyout, at most
 340px wide, beside navigation. Escape, outside click, Close or the same trigger
 dismisses it. Search matches titles and message text, supports arrow selection and
@@ -251,7 +250,7 @@ Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
 The selected archive location is a folded Archived group after the active chats
 in the sidebar. It starts closed, shows a count, keeps its fold while the window
-is open and shares the chat-list scroll region. Archived rows use 34px left padding;
+is open and shares the chat-list scroll region. Archived rows are not indented;
 More appears on hover and keyboard focus. Restore returns a
 chat to its original project or Chats without restarting cancelled work.
 The separate Archived button and flyout are retired. See
