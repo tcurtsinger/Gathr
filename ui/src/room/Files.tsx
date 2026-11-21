@@ -1,4 +1,4 @@
-import { ChevronRight, Copy, File as FileIcon, FileX, Folder, FolderOpen } from 'lucide-react';
+import { ChevronRight, CodeXml, Copy, File as FileIcon, FileX, Folder, FolderOpen } from 'lucide-react';
 import { type CSSProperties, useEffect, useState } from 'react';
 import { api, Failure, type FileEntry, type FileTree, type Unshown } from '../api';
 import { useCard } from '../components/Corner';
@@ -6,6 +6,7 @@ import { Face } from '../components/Face';
 import { pictureUrl } from '../components/FileTile';
 import { isPicture } from '../components/files';
 import { IconButton } from '../components/IconButton';
+import { FileBody, hasLook } from './FileBody';
 
 /** A file open in a tab: its path, and its place in the tree from the top folder down. */
 export interface Opened {
@@ -117,11 +118,12 @@ const KINDS: Record<string, string> = {
   pdf: 'PDF',
 };
 
-/** A file's tab: its path with Copy, and its words as plain text, or its picture. Viewing only. */
+/** A file's tab: its path with Source and Copy, and its words as they look, or its picture. Viewing only. */
 export function FileTab({ chat, file }: { chat: string; file: Opened }) {
   const picture = isPicture(file.path);
   const [shown, setShown] = useState<{ text: string } | { unshown: Unshown }>();
   const [broken, setBroken] = useState(false);
+  const [source, setSource] = useState(false);
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
   useEffect(() => {
@@ -140,6 +142,16 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
           {file.crumbs.slice(0, -1).map((c) => `${c} / `)}
           <strong>{name}</strong>
         </span>
+        {text !== undefined && hasLook(name) && (
+          <IconButton
+            aria-label="Source"
+            aria-pressed={source}
+            className="filetab-source"
+            onClick={() => setSource(!source)}
+          >
+            <CodeXml />
+          </IconButton>
+        )}
         {text !== undefined && (
           <IconButton aria-label="Copy" onClick={() => copy(text)}>
             <Copy />
@@ -165,7 +177,7 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
           <img src={pictureUrl(chat, file.path)} alt={name} onError={() => setBroken(true)} />
         </div>
       ) : (
-        text !== undefined && <pre className="filetab-text">{text}</pre>
+        text !== undefined && <FileBody name={name} text={text} source={source} />
       )}
     </div>
   );
