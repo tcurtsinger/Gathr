@@ -132,8 +132,10 @@ export function RoomView(props: Props) {
     approve,
     ask: setAsking,
     reference,
-    like: (message: string, give: boolean) =>
-      attempt(() => (give ? api.like(chat.id, message) : api.unlike(chat.id, message))),
+    like: chat.archived
+      ? undefined
+      : (message: string, give: boolean) =>
+          attempt(() => (give ? api.like(chat.id, message) : api.unlike(chat.id, message))),
   };
 
   return (

@@ -43,7 +43,8 @@ export interface Acts {
   /** Opens the questions panel on this question. */
   ask: (question: number) => void;
   reference: (ref: string) => void;
-  like: (message: string, give: boolean) => void;
+  /** Unset in an archived chat, which reads only. */
+  like?: (message: string, give: boolean) => void;
 }
 
 /** A search hit: the chat it opened and the message in it. */
@@ -307,7 +308,8 @@ function Reactions({ said, ctx }: { said: Message[]; ctx: Ctx }) {
 
 /** An agent's foot: its thumbs-ups, and at the right the person's own, on its last words. */
 function Foot({ said, last, ctx }: { said: Message[]; last?: Message; ctx: Ctx }) {
-  if (!last) return <Reactions said={said} ctx={ctx} />;
+  const like = ctx.acts.like;
+  if (!last || !like) return <Reactions said={said} ctx={ctx} />;
   const mine = ctx.reactions.some((r) => r.message === last.id && r.agent === PERSON);
   return (
     <div className="room-foot-row">
@@ -316,7 +318,7 @@ function Foot({ said, last, ctx }: { said: Message[]; last?: Message; ctx: Ctx }
         aria-label="Like"
         aria-pressed={mine}
         className="room-like"
-        onClick={() => ctx.acts.like(last.id, !mine)}
+        onClick={() => like(last.id, !mine)}
       >
         <ThumbsUp />
       </IconButton>
