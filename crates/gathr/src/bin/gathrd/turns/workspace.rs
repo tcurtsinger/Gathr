@@ -25,6 +25,10 @@ pub(super) struct Workspace {
     pub place: Option<Place>,
     /// Of those, the ones it writes in without asking: never one that leads into the data folder.
     pub beside: Vec<PathBuf>,
+    /// In a project chat, what it may read but not write: the project's folder in the agent folder
+    /// (its teammates' folders and worktrees, Shared) and the project's own; never one that leads
+    /// into the data folder.
+    pub read: Vec<PathBuf>,
     /// `cwd` is where Gathr put the agent's work before the agent folder, in the data folder.
     pub from_before: bool,
     /// Where its temporary files go (TEMP, TMP, TMPDIR).
@@ -98,6 +102,7 @@ impl Task {
                 env: fresh,
                 place: None,
                 beside: Vec::new(),
+                read: Vec::new(),
                 from_before: true,
                 scratch: None,
             });
@@ -139,6 +144,15 @@ impl Task {
             .filter(|dir| !refused(dir, false))
             .cloned()
             .collect();
+        let read = match &found.project {
+            Some(project) => [found.place.shared.parent(), Some(Path::new(project))]
+                .into_iter()
+                .flatten()
+                .filter(|dir| !refused(dir, false))
+                .map(Path::to_path_buf)
+                .collect(),
+            None => Vec::new(),
+        };
         let kind = match found.project {
             Some(_) => "worktree",
             None => "folder",
@@ -165,6 +179,7 @@ impl Task {
             env: fresh,
             place: Some(found.place),
             beside,
+            read,
             from_before,
             scratch: Some(scratch),
         })
