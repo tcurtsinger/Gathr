@@ -56,6 +56,25 @@ pub fn args(mcp: Option<&str>) -> Vec<String> {
     args
 }
 
+/// Each tool on the web (its entry's name and Gathr's relay for it), with the engine's token, asked
+/// about as the agent's approvals say. A call may be slow: it waits as long as Gathr's relay does.
+pub fn outside(entries: &[(String, String)]) -> Vec<String> {
+    let quoted = |s: &str| serde_json::Value::from(s).to_string();
+    let wait = crate::web_tools::CALL.as_secs().to_string();
+    let mut args = Vec::new();
+    for (name, relay) in entries {
+        for (key, value) in [
+            ("url", quoted(relay)),
+            ("bearer_token_env_var", quoted(TOKEN_VAR)),
+            ("tool_timeout_sec", wait.clone()),
+        ] {
+            args.push("-c".into());
+            args.push(format!("mcp_servers.{name}.{key}={value}"));
+        }
+    }
+    args
+}
+
 pub use crate::claude::command::{PUSH_VAR, TOKEN_VAR};
 
 /// The sandbox and approval policy for an agent's approvals (0029, 0033).

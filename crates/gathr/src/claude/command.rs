@@ -205,8 +205,15 @@ pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
 /// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking, and
-/// the briefing in `briefing`, a file for the same reason as the token (0005, 0021).
-pub fn given(url: &str, briefing: &Path, tools: &[String]) -> Vec<String> {
+/// the briefing in `briefing`, a file for the same reason as the token (0005, 0021). Beside them,
+/// each tool on the web (`outside`: its entry's name and Gathr's relay for it), with the same
+/// token, asked about as the agent's permission mode says and loaded only when needed.
+pub fn given(
+    url: &str,
+    briefing: &Path,
+    tools: &[String],
+    outside: &[(String, String)],
+) -> Vec<String> {
     let allowed: Vec<String> = tools
         .iter()
         .map(|name| format!("mcp__gathr__{name}"))
@@ -214,8 +221,12 @@ pub fn given(url: &str, briefing: &Path, tools: &[String]) -> Vec<String> {
     let auth = format!("Bearer ${{{TOKEN_VAR}}}");
     // `alwaysLoad` puts the tools in context from the start, not behind ToolSearch, whatever
     // ENABLE_TOOL_SEARCH says (Claude Code's MCP docs, "Exempt a server from deferral").
-    let servers = serde_json::json!({ "mcpServers": { "gathr": {
+    let mut servers = serde_json::json!({ "mcpServers": { "gathr": {
         "type": "http", "url": url, "headers": { "Authorization": auth }, "alwaysLoad": true } } });
+    for (name, relay) in outside {
+        servers["mcpServers"][name] = serde_json::json!({
+            "type": "http", "url": relay, "headers": { "Authorization": auth } });
+    }
     vec![
         "--mcp-config".into(),
         servers.to_string(),

@@ -79,6 +79,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0069_no_agent_pause.sql"),
     include_str!("../migrations/0070_agent_description.sql"),
     include_str!("../migrations/0071_agent_marks.sql"),
+    include_str!("../migrations/0072_tools.sql"),
 ];
 
 /// The schema version this build writes.
@@ -697,5 +698,41 @@ mod drop_old_tables_test {
             .map(Result::unwrap)
             .collect();
         assert_eq!(rows, ["1 mira -", "2 bo -"]);
+    }
+
+    /// 0072 adds the tools table, empty: every agent and setting from before stays as it was.
+    #[test]
+    fn tools_arrive_empty_and_what_was_there_stays() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-tools-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..71] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 71;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts, shape) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1, 'round');
+             INSERT INTO settings (key, value) VALUES ('skills_off', '[\"old-notes\"]');",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let kept: String = conn
+            .query_row(
+                "SELECT a.id || ' ' || a.shape || ' ' || s.value FROM agents a, settings s
+                 WHERE s.key = 'skills_off'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, "mira round [\"old-notes\"]");
+        let tools: i64 = conn
+            .query_row("SELECT count(*) FROM tools", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(tools, 0);
     }
 }

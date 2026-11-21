@@ -70,6 +70,7 @@ export type LiveEvent =
   | { type: 'agents' }
   // A skill was added, changed or removed in Gathr: reload skills.
   | { type: 'skills' }
+  | { type: 'tools' }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };
 

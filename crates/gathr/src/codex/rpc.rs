@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 
 use crate::claude::frames::{Frame, TurnEnd, Usage};
 
+mod asked;
+
 /// How the engine's thread opens once `initialize` has answered.
 #[derive(Debug, Clone, Default)]
 pub struct Opening {
@@ -53,8 +55,11 @@ pub struct Session {
     held: Vec<String>,
     /// A compaction asked before the thread opened.
     compact_held: bool,
-    /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id.
-    approvals: HashMap<String, Value>,
+    /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id, and whether it's an
+    /// MCP tool call's, which Codex asks as an elicitation and is answered as one.
+    approvals: HashMap<String, (Value, bool)>,
+    /// The MCP tool call started last, as Gathr names it: what an elicitation asks about.
+    mcp_call: Option<String>,
     replied: bool,
     total: Option<Usage>,
     baseline: Option<Usage>,
@@ -155,13 +160,6 @@ impl Session {
         self.stop_pending = false;
         let params = json!({ "threadId": thread, "turnId": turn });
         Some(self.request(Asked::Interrupt, "turn/interrupt", params))
-    }
-
-    /// The person's answer to an approval Codex asked for.
-    pub fn approval(&mut self, request_id: &str, allow: bool) -> Option<Value> {
-        let id = self.approvals.remove(request_id)?;
-        let decision = if allow { "accept" } else { "decline" };
-        Some(json!({ "id": id, "result": { "decision": decision } }))
     }
 
     pub fn read(&mut self, value: &Value) -> Read {
@@ -384,6 +382,9 @@ impl Session {
             "item/started" => {
                 self.replied(read);
                 if let Some(name) = tool_name(item) {
+                    if item["type"] == "mcpToolCall" {
+                        self.mcp_call = Some(name.clone());
+                    }
                     let input = super::steps::step(item);
                     let missing = input.as_ref().err().map(|field| Frame::ToolShape {
                         tool: name.clone(),
@@ -492,34 +493,6 @@ impl Session {
             resets_at: Some(resets_at),
             kind: Some(kind),
         })
-    }
-
-    fn server_request(&mut self, method: &str, id: &Value, params: &Value, read: &mut Read) {
-        let request_id = id.to_string();
-        let asked = |tool: &str, input: Value| Frame::ApprovalAsked {
-            request_id: request_id.clone(),
-            tool: tool.to_string(),
-            input,
-            why: params["reason"].as_str().map(String::from),
-        };
-        match method {
-            "item/commandExecution/requestApproval" => {
-                let input = json!({ "command": params["command"], "cwd": params["cwd"] });
-                read.frames.push(asked("Shell", input));
-            }
-            "item/fileChange/requestApproval" => {
-                let input = json!({ "grantRoot": params["grantRoot"] });
-                read.frames.push(asked("Edit", input));
-            }
-            // Nothing else Codex asks of a client is Gathr's to give: refused, so it never waits.
-            _ => {
-                read.send.push(json!({ "id": id, "error": { "code": -32601,
-                    "message": format!("Gathr doesn't answer {method}") } }));
-                read.frames.push(Frame::Other(method.to_string()));
-                return;
-            }
-        }
-        self.approvals.insert(request_id, id.clone());
     }
 }
 

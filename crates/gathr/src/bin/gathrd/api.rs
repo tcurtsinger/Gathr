@@ -15,6 +15,8 @@ use gathr::writer::Writer;
 use gathr::{VERSION, db, ids};
 use serde_json::json;
 
+use crate::tools::relay;
+
 pub struct State {
     pub writer: Writer,
     pub token: String,
@@ -63,6 +65,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::archive::routes())
         .merge(crate::settings::routes())
         .merge(crate::skills::routes())
+        .merge(crate::web_tools::routes())
         .merge(crate::pauses::routes())
         .merge(crate::projects::routes())
         .merge(crate::deletes::routes())
@@ -74,6 +77,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
         .nest_service("/mcp", crate::tools::service(state.clone()))
+        .route_service(relay::PATH, relay::service(state.clone()))
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
         .fallback(crate::ui::page)
@@ -118,7 +122,7 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
             next.run(req).await
         }
     };
-    if method == "GET" && path == "/mcp" {
+    if method == "GET" && (path == "/mcp" || path.starts_with("/mcp/tools/")) {
         response = crate::tools::until_stop(response, s.stopping.subscribe());
     }
     let status = response.status();

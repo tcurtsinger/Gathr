@@ -352,6 +352,23 @@ export interface Skill {
   problem: string | null;
 }
 
+/** A tool on the web: never its key, only whether it has one. */
+export interface WebTool {
+  id: string;
+  name: string;
+  link: string;
+  enabled: boolean;
+  has_key: boolean;
+  /** Asked of it when listed; none while it's disabled. */
+  state: 'connected' | 'not_reachable' | 'key_refused' | null;
+}
+
+/** One thing a tool lets an agent do, with the first line of its description. */
+export interface ToolAction {
+  name: string;
+  description: string | null;
+}
+
 export class Failure extends Error {
   constructor(
     readonly error: string,
@@ -520,6 +537,17 @@ export const api = {
   },
   /** Opens its folder in the system's file manager: the desktop window only. */
   openSkill: (name: string) => call<unknown>('POST', `/api/skills/${encodeURIComponent(name)}/open`),
+  /** Every tool on the web, each enabled one's state asked of it now. */
+  tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
+  /** One tool, with its actions when it's connected. */
+  tool: (id: string) => call<WebTool & { actions: ToolAction[] | null }>('GET', `/api/tools/${id}`),
+  /** Gathr connects to the link: the tool saved, or what it needs first. */
+  addTool: (tool: { link: string; name?: string; key?: string }) =>
+    call<{ tool?: WebTool; needs?: 'key' | 'sign_in' }>('POST', '/api/tools', tool),
+  /** A new key is saved only when the tool takes it. */
+  changeTool: (id: string, change: { enabled?: boolean; key?: string }) =>
+    call<WebTool>('PATCH', `/api/tools/${id}`, change),
+  removeTool: (id: string) => call<unknown>('DELETE', `/api/tools/${id}`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>

@@ -167,10 +167,21 @@ impl Task {
             .await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
+        // Each enabled tool on the web, as it is at this engine's start.
+        let outside = self
+            .chats
+            .writer
+            .call(|c| gathr::web_tools::entries(c))
+            .await;
+        let outside: Vec<(String, String)> = (outside.and_then(Result::ok).unwrap_or_default())
+            .into_iter()
+            .map(|(name, id)| (name, format!("{url}/tools/{id}")))
+            .collect();
         let point = self.compact_at(&assigned).await;
         let compact_at = point.as_ref().map(|(at, _)| *at);
         let first = if codex {
             args = gathr::codex::command::args(Some(&url));
+            args.extend(gathr::codex::command::outside(&outside));
             let opening = gathr::codex::rpc::Opening {
                 resume: session.clone(),
                 cwd: cwd.display().to_string(),
@@ -189,7 +200,8 @@ impl Task {
             Some(first)
         } else {
             self.driver = Default::default();
-            args.extend(command::given(&url, &pass.briefing, &crate::tools::names()));
+            let names = crate::tools::names();
+            args.extend(command::given(&url, &pass.briefing, &names, &outside));
             if assigned.slash {
                 args.retain(|a| a != command::NO_SLASH);
             }
