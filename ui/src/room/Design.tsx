@@ -1,7 +1,7 @@
-import { Palette } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, type Failure, type FileEntry } from '../api';
 import { useCard } from '../components/Corner';
+import { DesignsMark } from '../components/DesignsMark';
 import { Face } from '../components/Face';
 import { onWindows, pathSteps } from '../components/files';
 import { StateMark } from '../components/StateMark';
@@ -76,7 +76,7 @@ function Writing() {
   );
 }
 
-/** The Design tab: the chat's designs, newest first, each opening in its own tab. */
+/** The Designs tab: the chat's designs, newest first, each opening in its own tab. */
 export function Designs({
   chat,
   room,
@@ -126,7 +126,7 @@ export function Designs({
   if (!list.length)
     return (
       <div className="filetab-none">
-        <Palette aria-hidden="true" />
+        <DesignsMark />
         <strong>No designs</strong>
         <span>Ask an agent to draw one.</span>
       </div>
@@ -182,7 +182,7 @@ export function DesignTab({ chat, design, room }: { chat: string; design: Opened
   return (
     <div className="filetab">
       <div className="filetab-path design-bar">
-        <Palette aria-hidden="true" />
+        <DesignsMark />
         <span>
           <strong>{name}</strong>
         </span>
