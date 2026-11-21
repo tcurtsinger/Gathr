@@ -12,6 +12,7 @@ mod github;
 mod hook;
 mod person;
 mod react;
+pub mod relay;
 mod server;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};

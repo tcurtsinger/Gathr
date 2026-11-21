@@ -27,6 +27,12 @@
   border-radius: 50%;
   background: var(--danger);
 }
+.plugins-dot[data-tone="attention"] {
+  background: var(--attention);
+}
+.plugins-dot[data-tone="ok"] {
+  background: var(--muted-foreground);
+}
 .app > .chat.plugins {
   overflow: auto;
   background: var(--frame);
@@ -279,4 +285,132 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+/* All, Tools and Skills: one choice, which the sidebar's Tools and Skills set too. */
+.plugins-kind {
+  display: flex;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+}
+.plugins-kind button {
+  min-height: 0;
+  padding: 4px 12px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.plugins-kind button[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--foreground);
+}
+.plugins-add-menu [data-slot="dropdown-menu-label"] {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.plugin-words [data-tone="attention"],
+.tool-state[data-tone="attention"] {
+  color: var(--attention);
+}
+.plugin-words [data-tone="danger"],
+.tool-state[data-tone="danger"] {
+  color: var(--danger);
+}
+.plugin-words span span {
+  font-size: inherit;
+}
+.tool-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.tool-line code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.tool-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.tool-actions {
+  margin-top: 22px;
+}
+.tool-actions h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tool-actions > p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.tool-actions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tool-actions li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.tool-action-name {
+  font-weight: 500;
+}
+.tool-actions li .muted {
+  font-size: 12.5px;
+}
+.tool-form {
+  display: grid;
+  gap: 12px;
+}
+.tool-form p {
+  margin: 0;
+  font-size: 13px;
+}
+.tool-form .tool-why {
+  margin-top: -6px;
+  color: var(--danger);
+}
+.tool-form .muted:has(+ footer),
+.tool-form label + .muted {
+  margin-top: -6px;
+}
+.tool-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.tool-link {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+}
+.tool-form footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.tool-checking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: 13px;
+}
+.tool-spinner {
+  width: 14px;
+  height: 14px;
+  animation: rail-spin 0.9s linear infinite;
+}
+.change-key .tool-form {
+  width: 24rem;
+  padding: 16px;
 }

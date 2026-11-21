@@ -1,73 +1,106 @@
-import { BookOpen, Plus, Search } from 'lucide-react';
+import { BookOpen, Plug, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { api, type Failure, type Skill } from '../api';
+import { api, type Failure, type Skill, type WebTool } from '../api';
 import { Confirm } from '../components/Confirm';
 import { IconButton } from '../components/IconButton';
 import { FailureNotice } from '../components/Notice';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { listen } from '../live';
 import { TopLine } from '../TopLine';
+import { AddTool } from './AddTool';
+import { ChangeKey } from './ChangeKey';
 import { NewSkill } from './NewSkill';
 import { SkillMenu } from './SkillMenu';
 import { SkillPage } from './SkillPage';
+import { ToolMenu } from './ToolMenu';
+import { ToolPage } from './ToolPage';
+import { host, stateOf } from './tool';
 import './plugins.css';
 
-/** The list, a skill's page, or the New skill form. */
-type View = { page: 'list' } | { page: 'skill'; name: string } | { page: 'new' };
+/** The list, a skill's or a tool's page, New skill, or Add a tool. */
+type View =
+  | { page: 'list' }
+  | { page: 'skill'; name: string }
+  | { page: 'tool'; id: string }
+  | { page: 'new' }
+  | { page: 'add-tool' };
+/** The list's choice: both kinds, or one; the sidebar's Tools and Skills set it too. */
+type Kind = 'all' | 'tools' | 'skills';
+
+type Removing = { skill: Skill; opener: HTMLElement | null } | { tool: WebTool; opener: HTMLElement | null };
 
 interface Props {
   onReference: (ref: string) => void;
 }
 
 /**
- * The Plugins screen, in place of the chat list and the chat: its sidebar names every skill installed, the main
- * panel lists them, with one search for both. Skills are the only kind there is yet.
+ * The Plugins screen, in place of the chat list and the chat: its sidebar names every tool and skill installed, the
+ * main panel lists them in groups, with one search for both.
  */
 export function Plugins({ onReference }: Props) {
   const [skills, setSkills] = useState<Skill[] | null>(null);
+  const [tools, setTools] = useState<WebTool[] | null>(null);
   const [view, setView] = useState<View>({ page: 'list' });
+  const [kind, setKind] = useState<Kind>('all');
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [removing, setRemoving] = useState<{ skill: Skill; opener: HTMLElement | null } | null>(null);
+  const [removing, setRemoving] = useState<Removing | null>(null);
+  const [changingKey, setChangingKey] = useState<{ tool: WebTool; opener: HTMLElement | null } | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(() => api.skills().then((s) => setSkills(s.skills), setFailure), []);
+  const loadSkills = useCallback(() => api.skills().then((s) => setSkills(s.skills), setFailure), []);
+  const loadTools = useCallback(() => api.tools().then(setTools, setFailure), []);
   useEffect(() => {
-    load();
+    loadSkills();
+    loadTools();
     return listen((event) => {
-      if (event.type === 'skills' || event.type === 'lagged') load();
+      if (event.type === 'skills' || event.type === 'lagged') loadSkills();
+      if (event.type === 'tools' || event.type === 'lagged') loadTools();
     });
-  }, [load]);
+  }, [loadSkills, loadTools]);
 
   const words = query.trim().toLowerCase();
-  const shown = (skills ?? []).filter(
-    (s) => !words || `${s.name} ${s.description ?? ''}`.toLowerCase().includes(words),
-  );
-  const open = (name: string) => {
+  const found = (text: string) => !words || text.toLowerCase().includes(words);
+  const shownSkills =
+    kind === 'tools' ? [] : (skills ?? []).filter((s) => found(`${s.name} ${s.description ?? ''}`));
+  const shownTools = kind === 'skills' ? [] : (tools ?? []).filter((t) => found(`${t.name} ${host(t.link)}`));
+  const nothing = skills?.length === 0 && tools?.length === 0;
+  const openSkill = (name: string) => {
     setFailure(null);
     setView({ page: 'skill', name });
+  };
+  const openTool = (id: string) => {
+    setFailure(null);
+    setView({ page: 'tool', id });
   };
   const acted = (done: Promise<unknown>) => {
     setFailure(null);
     done.catch(setFailure);
   };
-  const enable = (skill: Skill, on: boolean) => acted(api.enableSkill(skill.name, on));
-  const remove = (skill: Skill, opener: HTMLElement | null) => setRemoving({ skill, opener });
+  const enableSkill = (skill: Skill, on: boolean) => acted(api.enableSkill(skill.name, on));
+  const enableTool = (tool: WebTool, on: boolean) => acted(api.changeTool(tool.id, { enabled: on }));
+  const changeKey = (tool: WebTool, opener: HTMLElement | null) => setChangingKey({ tool, opener });
   const added = (done: Promise<string>) => {
     setFailure(null);
-    done.then((name) => load().then(() => open(name)), setFailure);
+    done.then((name) => loadSkills().then(() => openSkill(name)), setFailure);
+  };
+  const pick = (next: Kind) => {
+    setKind(next);
+    setView({ page: 'list' });
   };
 
-  const row = (s: Skill) => (
-    <li key={s.name} className="plugin-row" data-disabled={!s.enabled || undefined}>
-      <button type="button" className="plugin-open" onClick={() => open(s.name)}>
+  const skillRow = (s: Skill) => (
+    <li key={`s-${s.name}`} className="plugin-row" data-disabled={!s.enabled || undefined}>
+      <button type="button" className="plugin-open" onClick={() => openSkill(s.name)}>
         <span className="plugin-tile" aria-hidden="true">
           <BookOpen />
         </span>
@@ -79,26 +112,59 @@ export function Plugins({ onReference }: Props) {
       <SkillMenu
         skill={s}
         onOpen={() => acted(api.openSkill(s.name))}
-        onEnable={(on) => enable(s, on)}
-        onRemove={(opener) => remove(s, opener)}
+        onEnable={(on) => enableSkill(s, on)}
+        onRemove={(opener) => setRemoving({ skill: s, opener })}
       />
     </li>
   );
-  const group = (title: string, list: Skill[]) =>
-    list.length > 0 && (
+  const toolRow = (t: WebTool) => {
+    const state = stateOf(t);
+    return (
+      <li key={`t-${t.id}`} className="plugin-row" data-disabled={!t.enabled || undefined}>
+        <button type="button" className="plugin-open" onClick={() => openTool(t.id)}>
+          <span className="plugin-tile" aria-hidden="true">
+            <Plug />
+          </span>
+          <span className="plugin-words">
+            <strong>{t.name}</strong>
+            <span>
+              {host(t.link)} · <span data-tone={state.tone}>{state.words}</span>
+            </span>
+          </span>
+        </button>
+        <ToolMenu
+          tool={t}
+          onChangeKey={(opener) => changeKey(t, opener)}
+          onEnable={(on) => enableTool(t, on)}
+          onRemove={(opener) => setRemoving({ tool: t, opener })}
+        />
+      </li>
+    );
+  };
+  const group = (title: string, rows: React.ReactNode[]) =>
+    rows.length > 0 && (
       <section className="plugin-group">
         <h2>
-          {title} <span className="nav-count">{list.length}</span>
+          {title} <span className="nav-count">{rows.length}</span>
         </h2>
-        <ul>{list.map(row)}</ul>
+        <ul>{rows}</ul>
       </section>
     );
-  const picked = view.page === 'skill' ? view.name : null;
-  // The skill whose page is open, as listed: one gone from the folder (removed here or by hand) goes back to the list.
-  const page = skills?.find((s) => s.name === picked);
+  const pickedSkill = view.page === 'skill' ? view.name : null;
+  const pickedTool = view.page === 'tool' ? view.id : null;
+  // The page open, as listed: one gone (removed here, or a skill's folder by hand) goes back to the list.
+  const skillPage = skills?.find((s) => s.name === pickedSkill);
+  const toolPage = tools?.find((t) => t.id === pickedTool);
   useEffect(() => {
-    if (picked && skills && !skills.some((s) => s.name === picked)) setView({ page: 'list' });
-  }, [picked, skills]);
+    const goneSkill = pickedSkill && skills && !skills.some((s) => s.name === pickedSkill);
+    const goneTool = pickedTool && tools && !tools.some((t) => t.id === pickedTool);
+    if (goneSkill || goneTool) setView({ page: 'list' });
+  }, [pickedSkill, skills, pickedTool, tools]);
+
+  const dot = (tone: 'attention' | 'danger', label: string) => (
+    <i className="plugins-dot" data-tone={tone} role="img" aria-label={label} />
+  );
+  const title = { all: 'Tools and skills', tools: 'Tools', skills: 'Skills' }[kind];
 
   return (
     <>
@@ -120,8 +186,17 @@ export function Plugins({ onReference }: Props) {
           <button
             type="button"
             className="navbutton"
-            aria-current={view.page === 'list' ? 'page' : undefined}
-            onClick={() => setView({ page: 'list' })}
+            aria-current={kind === 'tools' ? 'page' : undefined}
+            onClick={() => pick('tools')}
+          >
+            <Plug aria-hidden="true" />
+            Tools
+          </button>
+          <button
+            type="button"
+            className="navbutton"
+            aria-current={kind === 'skills' ? 'page' : undefined}
+            onClick={() => pick('skills')}
           >
             <BookOpen aria-hidden="true" />
             Skills
@@ -130,23 +205,43 @@ export function Plugins({ onReference }: Props) {
         <div className="chatlist">
           <section>
             <h2>Installed</h2>
-            {skills?.length === 0 && <p className="sidebar-empty">Nothing yet</p>}
-            {shown.map((s) => (
+            {nothing && <p className="sidebar-empty">Nothing yet</p>}
+            {shownTools.map((t) => (
               <div
-                key={s.name}
+                key={`t-${t.id}`}
                 className="chatrow"
-                data-current={s.name === picked || undefined}
+                data-current={t.id === pickedTool || undefined}
+                data-disabled={!t.enabled || undefined}
+              >
+                <button
+                  type="button"
+                  className="chat-link"
+                  aria-current={t.id === pickedTool ? 'page' : undefined}
+                  onClick={() => openTool(t.id)}
+                >
+                  <Plug aria-hidden="true" className="plugins-nav-icon" />
+                  <span>{t.name}</span>
+                  {t.enabled && t.state === 'key_refused' && dot('attention', 'Key refused')}
+                  {t.enabled && t.state === 'not_reachable' && dot('danger', 'Not reachable')}
+                </button>
+              </div>
+            ))}
+            {shownSkills.map((s) => (
+              <div
+                key={`s-${s.name}`}
+                className="chatrow"
+                data-current={s.name === pickedSkill || undefined}
                 data-disabled={!s.enabled || undefined}
               >
                 <button
                   type="button"
                   className="chat-link"
-                  aria-current={s.name === picked ? 'page' : undefined}
-                  onClick={() => open(s.name)}
+                  aria-current={s.name === pickedSkill ? 'page' : undefined}
+                  onClick={() => openSkill(s.name)}
                 >
                   <BookOpen aria-hidden="true" className="plugins-nav-icon" />
                   <span>{s.name}</span>
-                  {s.problem && <i className="plugins-dot" role="img" aria-label="Can't be read" />}
+                  {s.problem && dot('danger', 'Can’t be read')}
                 </button>
               </div>
             ))}
@@ -164,64 +259,92 @@ export function Plugins({ onReference }: Props) {
       <main className="chat plugins" aria-label="Plugins">
         <div className="plugins-page">
           {failure && <FailureNotice failure={failure} onReference={onReference} />}
-          {page && (
+          {skillPage && (
             <SkillPage
-              key={page.name}
-              skill={page}
+              key={skillPage.name}
+              skill={skillPage}
               onBack={() => setView({ page: 'list' })}
               onFailure={setFailure}
-              onEnable={enable}
-              onRemove={remove}
+              onEnable={enableSkill}
+              onRemove={(skill, opener) => setRemoving({ skill, opener })}
+            />
+          )}
+          {toolPage && (
+            <ToolPage
+              key={toolPage.id}
+              tool={toolPage}
+              onBack={() => setView({ page: 'list' })}
+              onFailure={setFailure}
+              onEnable={enableTool}
+              onChangeKey={changeKey}
+              onRemove={(tool, opener) => setRemoving({ tool, opener })}
             />
           )}
           {view.page === 'new' && (
             <NewSkill
               onBack={() => setView({ page: 'list' })}
-              onSave={(skill) => api.newSkill(skill).then((s) => load().then(() => open(s.name)))}
+              onSave={(skill) => api.newSkill(skill).then((s) => loadSkills().then(() => openSkill(s.name)))}
               onReference={onReference}
+            />
+          )}
+          {view.page === 'add-tool' && (
+            <AddTool
+              onBack={() => setView({ page: 'list' })}
+              onAdded={(id) => loadTools().then(() => openTool(id))}
             />
           )}
           {view.page === 'list' && (
             <>
-              <h1>Skills</h1>
+              <h1>{title}</h1>
               <div className="plugins-bar">
-                {skills?.length !== 0 && (
-                  <label className="plugins-search">
-                    <Search aria-hidden="true" />
-                    <input
-                      ref={search}
-                      type="text"
-                      placeholder="Search"
-                      aria-label="Search skills"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </label>
+                {!nothing && (
+                  <>
+                    <label className="plugins-search">
+                      <Search aria-hidden="true" />
+                      <input
+                        ref={search}
+                        type="text"
+                        placeholder="Search"
+                        aria-label="Search tools and skills"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </label>
+                    <fieldset className="plugins-kind" aria-label="Show">
+                      {(['all', 'tools', 'skills'] as const).map((k) => (
+                        <button key={k} type="button" aria-pressed={kind === k} onClick={() => pick(k)}>
+                          {{ all: 'All', tools: 'Tools', skills: 'Skills' }[k]}
+                        </button>
+                      ))}
+                    </fieldset>
+                  </>
                 )}
                 <AddMenu
+                  onTool={() => setView({ page: 'add-tool' })}
                   onFolder={(files) => added(api.addSkillFolder(files))}
                   onZip={(file) => added(api.addSkillZip(file))}
                   onFile={(file) => added(api.addSkillFile(file))}
                   onNew={() => setView({ page: 'new' })}
                 />
               </div>
-              {skills?.length === 0 ? (
+              {nothing ? (
                 <div className="plugins-empty">
                   <h2>Nothing installed yet</h2>
+                  <p className="muted">
+                    A tool lets your agents use an app on the web, such as an issue tracker or a calendar.
+                  </p>
                   <p className="muted">
                     A skill is a folder of instructions an agent reads when a task needs them.
                   </p>
                 </div>
               ) : (
                 <>
-                  {group(
-                    'Skills',
-                    shown.filter((s) => s.enabled),
-                  )}
-                  {group(
-                    'Disabled',
-                    shown.filter((s) => !s.enabled),
-                  )}
+                  {group('Tools', shownTools.filter((t) => t.enabled).map(toolRow))}
+                  {group('Skills', shownSkills.filter((s) => s.enabled).map(skillRow))}
+                  {group('Disabled', [
+                    ...shownTools.filter((t) => !t.enabled).map(toolRow),
+                    ...shownSkills.filter((s) => !s.enabled).map(skillRow),
+                  ])}
                 </>
               )}
             </>
@@ -230,14 +353,21 @@ export function Plugins({ onReference }: Props) {
       </main>
       {removing && (
         <Confirm
-          question={`Remove ${removing.skill.name}?`}
-          body={`Its folder is deleted, with all its files: ${removing.skill.path}`}
+          question={`Remove ${'skill' in removing ? removing.skill.name : removing.tool.name}?`}
+          body={
+            'skill' in removing
+              ? `Its folder is deleted, with all its files: ${removing.skill.path}`
+              : 'Its key is deleted too.'
+          }
           verb="Remove"
           danger
           opener={removing.opener}
           onCancel={() => setRemoving(null)}
           onConfirm={() =>
-            api.removeSkill(removing.skill.name).then(() => {
+            ('skill' in removing
+              ? api.removeSkill(removing.skill.name)
+              : api.removeTool(removing.tool.id)
+            ).then(() => {
               setRemoving(null);
               setView({ page: 'list' });
             })
@@ -245,19 +375,23 @@ export function Plugins({ onReference }: Props) {
           onReference={onReference}
         />
       )}
+      {changingKey && (
+        <ChangeKey tool={changingKey.tool} opener={changingKey.opener} onClose={() => setChangingKey(null)} />
+      )}
     </>
   );
 }
 
 interface AddProps {
+  onTool: () => void;
   onFolder: (files: File[]) => void;
   onZip: (file: File) => void;
   onFile: (file: File) => void;
   onNew: () => void;
 }
 
-/** Add: a skill from a folder, from a zip, from one Markdown file, or written here. */
-function AddMenu({ onFolder, onZip, onFile, onNew }: AddProps) {
+/** Add: a tool on the web; a skill from a folder, from a zip, from one Markdown file, or written here. */
+function AddMenu({ onTool, onFolder, onZip, onFile, onNew }: AddProps) {
   const folder = useRef<HTMLInputElement>(null);
   const zip = useRef<HTMLInputElement>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -275,7 +409,11 @@ function AddMenu({ onFolder, onZip, onFile, onNew }: AddProps) {
             Add
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={6}>
+        <DropdownMenuContent align="end" sideOffset={6} className="plugins-add-menu">
+          <DropdownMenuLabel>Tool</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={onTool}>On the web</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Skill</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => folder.current?.click()}>From a folder</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => zip.current?.click()}>From a zip</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => file.current?.click()}>From a file</DropdownMenuItem>

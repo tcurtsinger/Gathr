@@ -36,6 +36,7 @@ mod tools;
 mod turns;
 mod ui;
 mod updates;
+mod web_tools;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
