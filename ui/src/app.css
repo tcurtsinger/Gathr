@@ -93,12 +93,14 @@ body:has(.app) {
 .head-button .lucide-ellipsis circle {
   r: 1.4px;
 }
-/* Pressed while the sidebar is open. */
-.head-button.workspace-toggle[aria-expanded="true"] {
+/* Pressed while the sidebar is open, and a file tab's Source while it shows the file's text. */
+.head-button.workspace-toggle[aria-expanded="true"],
+.filetab-source[aria-pressed="true"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
-.head-button.workspace-toggle[aria-expanded="true"]:hover {
+.head-button.workspace-toggle[aria-expanded="true"]:hover,
+.filetab-source[aria-pressed="true"]:hover {
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 @media (max-width: 759px) {

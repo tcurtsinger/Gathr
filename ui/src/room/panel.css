@@ -104,9 +104,8 @@
 .filetab-path {
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-  justify-content: space-between;
   height: 38px;
   padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--border);
@@ -114,6 +113,7 @@
   font-size: 12.5px;
 }
 .filetab-path > span {
+  margin-right: auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -121,18 +121,6 @@
 .filetab-path strong {
   color: var(--foreground);
   font-weight: 600;
-}
-.filetab-text {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  overflow: auto;
-  padding: 14px 16px;
-  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
-  font-size: 12.5px;
-  line-height: 1.65;
-  white-space: pre;
-  tab-size: 4;
 }
 .filetab-picture {
   display: flex;
