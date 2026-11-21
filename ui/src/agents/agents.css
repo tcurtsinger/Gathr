@@ -1,0 +1,239 @@
+/* The Agents screen (Screen.tsx's frame and rows), as the approved mock-up (option C) draws it. */
+.agent-nav {
+  padding-top: 6px;
+}
+.agent-nav .face {
+  flex: none;
+  mask-image: none;
+}
+.agent-tag {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: normal;
+}
+.agent-bar {
+  gap: 10px;
+}
+.agent-bar label {
+  font-size: 13px;
+}
+.agent-assistant {
+  width: 150px;
+  height: 34px;
+  font-size: 14px;
+}
+.agent-index {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+.agent-index .screen-words strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.agent-meta {
+  flex: none;
+  margin-left: auto;
+  padding-right: 6px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.agent-page > .notice {
+  margin: 0 0 16px;
+}
+.agent-page .screen-title h1 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  overflow-wrap: anywhere;
+}
+/* The picture in its box, a quiet pencil on its corner: the box opens the picture's choices. */
+.agent-picture {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.agent-picture[data-state="open"] {
+  border-color: var(--control);
+  background: var(--raised);
+}
+.agent-picture-edit {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--frame);
+  color: var(--muted-foreground);
+}
+.agent-picture-edit svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2;
+}
+/* Six rows: a name with one muted line under it at the left, its control at the right. */
+.agent-rows {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.agent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 60px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.agent-words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+.agent-words .muted {
+  font-size: 12.5px;
+}
+.agent-control {
+  flex: none;
+  width: 300px;
+}
+.agent-control > :is(input, .dropdown) {
+  width: 100%;
+  height: 34px;
+  font-size: 14px;
+}
+.agent-control > p {
+  margin: 0;
+  font-size: 14px;
+}
+.agent-control > .notice {
+  margin: 0;
+}
+.agent-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.agent-foot [role="status"] {
+  margin-right: auto;
+  font-size: 14px;
+}
+/* The picture's panel: Shuffle, then Shape, Eyes and Colour, each a row of the twelve choices in the agent's colour,
+   the chosen one ringed. */
+.picture-panel {
+  z-index: 50;
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 18px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover);
+  color: var(--foreground);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
+}
+html.light .picture-panel {
+  box-shadow: 0 12px 32px rgb(0 0 0 / 12%);
+}
+.picture-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.picture-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.picture-head p {
+  margin: 0;
+  font-size: 12.5px;
+}
+.picture-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+}
+.picture-row > span:first-child {
+  flex: none;
+  width: 64px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+}
+html.light .picks {
+  color: var(--ink-l);
+}
+.picks .pk {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+}
+.pk > svg {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+}
+.pk[data-part="eyes"] > svg {
+  width: 34px;
+  height: 34px;
+}
+.pk[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--foreground);
+}
+.picks.colours {
+  gap: 10px;
+  padding: 4px 3px;
+}
+.picks .swatch {
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+}
+html.light .picks .swatch {
+  background: var(--ink-l);
+}
+.picks .swatch[aria-pressed="true"] {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}

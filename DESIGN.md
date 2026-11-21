@@ -108,7 +108,7 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
   "Start failed" page keeps the system's title bar.
-- The rail: Home at the top, its centre on the word mark's line, and Plugins under it, 6px apart; the
+- The rail: Home at the top, its centre on the word mark's line, then Agents and Plugins, 6px apart; the
   screen that is open is drawn as current (32px, 8px radius, foreground 9%). At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
   while it installs), above the Settings cog. Icons 18px at 1.75 stroke; Update 20px at 2.
@@ -299,9 +299,11 @@ Shared and per-agent folders and that changes apply to new work. Current work
 stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
-path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Picture, Shape, Eyes, Colour, Account, Model, Effort, Approvals. Picture is the agent's
-56px picture and Shuffle, which picks a new shape, eyes and colour. Shape and Eyes are the twelve choices each,
+path. A new Gathr has no accounts and does not reuse external logins. Agents is a screen of its own, as Plugins is:
+every agent in its sidebar, the list with the Assistant dropdown and Add, and one page per agent with Name,
+Description, Account, Model, Effort and Approvals as rows, each with one line under its name and no ? Help. The
+page's 56px picture sits in a 64px box with a pencil on its corner; the box opens Shuffle, which picks a new shape,
+eyes and colour, then Shape, Eyes and Colour. Shape and Eyes are the twelve choices each,
 drawn alone in 40px boxes in the agent's colour, the one shown ringed; Colour is twelve 26px swatches, names for
 screen readers only, the one shown ringed. A click redraws the picture at once and is saved with Save; one never
 picked shows what the id worked out. A new agent's form starts with three picked as Shuffle picks them, saved with
@@ -311,18 +313,17 @@ releases; numbered versions stay pinned. Do not ship prototype fixture models,
 temperature or extra toggles as product settings. Save affects future turns in
 all chats using the agent; running turns retain their assignment. Roles are
 chat-specific, with one Supervisor for two to five members and an optional,
-distinct Reviewer. Edit agent opens this same editor from every entry point.
+distinct Reviewer. Edit agent opens that agent's page on the Agents screen.
 
-Approvals is Ask, Edits, Auto (new-agent default) or Full, per 0029. Detail stays
-behind Help beside the label. The shared ? opens an in-window popover; Escape
+Approvals is Ask, Edits, Auto (new-agent default) or Full, per 0029. The line under
+its name is the chosen mode's sentence. Elsewhere in Settings, the shared ? opens an in-window popover; Escape
 closes Help before Settings and preserves focus. Switch remains the existing
 accessible immediate setting, with pending save and referenced failure states.
 
-Projects (0043, option B) lists projects as Agents lists agents. A project's page has
+Projects (0043, option B) lists projects beside the open project's page. A project's page has
 its name, folder and default team in one draft with one Save. A project's More in the sidebar has Project settings, which
-opens Projects at that project, then Delete after a separator. Projects and Agents
-have Delete, the outlined danger Button, at the left of the form's foot; Agents'
-Delete replaced Remove and its inline question.
+opens Projects at that project, then Delete after a separator. Projects has Delete, the outlined danger Button,
+at the left of the form's foot; an agent's page has it at the right of its header.
 
 Diagnostics stays a Settings category: a 210px turn list beside the independently
 scrolling timeline. Failure links open its matching turn and reset conflicting

@@ -87,6 +87,13 @@ afterEach(() => {
   sent.length = 0;
 });
 
+/** The screen; with a name, at that agent's page, opened from the sidebar as a person does. */
+async function show(name?: string, onReference: (ref: string) => void = () => {}) {
+  const screen = await render(<Agents onReference={onReference} onAssistant={() => {}} />);
+  if (name) await screen.getByRole('navigation', { name: 'Agents' }).getByRole('button', { name }).click();
+  return screen;
+}
+
 const agent = (over: Partial<Agent>): Agent => ({
   id: 'x',
   name: 'Made-up agent',
@@ -103,7 +110,7 @@ const agent = (over: Partial<Agent>): Agent => ({
 test('an agent saved on a Latest or the engine default shows the model that is today, and picking it keeps it', async () => {
   const agents = [agent({ model: 'opus' })];
   service(agents, listed);
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show('Made-up agent');
   const model = screen.getByRole('combobox', { name: 'Model' });
   await expect.element(model).toHaveTextContent('Opus 5.5 / Latest');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -119,7 +126,7 @@ test('an agent saved on a Latest or the engine default shows the model that is t
 
 test('another account takes that account’s default model, resets effort and lists its own models', async () => {
   service([agent({ model: 'made-up-opus-5-5', effort: 'high' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show('Made-up agent');
   const model = screen.getByRole('combobox', { name: 'Model' });
   await expect.element(model).toHaveTextContent('Opus 5.5');
   await pick('Account', 'Made-up two / Claude Code');
@@ -146,7 +153,7 @@ test('another account takes that account’s default model, resets effort and li
 test('a change saved elsewhere shows in the open editor, and Save keeps it unless the field was edited here', async () => {
   const agents = [agent({ model: 'made-up-opus-5-5', effort: null })];
   service(agents, listed);
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show('Made-up agent');
   const effort = screen.getByRole('combobox', { name: 'Effort' });
   const model = screen.getByRole('combobox', { name: 'Model' });
   await expect.element(model).toHaveTextContent('Opus 5.5');
@@ -178,7 +185,7 @@ test('models that fail to load say so with a reference that opens', async () => 
   const failed = { error: 'Models failed', why: 'made-up engine failure', ref: 'made-up-ref' };
   service([agent({})], () => new Response(JSON.stringify(failed), { status: 500 }));
   const opened: string[] = [];
-  const screen = await render(<Agents onReference={(ref) => opened.push(ref)} />);
+  const screen = await show('Made-up agent', (ref) => opened.push(ref));
   await expect.element(screen.getByText('Models failed')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
@@ -190,7 +197,7 @@ test('a new agent takes the exact model its account’s engine default means and
     release = r;
   });
   service([], (id) => slow.then(() => listed(id)));
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show();
   await screen.getByRole('button', { name: 'Add' }).click();
   await screen.getByRole('textbox', { name: 'Name' }).fill('Made-up new');
   await expect.element(screen.getByText('Loading models')).toBeVisible();
@@ -211,7 +218,7 @@ test('a new agent takes the exact model its account’s engine default means and
 test('an account that lists no exact model can’t be saved for a new agent', async () => {
   const none = [{ ...model('default', 'Default'), resolved: null }, model('opus', 'Opus')];
   service([], () => new Response(JSON.stringify({ models: none })));
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show();
   await screen.getByRole('button', { name: 'Add', exact: true }).click();
   await screen.getByRole('textbox', { name: 'Name' }).fill('Made-up new');
   await expect.element(screen.getByText('No models')).toBeVisible();
@@ -220,7 +227,7 @@ test('an account that lists no exact model can’t be saved for a new agent', as
 
 test('a change of approvals enables Save and is saved', async () => {
   service([agent({ approvals: 'full' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show('Made-up agent');
   const approvals = screen.getByRole('combobox', { name: 'Approvals' });
   await expect.element(approvals).toHaveTextContent('Full');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -231,7 +238,7 @@ test('a change of approvals enables Save and is saved', async () => {
 
 test('Delete asks with what the service counts, then deletes the agent', async () => {
   service([agent({ name: 'Mira' }), agent({ id: 'y', name: 'Ann' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
+  const screen = await show('Mira');
   await screen.getByRole('button', { name: 'Delete' }).click();
   const confirm = screen.getByRole('dialog', { name: 'Delete Mira?' });
   await expect.element(confirm.getByText('1 task will be cancelled. Ann becomes lead.')).toBeVisible();

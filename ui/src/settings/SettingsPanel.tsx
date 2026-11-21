@@ -1,5 +1,4 @@
 import { Dialog } from '../components/Dialog';
-import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import { Friction } from './Friction';
@@ -7,7 +6,7 @@ import { General } from './General';
 import { Projects } from './Projects';
 import './settings.css';
 
-export type Page = 'general' | 'engines' | 'agents' | 'projects' | 'diagnostics';
+export type Page = 'general' | 'engines' | 'projects' | 'diagnostics';
 
 export interface SettingsTarget {
   page: Page;
@@ -34,7 +33,6 @@ interface Props {
 const pages: [Page, string][] = [
   ['general', 'General'],
   ['engines', 'Engines'],
-  ['agents', 'Agents'],
   ['projects', 'Projects'],
   ['diagnostics', 'Diagnostics'],
 ];
@@ -69,8 +67,6 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
               <General onReference={onReference} />
             ) : target.page === 'engines' ? (
               <Engines onReference={onReference} />
-            ) : target.page === 'agents' ? (
-              <Agents onReference={onReference} />
             ) : target.page === 'projects' ? (
               <Projects start={target.project} onReference={onReference} />
             ) : (

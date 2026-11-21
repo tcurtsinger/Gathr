@@ -31,15 +31,15 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
   const actions = asked?.state === 'connected' ? asked.actions : null;
   return (
     <article className="skill-page">
-      <button type="button" className="plugins-back" onClick={onBack}>
+      <button type="button" className="screen-back" onClick={onBack}>
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>
-      <header className="skill-head">
+      <header className="screen-head">
         <span className="plugin-tile" aria-hidden="true">
           <Plug />
         </span>
-        <div className="skill-title">
+        <div className="screen-title">
           <h1>{tool.name}</h1>
           <p className="tool-line">
             <code>{tool.link}</code>
@@ -51,7 +51,7 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
             )}
           </p>
         </div>
-        <div className="skill-actions">
+        <div className="screen-actions">
           <Button
             ref={changeKey}
             type="button"
