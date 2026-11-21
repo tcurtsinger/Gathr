@@ -259,7 +259,7 @@ export function RoomView(props: Props) {
           )}
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat={chat.id} room={state} />}
+      {sidebar && <RoomSidebar chat={chat.id} room={state} onAnswer={answer} />}
     </OpenFile.Provider>
   );
 }

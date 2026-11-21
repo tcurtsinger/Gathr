@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
-import { api, type Failure, type FileEntry } from '../api';
+import { Check, Columns2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { api, type Failure, type FileEntry, type Question } from '../api';
 import { useCard } from '../components/Corner';
 import { DesignsMark } from '../components/DesignsMark';
 import { Face } from '../components/Face';
-import { onWindows, pathSteps } from '../components/files';
+import { fileName, onWindows, pathSteps, split } from '../components/files';
+import { IconButton } from '../components/IconButton';
 import { StateMark } from '../components/StateMark';
 import type { Opened } from './Files';
 import { isPage, PageFrame } from './PageFrame';
+import type { OnAnswer } from './Question';
 import type { RoomState } from './useRoom';
 import './design.css';
 
@@ -65,6 +69,32 @@ function written(room: RoomState, designs: string) {
 }
 
 const pagesOf = (entries: FileEntry[]) => entries.filter((e) => !e.folder && isPage(e.name));
+const letter = (i: number) => String.fromCharCode(65 + i);
+
+/**
+ * The pages of the design in `folder` that a question asks the person to pick from, in its choices' order: when every
+ * file it attaches is an HTML page right in that folder, none twice, one per choice. Else none, and it is an ordinary
+ * question with files.
+ */
+function asked(q: Question, folder: string) {
+  const pages = split(q.question).files;
+  const keys = pages.map(key);
+  const fits =
+    pages.length === q.choices.length &&
+    new Set(keys).size === keys.length &&
+    keys.every((k) => isPage(k) && k.slice(0, k.lastIndexOf('/')) === key(folder));
+  return pages.length && fits ? pages : undefined;
+}
+
+/** The question a design follows: the newest open one asking for a pick in it, else the newest answered. */
+function following(room: RoomState, folder: string) {
+  const asking = room.questions.filter((q) => asked(q, folder));
+  return asking.findLast((q) => !q.answered) ?? asking.at(-1);
+}
+
+/** Which of its choices an answered question picked: -1 for none. */
+const pickOf = (q?: Question) =>
+  q?.answered && q.pick ? q.choices.findIndex((c) => c.label === q.pick) : -1;
 
 /** "Writing" while an agent's running turn writes in the design. */
 function Writing() {
@@ -136,6 +166,8 @@ export function Designs({
       {list.map((d) => {
         const w = seen.get(key(d.path));
         const by = room.members.find((m) => m.agent === w?.agent);
+        const q = following(room, d.path);
+        const picked = pickOf(q);
         return (
           <button key={d.path} type="button" className="design-row" onClick={() => onOpen(d)}>
             <span>
@@ -146,7 +178,21 @@ export function Designs({
                 {d.pages === 1 ? '1 page' : `${d.pages} options`}
               </span>
             </span>
-            {w?.writing && <Writing />}
+            {w?.writing ? (
+              <Writing />
+            ) : q && !q.answered ? (
+              <span className="room-state live design-mark">
+                <StateMark state="needs" size={12} />
+                Pick
+              </span>
+            ) : (
+              picked >= 0 && (
+                <span className="room-state design-mark">
+                  <Check aria-hidden="true" />
+                  {letter(picked)}
+                </span>
+              )
+            )}
           </button>
         );
       })}
@@ -154,16 +200,39 @@ export function Designs({
   );
 }
 
-const letter = (i: number) => String.fromCharCode(65 + i);
+/** The tab's width from which a design's options can show two side by side, each still readable (the drawing's
+ * two options sit in a 743px tab). */
+const SIDE = 700;
 
-/** A design's tab: its name, A, B, C for its options in their files' order, and the option's page as it looks,
- * drawn again each time an agent's write in the folder ends. */
-export function DesignTab({ chat, design, room }: { chat: string; design: Opened; room: RoomState }) {
+interface Props {
+  chat: string;
+  design: Opened;
+  room: RoomState;
+  /** Shows the option on that page. */
+  onShow: (page: string) => void;
+  onAnswer: OnAnswer;
+}
+
+/**
+ * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again each time an
+ * agent's write in the folder ends. While a question asks for a pick in it, its options are the question's choices,
+ * each with Pick; else its pages in their files' order. Side by side when the panel is wide enough.
+ */
+export function DesignTab({ chat, design, room, onShow, onAnswer }: Props) {
   const name = design.crumbs.at(-1) ?? design.path;
   const [pages, setPages] = useState<FileEntry[]>();
-  const [at, setAt] = useState(0);
+  const [side, setSide] = useState(false);
+  const [wide, setWide] = useState(false);
+  const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
+  const tab = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!tab.current) return;
+    const seen = new ResizeObserver(([e]) => setWide(e.contentRect.width >= SIDE));
+    seen.observe(tab.current);
+    return () => seen.disconnect();
+  }, []);
   const w = written(room, design.path.replace(/[\\/][^\\/]*$/, '')).get(key(design.path));
   const saves = w?.saves ?? 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: each write that ends reads the options again
@@ -177,27 +246,90 @@ export function DesignTab({ chat, design, room }: { chat: string; design: Opened
       live = false;
     };
   }, [chat, design.path, saves]);
-  const shown = Math.min(at, (pages?.length ?? 1) - 1);
-  const page = pages?.[shown];
+  const q = following(room, design.path);
+  const options = q
+    ? (asked(q, design.path) ?? []).map((path, i) => ({
+        path,
+        name: fileName(path),
+        label: q.choices[i].label,
+      }))
+    : (pages ?? []).map((p) => ({ path: p.path, name: p.name, label: undefined }));
+  const shown = Math.max(
+    0,
+    options.findIndex((o) => key(o.path) === key(design.page ?? '')),
+  );
+  const picked = pickOf(q);
+  const two = wide && side && options.length > 1;
+  const pick = (i: number) => {
+    if (!q || sending) return;
+    setSending(true);
+    onAnswer(q, q.choices[i].label).then(
+      () => setSending(false),
+      (f: Failure) => {
+        setFailure(f);
+        setSending(false);
+      },
+    );
+  };
+  // Pick while the question is open; Picked on the option it picked.
+  const verdict = (i: number) =>
+    q && !q.answered ? (
+      <Button type="button" size="xs" disabled={sending} onClick={() => pick(i)}>
+        Pick
+      </Button>
+    ) : (
+      i === picked && (
+        <span className="room-state design-picked">
+          <Check aria-hidden="true" />
+          Picked
+        </span>
+      )
+    );
+  const frame = (i: number) => (
+    <PageFrame chat={chat} path={options[i].path} name={options[i].name} redraw={saves} />
+  );
+  const pair = shown + 1 < options.length ? [shown, shown + 1] : [shown - 1, shown];
   return (
-    <div className="filetab">
+    <div className="filetab" ref={tab}>
       <div className="filetab-path design-bar">
         <DesignsMark />
         <span>
           <strong>{name}</strong>
         </span>
-        {pages && pages.length > 1 && (
+        {options.length > 1 && (
           <fieldset className="plugins-kind design-options" aria-label="Options">
-            {pages.map((p, i) => (
-              <button key={p.path} type="button" aria-pressed={i === shown} onClick={() => setAt(i)}>
+            {options.map((o, i) => (
+              <button key={o.path} type="button" aria-pressed={i === shown} onClick={() => onShow(o.path)}>
+                {i === picked && <Check aria-hidden="true" />}
                 {letter(i)}
               </button>
             ))}
           </fieldset>
         )}
+        {wide && options.length > 1 && (
+          <IconButton aria-label="Side by side" aria-pressed={side} onClick={() => setSide(!side)}>
+            <Columns2 />
+          </IconButton>
+        )}
         {w?.writing && <Writing />}
+        {!two && options.length > 0 && verdict(shown)}
       </div>
-      {page && <PageFrame chat={chat} path={page.path} name={page.name} redraw={saves} />}
+      {two ? (
+        <div className="design-side">
+          {pair.map((i) => (
+            <div key={options[i].path} className="design-option" data-shown={i === shown || undefined}>
+              <div className="design-option-head">
+                <b>{letter(i)}</b>
+                <span>{options[i].label ?? options[i].name}</span>
+                {verdict(i)}
+              </div>
+              {frame(i)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        options.length > 0 && frame(shown)
+      )}
     </div>
   );
 }
