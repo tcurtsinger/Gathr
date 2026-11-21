@@ -10,7 +10,7 @@ const STATES: Record<BoardLine['state'], string> = {
   done: 'Done',
 };
 
-/** The chat's board, the room's sidebar tab: read only. A read that fails says nothing: the live socket reloads it. */
+/** The chat's board, on the panel's Home: read only. A read that fails says nothing: the live socket reloads it. */
 export function Board({ chat }: { chat: string }) {
   const [lines, setLines] = useState<BoardLine[] | null>(null);
   useEffect(() => {

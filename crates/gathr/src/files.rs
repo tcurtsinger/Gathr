@@ -1,4 +1,5 @@
-//! The person's files in a chat's messages, and the pictures the window shows from a chat's folders.
+//! The person's files in a chat's messages, and the tree, words and pictures the window shows from
+//! a chat's folders.
 //! A file is saved in `<Project>/Shared/files/<chat part>`, the one folder every agent of the chat
 //! reads on both engines, and named in the message by one line with its path: each engine opens it
 //! from there. The folder goes with the chat, as its agents' folders do.
@@ -6,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::folders::{self, Made};
@@ -105,14 +107,23 @@ pub fn roots(conn: &Connection, data: &Path, chat: &str) -> Result<Vec<PathBuf>,
     Ok(roots.iter().map(|r| folders::real(r)).collect())
 }
 
-/// The picture at `path` with its media type, when it is a png, jpeg, gif or webp inside one of
-/// `roots` once links and `..` are followed. Blocks on the disk.
-pub fn picture(roots: &[PathBuf], path: &str) -> Option<(PathBuf, &'static str)> {
+/// `path` as the disk names it, when it is inside one of `roots` once links and `..` are followed.
+fn inside(roots: &[PathBuf], path: &str) -> Option<PathBuf> {
     let path = Path::new(path);
     if !path.is_absolute() {
         return None;
     }
     let found = folders::real(&std::fs::canonicalize(path).ok()?);
+    roots
+        .iter()
+        .any(|root| found.starts_with(root))
+        .then_some(found)
+}
+
+/// The picture at `path` with its media type, when it is a png, jpeg, gif or webp inside one of
+/// `roots` once links and `..` are followed. Blocks on the disk.
+pub fn picture(roots: &[PathBuf], path: &str) -> Option<(PathBuf, &'static str)> {
+    let found = inside(roots, path)?;
     let ext = found.extension()?.to_str()?.to_lowercase();
     let kind = match ext.as_str() {
         "png" => "image/png",
@@ -121,8 +132,122 @@ pub fn picture(roots: &[PathBuf], path: &str) -> Option<(PathBuf, &'static str)>
         "webp" => "image/webp",
         _ => return None,
     };
-    let inside = roots.iter().any(|root| found.starts_with(root));
-    (inside && found.is_file()).then_some((found, kind))
+    found.is_file().then_some((found, kind))
+}
+
+/// The largest file the window shows as text.
+pub const SHOWN: u64 = 2 * 1024 * 1024;
+
+/// A folder at the top of a chat's tree in the window.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Part {
+    pub name: String,
+    pub path: PathBuf,
+    /// The agent whose folder it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+}
+
+/// The folders of one chat the window shows: the project's own, Shared, and each of its agents'
+/// folder for this chat, those that are on the disk. Never another chat's.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Tree {
+    pub project: Option<Part>,
+    pub shared: Option<Part>,
+    pub agents: Vec<Part>,
+}
+
+impl Tree {
+    pub fn roots(&self) -> Vec<PathBuf> {
+        let tops = self.project.iter().chain(&self.shared).chain(&self.agents);
+        tops.map(|p| p.path.clone()).collect()
+    }
+}
+
+/// `chat`'s tree. Blocks on the disk.
+pub fn tree(conn: &Connection, data: &Path, chat: &str) -> Result<Tree, Error> {
+    let part = |path: PathBuf, name: Option<String>, agent: Option<String>| {
+        let path = folders::real(&path);
+        let name = name.unwrap_or_else(|| {
+            path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into()
+        });
+        path.is_dir().then_some(Part { name, path, agent })
+    };
+    let own: Option<String> = conn
+        .query_row(
+            "SELECT p.folder FROM chats c JOIN projects p ON p.id = c.project_id WHERE c.id = ?1",
+            [chat],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let shared = folders::shared_of(conn, data, chat)?;
+    let mut agents = Vec::new();
+    for m in crate::team::members(conn, chat)? {
+        if let Some(path) = folders::workspace(conn, chat, &m.agent)? {
+            agents.extend(part(path, Some(m.name), Some(m.agent)));
+        }
+    }
+    Ok(Tree {
+        project: own.and_then(|own| part(PathBuf::from(own), None, None)),
+        shared: part(shared, Some(folders::SHARED.into()), None),
+        agents,
+    })
+}
+
+/// One thing in a folder of the tree.
+#[derive(Debug, Serialize)]
+pub struct Entry {
+    pub name: String,
+    pub path: PathBuf,
+    pub folder: bool,
+}
+
+/// The folder at `path` inside one of `roots`, folders first and then files, each by name, `.git`
+/// left out; none when it isn't a folder in them. Blocks on the disk.
+pub fn listing(roots: &[PathBuf], path: &str) -> Option<Vec<Entry>> {
+    let found = inside(roots, path)?;
+    let mut entries: Vec<Entry> = std::fs::read_dir(&found)
+        .ok()?
+        .flatten()
+        .map(|e| Entry {
+            name: e.file_name().to_string_lossy().into(),
+            folder: e.path().is_dir(),
+            path: e.path(),
+        })
+        .filter(|e| e.name != ".git")
+        .collect();
+    entries.sort_by_cached_key(|e| (!e.folder, e.name.to_lowercase()));
+    Some(entries)
+}
+
+/// Why a file isn't shown as text.
+#[derive(Debug, PartialEq)]
+pub enum Unshown {
+    /// Not a file in the roots: moved, deleted, or never one of them.
+    Gone,
+    /// Over `SHOWN`.
+    Large,
+    /// Not UTF-8 text.
+    NotText,
+}
+
+/// The words of the file at `path` inside one of `roots`. Blocks on the disk.
+pub fn text(roots: &[PathBuf], path: &str) -> Result<String, Unshown> {
+    let found = inside(roots, path)
+        .filter(|f| f.is_file())
+        .ok_or(Unshown::Gone)?;
+    let size = std::fs::metadata(&found).map_err(|_| Unshown::Gone)?.len();
+    if size > SHOWN {
+        return Err(Unshown::Large);
+    }
+    let bytes = std::fs::read(&found).map_err(|_| Unshown::Gone)?;
+    match String::from_utf8(bytes) {
+        Ok(words) if !words.contains('\0') => Ok(words),
+        _ => Err(Unshown::NotText),
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +273,41 @@ mod tests {
         assert!(
             !shown(elsewhere.join("out.png")),
             "an absolute path elsewhere"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_folder_or_file_outside_the_chats_folders_is_refused() {
+        let base = std::env::temp_dir().join(format!("gathr-files-{}", crate::ids::span_id()));
+        let shared = base.join("Shared");
+        let elsewhere = base.join("Elsewhere");
+        std::fs::create_dir_all(shared.join("docs")).unwrap();
+        std::fs::create_dir_all(elsewhere.join("docs")).unwrap();
+        std::fs::write(shared.join("in.md"), "in").unwrap();
+        std::fs::write(elsewhere.join("out.md"), "out").unwrap();
+        let roots = [folders::real(&shared)];
+        let at = |p: PathBuf| p.to_string_lossy().into_owned();
+        let listed = listing(&roots, &at(shared.clone())).unwrap();
+        let names: Vec<&str> = listed.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["docs", "in.md"], "folders first");
+        assert!(
+            listing(&roots, &at(shared.join("..").join("Elsewhere"))).is_none(),
+            "'..'"
+        );
+        assert!(
+            listing(&roots, &at(elsewhere.clone())).is_none(),
+            "a folder elsewhere"
+        );
+        assert!(listing(&roots, "Elsewhere").is_none(), "a relative path");
+        assert_eq!(text(&roots, &at(shared.join("in.md"))), Ok("in".into()));
+        let out = shared.join("..").join("Elsewhere").join("out.md");
+        assert_eq!(text(&roots, &at(out)), Err(Unshown::Gone), "'..'");
+        let out = elsewhere.join("out.md");
+        assert_eq!(
+            text(&roots, &at(out)),
+            Err(Unshown::Gone),
+            "a file elsewhere"
         );
         let _ = std::fs::remove_dir_all(&base);
     }
