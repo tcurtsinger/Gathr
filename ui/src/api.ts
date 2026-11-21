@@ -50,6 +50,15 @@ export interface Message {
   reply_to?: string | null;
   /** The person's reply about a task: a task's message has no message of its own. */
   reply_task?: number | null;
+  /** Gathr's line a compaction left, "Compacted Ann's conversation: 468K to 52K": the one line of Gathr's shown. */
+  compacted?: boolean;
+}
+
+/** A command an agent's engine still runs in the background: who started it, what it is, since when. */
+export interface Background {
+  agent: string | null;
+  description: string;
+  started: string;
 }
 
 /** What a reply in a thread answers (0076): a message, or a task. */
@@ -277,6 +286,8 @@ export interface History {
   reactions?: Reaction[];
   /** A room chat's questions to the person, oldest first. */
   questions?: Question[];
+  /** The commands its agents' engines still run in the background, oldest first. */
+  background?: Background[];
 }
 
 /** An agent's question to the person in a room chat: open until `answered`, then with their pick, words or both. */
@@ -467,6 +478,9 @@ export const api = {
       ...reply,
     });
   },
+  /** Compacts the agent's conversation in the chat, once its turn and background commands are done. */
+  compact: (chat: string, agent: string) =>
+    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/agents/${agent}/compact`, {}),
   /** The person's like (0057): it reaches the message's agent. */
   like: (chat: string, message: string) =>
     call<{ reaction: Reaction; did: string }>('PUT', `/api/chats/${chat}/messages/${message}/like`, {}),

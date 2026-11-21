@@ -1,5 +1,6 @@
 import type {
   AppState,
+  Background,
   BoardLine,
   ChatMark,
   Context,
@@ -60,6 +61,8 @@ export type LiveEvent =
   | { type: 'questions'; chat: string; questions: Question[] }
   // How full an agent's context is, after each model call or compaction.
   | { type: 'context'; chat: string; agent: string; context: Context }
+  // The chat's background commands, whole, after any engine of it listed its own again.
+  | { type: 'background'; chat: string; background: Background[] }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.
   | ({ type: 'pauses' } & Pauses)
   // Gathr's own version and update, whole, after any change to it (0032).

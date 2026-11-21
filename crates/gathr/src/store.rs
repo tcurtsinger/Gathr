@@ -243,15 +243,17 @@ const PLACE: &str = "CASE WHEN m.turn_id IS NOT NULL THEN t.position ELSE COALES
 /// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
+    let role: String = r.get(3)?;
+    let compacted = role == "gathr" && kind == "text" && crate::context::is_compacted_line(&body);
     let body = match kind.as_str() {
         "tool" | "thinking" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
-    Ok(json!({
+    let mut row = json!({
         "id": r.get::<_, String>(0)?,
         "turn": r.get::<_, Option<String>>(1)?,
         "time": crate::ids::utc(r.get(2)?),
-        "role": r.get::<_, String>(3)?,
+        "role": role,
         "kind": kind,
         "body": body,
         "agent": r.get::<_, Option<String>>(6)?,
@@ -263,7 +265,12 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "picks": r.get::<_, Option<String>>(9)?.and_then(|p| serde_json::from_str::<Value>(&p).ok()),
         // A reply: the message it sits under.
         "reply_to": r.get::<_, Option<String>>(10)?,
-    }))
+    });
+    // The quiet line a compaction left, which the window shows: only on that line.
+    if compacted {
+        row["compacted"] = json!(true);
+    }
+    Ok(row)
 }
 
 /// A saved message, as the API shows it.

@@ -86,9 +86,16 @@ export function Room({ chat, state, people, acts, found, header, after, children
         <div className="room-col">
           {header}
           {items.map((item, i) => {
-            const joined = !!items[i + 1] && items[i + 1].kind !== 'said';
+            const next = items[i + 1]?.kind;
+            const joined = next === 'card' || next === 'question';
             if (item.kind === 'said') return <You key={item.id} said={item} ctx={ctx} />;
             if (item.kind === 'card') return <Main key={item.id} card={item} joined={joined} ctx={ctx} />;
+            if (item.kind === 'line')
+              return (
+                <p key={item.id} className="room-quiet">
+                  {item.text}
+                </p>
+              );
             return (
               <QuestionCard
                 key={item.id}

@@ -318,15 +318,21 @@ impl Task {
         );
         // Idle, the engine begins a turn of its own once a command ends: it answers that command's.
         let idle = turn.is_none();
-        let saved = self.chats.writer.call(move |c| {
-            let engine = (chat.as_str(), agent.as_deref());
-            gathr::background::set(c, engine, &listed, turn.as_deref())
+        let c = chat.clone();
+        let saved = self.chats.writer.call(move |conn| {
+            let engine = (c.as_str(), agent.as_deref());
+            let ended = gathr::background::set(conn, engine, &listed, turn.as_deref())?;
+            Ok::<_, gathr::Error>((ended, gathr::background::in_chat(conn, &c)?))
         });
         match saved.await {
-            Some(Ok(ended)) => {
+            Some(Ok((ended, running))) => {
                 if let Some(last) = ended.into_iter().last().filter(|_| idle) {
                     self.woke_from = Some(last);
                 }
+                self.publish(
+                    &chat,
+                    json!({ "type": "background", "background": running }),
+                );
             }
             Some(Err(e)) => self.record(
                 Event::point("gathr.engine.background")
@@ -346,16 +352,22 @@ impl Task {
         if let Some(agent) = &self.agent {
             crate::cleanup::engine_closed(&self.chats, &chat, agent).await;
         }
-        let agent = self.agent.clone();
-        let gone = self.chats.writer.call(move |c| {
-            gathr::background::set(c, (&chat, agent.as_deref()), &[], None).map(|_| ())
+        let (agent, c) = (self.agent.clone(), chat.clone());
+        let gone = self.chats.writer.call(move |conn| {
+            gathr::background::set(conn, (&c, agent.as_deref()), &[], None)?;
+            gathr::background::in_chat(conn, &c)
         });
-        if let Some(Err(e)) = gone.await {
-            self.record(
+        match gone.await {
+            Some(Ok(running)) => self.publish(
+                &chat,
+                json!({ "type": "background", "background": running }),
+            ),
+            Some(Err(e)) => self.record(
                 Event::point("gathr.engine.background")
                     .error("sqlite")
                     .attr("why", e.to_string()),
-            );
+            ),
+            None => {}
         }
         self.chats.settle_pauses(false).await;
     }

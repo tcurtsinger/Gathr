@@ -24,6 +24,7 @@ import { ProjectPick } from '../components/ProjectPick';
 import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
+import { AgentsPanel } from './AgentsPanel';
 import { Questions } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
 import { RoomSidebar } from './Sidebar';
@@ -169,6 +170,13 @@ export function RoomView(props: Props) {
         </div>
         {!fresh && (
           <div className="room-actions">
+            <AgentsPanel
+              chat={chat.id}
+              members={state.members}
+              background={state.background}
+              turns={state.turns}
+              people={team}
+            />
             <Questions
               questions={state.questions}
               people={team}

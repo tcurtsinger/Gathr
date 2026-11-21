@@ -93,6 +93,7 @@ async fn history(
         gathr::context::on_members(conn, &id, &mut history)?;
         gathr::reactions::on_history(conn, &id, &mut history)?;
         gathr::reads::on_history(conn, &id, &mut history)?;
+        history["background"] = json!(gathr::background::in_chat(conn, &id)?);
         Ok(history)
     })
     .await?;
