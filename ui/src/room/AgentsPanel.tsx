@@ -7,7 +7,6 @@ import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import { since } from '../components/marks';
-import { AgentsMark } from '../Rail';
 import type { People } from './Room';
 import '../components/popover-panel.css';
 import './agents-panel.css';
@@ -35,7 +34,7 @@ export function AgentsPanel(props: {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <IconButton aria-label="Agents" className="head-button agents-button">
-          <AgentsMark />
+          <FillMark />
           {background.length > 0 && <span className="agents-dot" />}
         </IconButton>
       </Popover.Trigger>
@@ -64,6 +63,27 @@ export function AgentsPanel(props: {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** The button's own mark, on the icon set's grid: a chat bubble holding three rising bars, how full a conversation is. */
+function FillMark() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+      <g fill="currentColor" stroke="none">
+        <rect x="7.4" y="12.6" width="2.5" height="3.4" rx="0.7" />
+        <rect x="11.05" y="10" width="2.5" height="6" rx="0.7" />
+        <rect x="14.7" y="7.4" width="2.5" height="8.6" rx="0.7" />
+      </g>
+    </svg>
   );
 }
 
