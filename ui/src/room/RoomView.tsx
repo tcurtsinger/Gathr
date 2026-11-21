@@ -259,7 +259,14 @@ export function RoomView(props: Props) {
           )}
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat={chat.id} room={state} onAnswer={answer} />}
+      {sidebar && (
+        <RoomSidebar
+          chat={chat.id}
+          room={state}
+          onAnswer={answer}
+          onNote={(text, agent) => send(text, agent ?? recipients([], who, members, state)[0]?.id)}
+        />
+      )}
     </OpenFile.Provider>
   );
 }

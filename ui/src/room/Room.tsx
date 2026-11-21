@@ -2,13 +2,15 @@ import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
+import { DesignsMark } from '../components/DesignsMark';
 import { Face, type FaceOf } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
-import { OpenFile, parts, split } from '../components/files';
+import { fileName, OpenFile, parts, split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
+import { type Made, notesOf, readNote } from './note';
 import { QuestionCard } from './Question';
 import { type Card, type Item, type Said, type Step, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
@@ -79,6 +81,7 @@ export function Room({ chat, state, people, acts, found, header, after, children
     approvals: state.approvals,
     acts,
     found: found?.message,
+    notes: notesOf(state.messages, state.turns),
   };
   return (
     <>
@@ -122,6 +125,8 @@ interface Ctx {
   acts: Acts;
   /** The message a search hit opened the chat at. */
   found?: string;
+  /** The chat's notes on designs: a message that begins with one draws it above its words. */
+  notes: Made[];
 }
 
 /** Whether the item's words hold the message: `data-found` for it. */
@@ -135,13 +140,16 @@ function holds(item: Item, message?: string) {
  * any. Files alone sit without a bubble, the time under them.
  */
 function You({ said, ctx }: { said: Said; ctx: Ctx }) {
-  const { words, files } = split(said.message.body as string);
+  const { words: all, files } = split(said.message.body as string);
+  const made = ctx.notes.find((n) => n.id === said.message.id);
+  const words = made ? (readNote(all)?.words ?? '') : all;
   const tiles = files.length > 0 && <PathTiles chat={ctx.chat} paths={files} />;
   const time = <span className="room-time"> {clock(said.message.time)}</span>;
   return (
     <div className="room-item">
-      {words ? (
+      {words || made ? (
         <div className="room-you" data-found={holds(said, ctx.found)}>
+          {made && <NoteHead made={made} />}
           <Picked message={said.message} words={words} />
           {time}
           {tiles}
@@ -188,6 +196,24 @@ export function Words({ text, className, chat, names, agent }: WordsProps) {
   );
   if (!open) return words;
   return <OpenFile.Provider value={(path) => open(path, agent)}>{words}</OpenFile.Provider>;
+}
+
+/** A note's first line, drawn quietly above the person's words: its pin's number, the design and option, the part. */
+function NoteHead({ made: { n, note } }: { made: Made }) {
+  const design = fileName(note.page.replace(/[\\/][^\\/]*$/, ''));
+  return (
+    <span className="room-note">
+      <span className="room-note-where">
+        <b>{n}</b>
+        <DesignsMark />
+        {design} · {note.letter}
+      </span>
+      <span className="room-note-part">
+        The {note.kind}
+        {note.words && ` “${note.words}”`}
+      </span>
+    </span>
+  );
 }
 
 /** The person's words, each name they picked from the "@" list in blue. */

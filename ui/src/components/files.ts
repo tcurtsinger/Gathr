@@ -51,6 +51,11 @@ export function pathSteps(path: string) {
   return out;
 }
 export const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
+/** A path the one way, to compare: its case ignored on Windows. */
+export const pathKey = (path: string) => {
+  const joined = pathSteps(path).join('/');
+  return onWindows(path) ? joined.toLowerCase() : joined;
+};
 
 /** A message's words in order: words, and runs of files where they stand. */
 export type Part = { words: string } | { files: string[] };
