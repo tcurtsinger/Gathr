@@ -28,16 +28,16 @@ export function FileBody({ name, text, source }: { name: string; text: string; s
   return <Lines text={text} language={code.supportsLanguage(kind as Language) ? kind : undefined} />;
 }
 
-/** Past this many lines the highlighter held the window for seconds (12 s for 2 MB of TypeScript), so the lines show
- * plain. */
-const COLOURED = 3000;
+/** The highlighter's time grows with the text's size (12 s for 2 MB of TypeScript), so past about a second's worth
+ * the lines show plain. Size, not lines: a minified file is one long line. */
+const COLOURED = 150_000;
 
 /** Numbered lines that scroll sideways, coloured by the chat's code highlighter (Shiki, its themes) once it has them. */
 function Lines({ text, language }: { text: string; language?: string }) {
   // A file's last newline ends its last line; it doesn't start another.
   const body = text.replace(/\r?\n$/, '');
   const count = body.split('\n').length;
-  const coloured = count <= COLOURED ? language : undefined;
+  const coloured = body.length <= COLOURED ? language : undefined;
   const [colours, setColours] = useState<HighlightResult>();
   useEffect(() => {
     setColours(undefined);
