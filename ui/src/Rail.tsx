@@ -1,11 +1,12 @@
 import { CircleArrowUp, House, LoaderCircle, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { DesignsMark } from './components/DesignsMark';
 import { IconButton } from './components/IconButton';
 import { EYES, SHAPES } from './components/pictures';
 import './rail.css';
 
-/** The screen in the frame: the chats (Home), Agents or Plugins. */
-export type Opened = 'home' | 'agents' | 'plugins';
+/** The screen in the frame: the chats (Home), Agents, Plugins or Designs. */
+export type Opened = 'home' | 'agents' | 'plugins' | 'designs';
 
 interface Props {
   /** Its icon is lit. */
@@ -17,8 +18,8 @@ interface Props {
 }
 
 /**
- * The rail on the window's shell (0070): Home, Agents and Plugins at the top, the open one lit; Update and Settings
- * at the foot.
+ * The rail on the window's shell (0070): Home, Agents, Plugins and Designs at the top, the open one lit; Update and
+ * Settings at the foot.
  */
 export function Rail({ open, onOpen, onSettings, update }: Props) {
   const button = (screen: Opened, name: string, icon: ReactNode) => (
@@ -36,6 +37,7 @@ export function Rail({ open, onOpen, onSettings, update }: Props) {
       {button('home', 'Home', <House aria-hidden="true" />)}
       {button('agents', 'Agents', <AgentsMark />)}
       {button('plugins', 'Plugins', <PlugMark />)}
+      {button('designs', 'Designs', <DesignsMark />)}
       <div className="rail-foot">
         {update.ready && (
           <IconButton

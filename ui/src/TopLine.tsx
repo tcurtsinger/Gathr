@@ -40,9 +40,9 @@ export function WindowBand() {
 }
 
 interface NavProps {
-  /** Whether the sidebar is open, and what it lists: chats, or the Agents or Plugins screen's. */
+  /** Whether the sidebar is open, and what it lists: chats, or the Agents, Plugins or Designs screen's. */
   open: boolean;
-  lists?: 'chats' | 'agents' | 'plugins';
+  lists?: 'chats' | 'agents' | 'plugins' | 'designs';
   onToggle: () => void;
   /** None when there is nowhere to go: the arrow is dim. */
   onBack?: () => void;

@@ -1,5 +1,6 @@
-//! A page in a chat's folders shown as it looks: a view is a long random key that lets the window's
-//! sealed frame read the page's folder and what is below it, and nothing else. Kept in memory only.
+//! A page in a chat's folders, or in Designs, shown as it looks: a view is a long random key that
+//! lets the window's sealed frame read the page's folder and what is below it, and nothing else.
+//! Kept in memory only.
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -25,14 +26,32 @@ impl Views {
     /// A view of the file at `path` when it is inside one of `roots` (a chat's tree): its key and the
     /// file's name. Blocks on the disk.
     pub fn open(&self, roots: &[PathBuf], path: &str) -> Option<(String, String)> {
+        self.add(roots, path, false)
+    }
+
+    /// As `open`, but a page's folder keeps its one key while it is kept, now the newest: a gallery
+    /// that mounts its frames and lets them go as they scroll by holds one key per design.
+    pub fn reopen(&self, roots: &[PathBuf], path: &str) -> Option<(String, String)> {
+        self.add(roots, path, true)
+    }
+
+    fn add(&self, roots: &[PathBuf], path: &str, reuse: bool) -> Option<(String, String)> {
         let page = files::inside(roots, path).filter(|p| p.is_file())?;
         let name = page.file_name()?.to_str()?.to_string();
-        let key = ids::token();
+        let folder = page.parent()?.to_path_buf();
         let mut views = self.lock();
+        let kept = match reuse {
+            true => views.iter().position(|(_, f)| *f == folder),
+            false => None,
+        };
+        let key = match kept.and_then(|i| views.remove(i)) {
+            Some((key, _)) => key,
+            None => ids::token(),
+        };
         if views.len() >= MOST {
             views.pop_front();
         }
-        views.push_back((key.clone(), page.parent()?.to_path_buf()));
+        views.push_back((key.clone(), folder));
         Some((key, name))
     }
 

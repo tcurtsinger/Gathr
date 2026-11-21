@@ -9,7 +9,7 @@ export const isPage = (name: string) => /\.html?$/i.test(name);
 /**
  * The page at `path` as it looks, its own scripts running, sealed: the frame has no origin, so it can't reach the
  * window, Gathr's API or anything of this PC's but its own folder, which the service's view of it serves. Each new
- * `redraw` loads it again in place.
+ * `redraw` loads it again in place. Without a chat, the page is one in Designs, for the Designs screen.
  */
 export function PageFrame({
   chat,
@@ -17,7 +17,7 @@ export function PageFrame({
   name,
   redraw = 0,
 }: {
-  chat: string;
+  chat?: string;
   path: string;
   name: string;
   redraw?: number;
@@ -30,7 +30,7 @@ export function PageFrame({
   useEffect(() => {
     let live = true;
     setAddress(undefined);
-    api.view(chat, path).then(
+    (chat ? api.view(chat, path) : api.designView(path)).then(
       (a) => live && setAddress(a),
       (f: Failure) => live && setFailure(f),
     );

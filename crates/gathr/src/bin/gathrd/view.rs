@@ -1,5 +1,6 @@
-//! A page in a chat's folders as it looks (`gathr::view`): the window asks for a view of it, and its
-//! sealed frame loads the page and the files beside it by the view's key alone, outside `/api`.
+//! A page as it looks (`gathr::view`): the window asks for a view of a page in a chat's folders, or
+//! in Designs for the Designs screen, and its sealed frame loads the page and the files beside it by
+//! the view's key alone, outside `/api`. The Designs screen's list of every design is here too.
 
 use std::sync::Arc;
 
@@ -8,6 +9,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use gathr::designs;
 use gathr::view::Views;
 use serde_json::json;
 
@@ -16,10 +18,14 @@ use crate::files::{Shown, tree_of};
 use crate::routes::{Answer, Fail, fail};
 
 static VIEWS: Views = Views::new();
+/// The Designs screen's views, kept apart: its many cards never let a page open in a chat's tab go.
+static GALLERY: Views = Views::new();
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/chats/{chat}/view", post(open))
+        .route("/api/designs", get(list))
+        .route("/api/designs/view", post(open_design))
         .route("/view/{key}/{*rest}", get(serve))
 }
 
@@ -36,6 +42,54 @@ async fn open(
         let why = "it isn't a file in this chat's folders";
         return Err(fail(StatusCode::NOT_FOUND, "Page failed", why, &t.0));
     };
+    Ok(Json(json!({ "address": address(s.port, &key, &name) })))
+}
+
+/// A view of the page at `path` in Designs, one key per design while it is kept.
+async fn open_design(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Query(q): Query<Shown>,
+) -> Answer {
+    let data = s.data.path().to_path_buf();
+    let found = s.writer.call(move |conn| designs::folder(conn, &data));
+    let root = answered(found.await, "Page failed", &t)?;
+    let opened = tokio::task::spawn_blocking(move || GALLERY.reopen(&[root], &q.path)).await;
+    let Ok(Some((key, name))) = opened else {
+        let why = "it isn't a page in Designs";
+        return Err(fail(StatusCode::NOT_FOUND, "Page failed", why, &t.0));
+    };
+    Ok(Json(json!({ "address": address(s.port, &key, &name) })))
+}
+
+/// Every design, by its part of Designs.
+async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
+    let data = s.data.path().to_path_buf();
+    let found = s.writer.call(move |conn| {
+        Ok::<_, gathr::Error>((designs::folder(conn, &data)?, designs::owners(conn)?))
+    });
+    let (root, owners) = answered(found.await, "Designs failed", &t)?;
+    let parts = tokio::task::spawn_blocking(move || designs::list(&root, &owners))
+        .await
+        .unwrap_or_default();
+    Ok(Json(json!({ "parts": parts })))
+}
+
+fn answered<T>(
+    found: Option<Result<T, gathr::Error>>,
+    error: &'static str,
+    t: &Trace,
+) -> Result<T, Fail> {
+    let why = match found {
+        Some(Ok(found)) => return Ok(found),
+        Some(Err(e)) => e.to_string(),
+        None => "the database didn't answer".into(),
+    };
+    Err(fail(StatusCode::INTERNAL_SERVER_ERROR, error, &why, &t.0))
+}
+
+/// Where the frame opens the page `name` of the view `key`.
+fn address(port: u16, key: &str, name: &str) -> String {
     let name: String = name
         .bytes()
         .map(|b| match b {
@@ -45,8 +99,7 @@ async fn open(
             b => format!("%{b:02X}"),
         })
         .collect();
-    let address = format!("http://127.0.0.1:{}/view/{key}/{name}", s.port);
-    Ok(Json(json!({ "address": address })))
+    format!("http://127.0.0.1:{port}/view/{key}/{name}")
 }
 
 /// A file of a view's folder, sealed: run only as a sandboxed page with no origin, loading only
@@ -57,7 +110,10 @@ async fn serve(
     headers: HeaderMap,
 ) -> Result<Response, Fail> {
     let k = key.clone();
-    let found = tokio::task::spawn_blocking(move || VIEWS.file(&k, &rest)).await;
+    let found = tokio::task::spawn_blocking(move || {
+        VIEWS.file(&k, &rest).or_else(|| GALLERY.file(&k, &rest))
+    })
+    .await;
     let read = match found {
         Ok(Some(path)) => tokio::fs::read(&path).await.ok().map(|bytes| (path, bytes)),
         _ => None,
