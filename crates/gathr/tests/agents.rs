@@ -221,162 +221,13 @@ fn saves_are_checked_against_the_engine_and_an_account_in_use_stays() {
     assert_eq!(removed.status, 200, "{}", removed.body);
 }
 
-/// An agent's face (0074): what it is drawn from, as the API answers it.
-fn face(agent: &Value) -> Value {
-    json!([agent["face_seed"], agent["gender"], agent["skin"]])
-}
-
 #[test]
-fn a_new_agents_face_seed_is_its_name_and_a_rename_keeps_it() {
+fn a_removed_agent_keeps_its_picture_for_its_old_messages() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[]);
     let work = service.add_account("Work");
-    let added = service.send(
-        "POST",
-        "/api/agents",
-        json!({ "name": " Tess ", "account": work }),
-    );
-    assert_eq!(added.status, 200, "{}", added.body);
-    assert_eq!(face(&added.json()), json!(["Tess", null, null]));
-    let tess = added.json()["id"].as_str().unwrap().to_string();
-
-    let path = format!("/api/agents/{tess}");
-    let renamed = service.send("PATCH", &path, json!({ "name": "Tessa" }));
-    assert_eq!(renamed.status, 200, "{}", renamed.body);
-    let read = service.call("GET", &path).json();
-    assert_eq!(
-        (&read["name"], face(&read)),
-        (&json!("Tessa"), json!(["Tess", null, null]))
-    );
-
-    let shuffled = json!({ "name": "Made-up", "account": work, "face_seed": "k2v9q" });
-    let shuffled = service.send("POST", "/api/agents", shuffled);
-    assert_eq!(face(&shuffled.json()), json!(["k2v9q", null, null]));
-}
-
-#[test]
-fn a_faces_gender_skin_tone_and_seed_are_saved_and_bad_ones_refused() {
-    let data = TempDir::new();
-    let service = TestService::with_engine(&data.0, &[]);
-    let work = service.add_account("Work");
-    let made = json!({ "name": "Ann", "account": work, "gender": "woman", "skin": 5 });
-    let ann = service.send("POST", "/api/agents", made);
-    assert_eq!(
-        face(&ann.json()),
-        json!(["Ann", "woman", 5]),
-        "{}",
-        ann.body
-    );
-    let path = format!("/api/agents/{}", ann.json()["id"].as_str().unwrap());
-
-    let changed = json!({ "gender": "man", "skin": 2 });
-    let changed = service.send("PATCH", &path, changed);
-    assert_eq!(changed.status, 200, "{}", changed.body);
-    // Shuffle: a new seed, and nothing else moves.
-    let shuffled = service.send("PATCH", &path, json!({ "face_seed": "x7f3p" }));
-    assert_eq!(shuffled.status, 200, "{}", shuffled.body);
-    let read = service.call("GET", &path).json();
-    assert_eq!(
-        (&read["name"], face(&read)),
-        (&json!("Ann"), json!(["x7f3p", "man", 2]))
-    );
-    let listed = service.call("GET", "/api/agents").json();
-    assert_eq!(face(&listed["agents"][0]), json!(["x7f3p", "man", 2]));
-    let cleared = service.send("PATCH", &path, json!({ "gender": null, "skin": null }));
-    assert_eq!(face(&cleared.json()), json!(["x7f3p", null, null]));
-
-    let refused = [
-        (json!({ "gender": "other" }), "Choose Man or Woman"),
-        (json!({ "skin": 7 }), "Choose a skin tone from 1 to 6"),
-        (json!({ "skin": 0 }), "Choose a skin tone from 1 to 6"),
-        (json!({ "face_seed": " " }), "the face seed is blank"),
-    ];
-    for (body, why) in refused {
-        let answer = service.send("PATCH", &path, body.clone());
-        assert_eq!(answer.status, 400, "{body}: {}", answer.body);
-        let answer = answer.json();
-        assert_eq!(
-            (&answer["error"], &answer["why"]),
-            (&json!("Save failed"), &json!(why))
-        );
-        let reference = answer["ref"].as_str().unwrap();
-        let (_, trace) = gathr(&data.0, &["diag", "trace", reference]);
-        assert!(trace.to_string().contains(why), "{why:?} not in {trace}");
-    }
-    let made = json!({ "name": "Bo", "account": work, "gender": "other" });
-    let answer = service.send("POST", "/api/agents", made);
-    assert_eq!(
-        (answer.status, &answer.json()["error"]),
-        (400, &json!("Add failed"))
-    );
-}
-
-#[test]
-fn a_faces_background_is_the_persons_pick_kept_in_upper_case_and_bad_ones_refused() {
-    let data = TempDir::new();
-    let service = TestService::with_engine(&data.0, &[]);
-    let work = service.add_account("Work");
-    let tess = service.send(
-        "POST",
-        "/api/agents",
-        json!({ "name": "Tess", "account": work }),
-    );
-    assert_eq!(tess.json()["background"], json!(null), "{}", tess.body);
-    let made = json!({ "name": "Ann", "account": work, "background": "#fca0a7" });
-    let ann = service.send("POST", "/api/agents", made);
-    assert_eq!(ann.json()["background"], json!("#FCA0A7"), "{}", ann.body);
-    let path = format!("/api/agents/{}", ann.json()["id"].as_str().unwrap());
-
-    let changed = service.send("PATCH", &path, json!({ "background": "#7fB5a8" }));
-    assert_eq!(changed.status, 200, "{}", changed.body);
-    assert_eq!(
-        service.call("GET", &path).json()["background"],
-        json!("#7FB5A8")
-    );
-    let listed = service.call("GET", "/api/agents").json();
-    assert_eq!(listed["agents"][1]["background"], json!("#7FB5A8"));
-    let renamed = service.send("PATCH", &path, json!({ "name": "Anna" }));
-    assert_eq!(renamed.json()["background"], json!("#7FB5A8"));
-
-    let why = "Choose a background as #RRGGBB";
-    for bad in ["FCA0A7", "#FCA", "#FCA0A", "#FCA0A7 ", "#GGGGGG", "red", ""] {
-        let answer = service.send("PATCH", &path, json!({ "background": bad }));
-        assert_eq!(answer.status, 400, "{bad:?}: {}", answer.body);
-        let answer = answer.json();
-        assert_eq!(
-            (&answer["error"], &answer["why"]),
-            (&json!("Save failed"), &json!(why)),
-            "{bad:?}"
-        );
-        let (_, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);
-        assert!(trace.to_string().contains(why), "{why:?} not in {trace}");
-    }
-    let made = json!({ "name": "Bo", "account": work, "background": "blue" });
-    let answer = service.send("POST", "/api/agents", made);
-    assert_eq!(
-        (answer.status, &answer.json()["error"]),
-        (400, &json!("Add failed"))
-    );
-    assert_eq!(
-        service.call("GET", &path).json()["background"],
-        json!("#7FB5A8")
-    );
-
-    let cleared = service.send("PATCH", &path, json!({ "background": null }));
-    assert_eq!(
-        cleared.json()["background"],
-        json!(null),
-        "{}",
-        cleared.body
-    );
-}
-
-#[test]
-fn a_removed_agent_keeps_its_face_for_its_old_messages() {
-    let data = TempDir::new();
-    let service = TestService::with_engine(&data.0, &[]);
-    let work = service.add_account("Work");
-    let made = json!({ "name": "Bo", "account": work, "skin": 3, "face_seed": "p0q8", "background": "#6cd5b3" });
+    let made =
+        json!({ "name": "Bo", "account": work, "shape": "drop", "eyes": "wink", "colour": "teal" });
     let bo = service.send("POST", "/api/agents", made).json();
     let deleted = service.call(
         "DELETE",
@@ -386,8 +237,13 @@ fn a_removed_agent_keeps_its_face_for_its_old_messages() {
     let listed = service.call("GET", "/api/agents").json();
     let removed = &listed["removed"][0];
     assert_eq!(
-        (&removed["id"], &removed["name"], face(removed)),
-        (&bo["id"], &json!("Bo"), json!(["p0q8", null, 3]))
+        json!([
+            removed["id"],
+            removed["name"],
+            removed["shape"],
+            removed["eyes"],
+            removed["colour"]
+        ]),
+        json!([bo["id"], "Bo", "drop", "wink", "teal"])
     );
-    assert_eq!(removed["background"], json!("#6CD5B3"), "{removed}");
 }

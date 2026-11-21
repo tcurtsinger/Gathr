@@ -78,6 +78,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0068_drop_old_tables.sql"),
     include_str!("../migrations/0069_no_agent_pause.sql"),
     include_str!("../migrations/0070_agent_description.sql"),
+    include_str!("../migrations/0071_agent_marks.sql"),
 ];
 
 /// The schema version this build writes.
@@ -395,47 +396,12 @@ mod tests {
             .unwrap();
     }
 
-    /// 0052 (0074): an agent from before has its name as its face's seed, and no gender or skin tone.
+    /// 0071 drops the old faces' columns: every agent keeps its row and id, and has no picture picked.
     #[test]
-    fn an_agents_face_starts_from_its_name() {
-        let path = temp_db("faces");
+    fn agents_keep_their_rows_through_the_marks_and_pick_none() {
+        let path = temp_db("marks");
         let conn = Connection::open(&path).unwrap();
-        for sql in &MIGRATIONS[..51] {
-            conn.execute_batch(sql).unwrap();
-        }
-        conn.execute_batch(
-            "PRAGMA user_version = 51;
-             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
-             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('mira', 'Mira', 'mira', 'acc', 1);
-             INSERT INTO agents (id, name, name_key, created_ts, removed_ts) VALUES ('ann', 'Ann', 'ann', 2, 3);",
-        )
-        .unwrap();
-        drop(conn);
-        let conn = open(&path).unwrap();
-        let sql = "SELECT id || ' ' || face_seed || ' ' || coalesce(gender, '-') || ' ' || coalesce(skin, '-')
-                   || ' ' || coalesce(background, '-') FROM agents ORDER BY id";
-        let mut stmt = conn.prepare(sql).unwrap();
-        let rows: Vec<String> = stmt
-            .query_map([], |r| r.get(0))
-            .unwrap()
-            .map(Result::unwrap)
-            .collect();
-        assert_eq!(rows, ["ann Ann - - -", "mira Mira - - -"]);
-        // A background is #RRGGBB in upper case or nothing, whatever wrote it.
-        let set = |value: &str| {
-            let sql = "UPDATE agents SET background = ?1 WHERE id = 'mira'";
-            conn.execute(sql, [value]).is_ok()
-        };
-        let tried = ["#7FB5A8", "#7fb5a8", "#7FB5A", "7FB5A8F", "#7FB5AG"].map(set);
-        assert_eq!(tried, [true, false, false, false, false]);
-    }
-
-    /// 0066: an agent from before has no picture, and removing an agent drops its picture.
-    #[test]
-    fn an_agent_from_before_has_no_picture_and_removing_drops_one() {
-        let path = temp_db("picture");
-        let conn = Connection::open(&path).unwrap();
-        let before = 65;
+        let before = 70;
         for sql in &MIGRATIONS[..before] {
             conn.execute_batch(sql).unwrap();
         }
@@ -443,24 +409,40 @@ mod tests {
             .unwrap();
         conn.execute_batch(
             "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
-             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
-                 ('mira', 'Mira', 'mira', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 2);",
+             INSERT INTO agents (id, name, name_key, account_id, model, effort, created_ts, approvals,
+                                 folder_name, face_seed, skin, background, picture, description) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 'opus', 'high', 1, 'full', 'Mira', 'x7', 3, '#7FB5A8',
+                  'data:image/png;base64,AA', 'Everyday help'),
+                 ('bo', 'Bo', 'bo', 'acc', NULL, NULL, 2, 'auto', NULL, 'Bo', NULL, NULL, NULL, NULL);
+             INSERT INTO agents (id, name, name_key, created_ts, removed_ts) VALUES ('ann', 'Ann', 'ann', 3, 4);",
         )
         .unwrap();
-        drop(conn);
-        let conn = open(&path).unwrap();
-        let pictures = || -> Vec<Option<String>> {
-            let mut stmt = conn
-                .prepare("SELECT picture FROM agents ORDER BY id")
-                .unwrap();
+        let rows = |conn: &Connection| -> Vec<String> {
+            let sql = "SELECT id || name || name_key || coalesce(account_id, '-') || coalesce(model, '-')
+                       || coalesce(effort, '-') || created_ts || approvals || coalesce(folder_name, '-')
+                       || coalesce(removed_ts, '-') || coalesce(description, '-') FROM agents ORDER BY id";
+            let mut stmt = conn.prepare(sql).unwrap();
             let rows = stmt.query_map([], |r| r.get(0)).unwrap();
             rows.map(Result::unwrap).collect()
         };
-        assert_eq!(pictures(), [None, None]);
-        let set = "UPDATE agents SET picture = 'data:image/png;base64,AA'";
-        conn.execute(set, []).unwrap();
-        crate::agents::mark_removed(&conn, "bo").unwrap();
-        assert_eq!(pictures(), [None, Some("data:image/png;base64,AA".into())]);
+        let kept = rows(&conn);
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        assert_eq!(rows(&conn), kept);
+        let mut stmt = conn
+            .prepare("SELECT name FROM pragma_table_info('agents') ORDER BY cid")
+            .unwrap();
+        let columns: Vec<String> = stmt
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        for gone in ["face_seed", "gender", "skin", "background", "picture"] {
+            assert!(!columns.iter().any(|c| c == gone), "{gone} is still there");
+        }
+        let mira = crate::agents::get(&conn, "mira").unwrap().unwrap();
+        assert_eq!((mira.shape, mira.eyes, mira.colour), (None, None, None));
     }
 
     /// 0053: a turn a restart cut before reads stopped, as one cut now does; a turn that failed stays failed.

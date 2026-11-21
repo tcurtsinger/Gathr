@@ -234,26 +234,20 @@ export interface Agent {
   effort: string | null;
   /** What it may do without asking (0029). */
   approvals: Approvals;
-  /** What its face is drawn from (0074): its name when made, a new one at each Shuffle. */
-  face_seed: string;
-  /** Set by the old faces' Gender; kept, no longer drawn. */
-  gender: 'man' | 'woman' | null;
-  /** Skin tone 1 to 6; null until the person sets it. */
-  skin: number | null;
-  /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
-  background: string | null;
-  /** A picture the person uploaded, as a data URL; shown instead of the drawn face. */
-  picture?: string | null;
+  /** Its picture's shape, eyes and colour by name; null until the person picks, worked out from the id. */
+  shape: string | null;
+  eyes: string | null;
+  colour: string | null;
   /** One line of up to 80 characters: what it is for, beside its name in the "@" list. */
   description?: string | null;
 }
 
-/** An agent as Settings saves it: a face field is sent only when it changed. */
-export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin' | 'background' | 'picture'> &
-  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin' | 'background' | 'picture'>>;
+/** An agent as Settings saves it: a picture field is sent only when it changed. */
+export type AgentDraft = Omit<Agent, 'id' | 'shape' | 'eyes' | 'colour'> &
+  Partial<Pick<Agent, 'shape' | 'eyes' | 'colour'>>;
 
-/** A removed agent: its old messages still say who wrote them, with its face (0069, 0074). */
-export type Named = Pick<Agent, 'id' | 'name' | 'face_seed' | 'gender' | 'skin' | 'background'>;
+/** A removed agent: its old messages still say who wrote them, with its picture (0069). */
+export type Named = Pick<Agent, 'id' | 'name' | 'shape' | 'eyes' | 'colour'>;
 
 export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 

@@ -1,20 +1,20 @@
-/* An agent's face (0074): its drawing on the background the person picked (Face sets it), at 36, 28, 24, 20 or 16,
-   and 56 in its form. */
+/* An agent's picture: lines only, in its colour (Face sets both values), a light one on the dark theme and a deep
+   one on the light theme; at 36, 28, 24, 20 or 16, and 56 in its form and the new chat. */
 .face {
-  position: relative;
   display: block;
   flex: none;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  --mark: 9px;
-  --mark-ring: 1.5px;
+  color: var(--ink);
 }
-.face > :is(svg, img) {
+html.light .face {
+  color: var(--ink-l);
+}
+.face > svg {
   display: block;
   width: 100%;
   height: 100%;
-  clip-path: circle(50%);
+  overflow: visible;
 }
 .face[data-size="56"] {
   width: 56px;
@@ -23,27 +23,21 @@
 .face[data-size="36"] {
   width: 36px;
   height: 36px;
-  --mark: 12px;
-  --mark-ring: 2px;
 }
 .face[data-size="28"] {
   width: 28px;
   height: 28px;
-  --mark: 10px;
-  --mark-ring: 2px;
 }
 .face[data-size="20"] {
   width: 20px;
   height: 20px;
-  --mark: 8px;
 }
 .face[data-size="16"] {
   width: 16px;
   height: 16px;
 }
 
-/* Its state (0071): top right, on the face's edge, cut out of the surface it sits on by a ring of that surface's
-   colour (--behind, the chat's own by default), so it reads on any background a face is drawn on. */
+/* An agent's state where it is said beside words: a chat's row, a card's head. */
 .mark {
   --c: var(--muted-foreground);
   --cut: var(--behind, var(--background));
@@ -52,18 +46,6 @@
   width: var(--mark, 9px);
   height: var(--mark, 9px);
   border-radius: 50%;
-}
-.face > .mark {
-  position: absolute;
-  /* Over a button's hover tint. */
-  z-index: 1;
-  top: -1px;
-  right: -1px;
-  background: var(--cut);
-  box-shadow: 0 0 0 var(--mark-ring) var(--cut);
-}
-.face:is([data-size="24"], [data-size="20"]) > .mark[data-state="stopped"] {
-  border-radius: 2px;
 }
 .mark > svg {
   display: block;
@@ -77,16 +59,6 @@
 .mark-cut {
   fill: var(--cut);
 }
-.mark-hand {
-  fill: none;
-  stroke: var(--cut);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.mark-hand[data-small] {
-  stroke-width: 1.9;
-}
 .mark-arc {
   fill: none;
   stroke: var(--c);
@@ -99,12 +71,8 @@
 .mark[data-state="cant"] {
   --c: var(--destructive);
 }
-.mark[data-state="free"] {
-  --c: var(--free);
-}
-/* Working turns on every face of an agent at work and beside its chat in the sidebar (the owner's call of
-   2026-11-19); a task's state word keeps its mark still. Calm and thin, one turn every 1.6s; still under reduced
-   motion. */
+/* Working turns beside its chat in the sidebar and on a card's head (the owner's call of 2026-11-19). Calm and
+   thin, one turn every 1.6s; still under reduced motion. */
 .mark[data-spin] > svg {
   animation: mark-turn 1.6s linear infinite;
 }

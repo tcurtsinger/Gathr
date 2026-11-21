@@ -190,11 +190,10 @@ coloured by a highlight (a span would move the letters after it off the
 textarea's by up to 1/16px). Once something is typed, a quiet sign by Send says
 who gets it: every picked agent in the order the names stand, else the hint's
 agent (0028), in 12.5px muted with each name in the foreground at 550 and bare
-20px faces, overlapping by 5px, each after the first ringed 1.5px in the box's own
-colour (the mock-up's `#who` A): "To Ann", "To Ann and Bo", "To Ann, Bo and Cy";
+20px pictures side by side, 2px apart (the mock-up's `#who` A): "To Ann", "To Ann and Bo", "To Ann, Bo and Cy";
 agents picked from outside a chat with no project are said apart, "Bo joins", "Bo
 and Cy join", "To Ann, Bo joins". The names end in "…" where the row runs out (the
-360 column), the faces stay. Each agent named gets the message.
+360 column), the pictures stay. Each agent named gets the message.
 There is no Everyone option. Sent, the message keeps its picked names, and its bubble draws each in the same attention blue; a typed
 @Ann stays plain, as does every name in a message from before picks were kept.
 
@@ -205,18 +204,13 @@ Raw HTML policy, link behavior and Diagnostics references stay governed by Gathr
 
 ### State marks
 
-An agent's state is one mark on its face ([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)), the
-same on every face of it in a chat: the most pressing that holds of Needs you (a blue dot), Can't run (a red
-disc with !), Working (a three-quarter blue ring), Stopped (a grey disc with a square; a plain square at 24 and
-under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's hand) and Free (a plain green
-dot). It sits at the face's top right, 1px over its edge: 12px at 36, 10px at 28, 9px at 24, 8px at 20, cut
-out of the surface behind it by a ring of that surface's colour (2px at 36 and 28, 1.5px below), so it reads on
-any background a face is drawn on. Faces of 20 to 36px carry it; Settings' faces don't. A Working mark turns once in 1.6s on every face of an agent at work,
-its older messages too (the owner's call of 2026-11-19: a ring standing still read as stuck); under reduced
-motion it is still.
+An agent's picture carries no state (the owner's call of 2026-11-21). A state shows only where it is said
+beside words ([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)): Needs you (a blue dot), Can't
+run (a red disc with !) and Working (a three-quarter blue ring). A card's head says "Working · 1m" or "Needs you" with its mark at 12px. A Working mark turns once in 1.6s
+(the owner's call of 2026-11-19: a ring standing still read as stuck); under reduced motion it is still.
 
 A chat's sidebar row shows its most pressing of Needs you, Can't run and Working as the
-same mark at 9px, Working turning as on a face, 8px after its cut title.
+same mark at 9px, Working turning, 8px after its cut title.
 
 ### Navigation and workspace
 
@@ -227,7 +221,7 @@ under it; a click folds it, and folded it shows its count. A chat's row is one 7
 a whole on hover; its More, and a project header's + and More, are 24px icons with no box of their own, shown
 only on hover, keyboard focus or while the menu is open, the open chat's row too (C70, C71). A chat with
 something going on carries one 9px mark 8px after its title, which is cut before it (0040, C65, 0071): the
-faces' own Needs you, Can't run or Working mark, the most pressing of the three, still. The mark never moves
+Needs you, Can't run or Working mark, the most pressing of the three. The mark never moves
 More. Its name is the mark's word. An agent that only waits, a queued turn and a paused chat with nothing
 running carry no mark. Archived is a header like Chats, with no icon.
 Search opens a contextual flyout, at most
@@ -240,11 +234,15 @@ Search uses [title first](designs/search/v1.html), selected 2026-11-10. Snippet 
 has the icon-button close.
 The portable reference demonstrates empty, loading, no matches and referenced errors.
 
-Agents show their face beside their name, replacing the shared robot icon (0074): a drawn face on the
-background the person picked, the same everywhere, at 28 on a card, 24 in the @ list and a project's team,
-and 20 on a reply and in the To line. The face is hidden from screen readers
-beside the name and carries the name where it stands alone. The background shows as picked, the same in light
-and dark; until one is picked it is a grey, #CECECE.
+Agents show their picture beside their name: Gathr's own drawing of a shape (twelve: Circle, Tile, Cloud,
+Flower, Hexagon, Pebble, Shield, Drop, Star, Diamond, Bubble, Leaf), a pair of eyes (twelve: Lines, Glance, Side,
+Squint, Dots, Rings, Ovals, Happy, Rest, Wink, Calm, Quirk) and a line colour (twelve, Red to Grey), lines only on
+no background, the same everywhere: 56 in Settings and the new chat, 28 on a card, 24 in the @ list and a
+project's team, 20 on a reply, in the To line and in General's Assistant pick. Each colour has a light value for
+the dark theme and a deep one for the light theme (OKLCH 0.80 and 0.50, the same hue). The line is 3 in the 48
+box and never under 1.5px; at 20 and under the Cloud draws six bumps and the Hexagon sharper corners. An agent
+with nothing picked has all three worked out from its id, so it always looks the same. The picture is hidden
+from screen readers beside the name and carries the name where it stands alone.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
 ### Archive (F11)
@@ -288,9 +286,7 @@ Apply the new shared tokens, type and controls within that layout.
 General starts with Theme for This computer: System (default, follows the system's
 setting), Light or Dark, applied at once without a reload. Then Open at login for
 This computer, applied immediately with Switch. The window keeps the theme and the
-navigation and workspace widths across restarts. General ends with the version and, under it, the faces'
-credit: "Faces", then "Dylan! The Avatar Generator by Natalia Spivak, CC BY 4.0, changed", the work
-and the licence linked.
+navigation and workspace widths across restarts. General ends with the version.
 
 Agent folder follows Open at login: the current path, Change and shared ? Help.
 It belongs to the service host, with no This computer label. In the desktop
@@ -304,16 +300,12 @@ stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Face, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
-56px face (DiceBear's Dylan; the seed picks hair, hair colour, mood and facial hair) and Shuffle, which draws it
-from a new seed and keeps the tone shown, Upload, which shows a picture from the computer in its place, cut to its
-middle square, and Remove, which brings the drawn face back; Skin tone is six swatches,
-light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
-for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
-row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
-not among the twelve shows on the +, pressed, and stays on it, not pressed, while a ready colour is picked. Escape or a click outside closes the picker, not Settings. Each
-redraws the face at once and is saved with Save. A tone never set shows what the face's seed picked;
-a background never set is the grey, with no swatch pressed (0074). Account implies engine;
+one shared editor: Picture, Shape, Eyes, Colour, Account, Model, Effort, Approvals. Picture is the agent's
+56px picture and Shuffle, which picks a new shape, eyes and colour. Shape and Eyes are the twelve choices each,
+drawn alone in 40px boxes in the agent's colour, the one shown ringed; Colour is twelve 26px swatches, names for
+screen readers only, the one shown ringed. A click redraws the picture at once and is saved with Save; one never
+picked shows what the id worked out. A new agent's form starts with three picked as Shuffle picks them, saved with
+it. No upload and no colour of one's own. Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,
 temperature or extra toggles as product settings. Save affects future turns in
