@@ -2,22 +2,22 @@ import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
-import { FailureNotice } from '../components/Notice';
+import { useCard } from '../components/Corner';
 
 interface Props {
   onBack: () => void;
-  /** Settles once it's written; a refusal stays on the form. */
+  /** Settles once it's written; a refusal is told, and the form keeps what was typed. */
   onSave: (skill: { name: string; description: string; text: string }) => Promise<unknown>;
-  onReference: (ref: string) => void;
 }
 
 /** New skill: its name, what it's for, and its instructions, written as its folder and SKILL.md. */
-export function NewSkill({ onBack, onSave, onReference }: Props) {
+export function NewSkill({ onBack, onSave }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const save = () => {
     setBusy(true);
     setFailure(null);
@@ -56,7 +56,6 @@ export function NewSkill({ onBack, onSave, onReference }: Props) {
         Instructions
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={14} />
       </label>
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <footer className="agent-actions">
         <Button type="button" size="sm" variant="outline" onClick={onBack}>
           Cancel

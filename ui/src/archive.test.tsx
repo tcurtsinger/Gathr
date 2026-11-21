@@ -98,7 +98,7 @@ test('a refused Archive keeps the question open with its reference; Cancel gives
   await expect.element(page.getByRole('button', { name: 'Made-up a', exact: true })).toBeVisible();
 });
 
-test('an archived chat reads only until Restore; a refused Restore says why on it', async () => {
+test('an archived chat reads only until Restore; a refused Restore says why', async () => {
   let refuse = true;
   service([chat('a')], [{ ...chat('z'), archived: '2026-11-08T12:00:00Z' }], (path) =>
     path.endsWith('/unarchive') && refuse ? refusal('Unarchive failed') : undefined,
@@ -111,9 +111,12 @@ test('an archived chat reads only until Restore; a refused Restore says why on i
   await page.getByRole('button', { name: 'More for Made-up z' }).click();
   await page.getByRole('menuitem', { name: 'Restore' }).click();
 
-  // The failure opens the chat it's about, which still reads only.
+  // The card sits over the sidebar's foot, where Archived is: closed, the chat can be opened.
+  const told = page.getByRole('alert').filter({ hasText: 'Unarchive failed' });
+  await expect.element(told).toBeVisible();
+  await told.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Made-up z', exact: true }).click();
   await expect.element(heading('Made-up z')).toBeInTheDocument();
-  await expect.element(page.getByText('Unarchive failed')).toBeVisible();
   await expect.element(page.getByRole('textbox')).not.toBeInTheDocument();
 
   refuse = false;

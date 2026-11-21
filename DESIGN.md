@@ -45,8 +45,7 @@ tokens and static component anatomy, not replacement runtime components.
 Surfaces take four steps. `shell` is the window's own surface, under the rail and the top line and
 around the frame ([0070](docs/archive/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
 frame in light, with `shell-edge` (7% foreground) as the frame's 1px ring. `frame` is navigation and the
-workspace. `background` is the chat. `card` is what stands on the chat: an approval, a
-notice. A message is no card: it stands in a bubble, the foreground at 8% over the chat
+workspace. `background` is the chat. `card` is what stands on the chat: an approval. A message is no card: it stands in a bubble, the foreground at 8% over the chat
 ([0072](docs/archive/decisions/0072-the-chat-reads-like-a-team-chat.md)). In dark the chat is darkest and the frame lighter ([0068](docs/archive/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog) at #2f2f2f. `raised` and
@@ -64,7 +63,8 @@ light `oklch(0.54 0.15 148)`) is the Free mark's green
 the board's In review.
 `os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
 alone.
-Errors combine destructive text, a tinted surface, an icon and a reference.
+A failure is a small card in the corner (Recovery, focus and motion): the popover surface, a hairline border, a small
+danger mark, its title, its reason muted and its reference; never a red fill or a red border.
 
 The prototype calls its neutral surface tokens `muted` and `accent`. Existing
 Gathr code uses those names for text. Here they are `muted-surface` and
@@ -265,14 +265,14 @@ Confirm is a shared Dialog variant: "Archive <title>?" or "Delete <title>?",
 Cancel and the verb. The title wraps, Cancel has initial focus, Escape cancels
 and focus returns to the trigger. Archive uses the neutral primary Button;
 Delete uses the outlined danger Button. A refused action keeps the confirm
-open with "Archive failed" or "Delete failed" and its Diagnostics reference.
+open; "Archive failed" or "Delete failed" and its Diagnostics reference show in a corner card.
 A confirm that needs it has a short body under the question, in muted 14px: a
 count and what happens to it, then what is kept ("1 project and 2 chats will be
 deleted. Files are kept."). Every thing named carries its count, never its name;
 no line per fact, no paths. A project's or an agent's Delete (0069) takes its
 body from the service's counts when it opens; the verb waits for them, and
-counts that fail show the shared failure notice with the verb off. No Undo.
-Restore asks nothing; its failure uses the shared referenced Notice.
+counts that fail show in a corner card, with the verb off. No Undo.
+Restore asks nothing; its failure shows in a corner card.
 
 ### Settings, accounts and agents
 
@@ -332,11 +332,16 @@ header Diagnostics action. The prototype's component gallery is a reference tool
 
 ### Recovery, focus and motion
 
-App-level failures appear at the top of the chat in the shared Notice, with the reason, reference and Dismiss.
+Every failure the window tells shows as a small card in its bottom-left corner, just right of the rail (the owner's
+pick of 2026-11-21): its title in bold, its reason muted, its reference, which opens Diagnostics, an action such as
+Retry beside it, and an X named Close. Cards stack upward, the newest nearest the corner; a new failure from the same
+place replaces its card. A card stays until it is closed or what failed succeeds or stops mattering; it never takes
+focus and is announced as an alert. Over a dialog, the cards show above it. What the app only loads or reloads by
+itself says nothing when it fails: the live socket reloads it.
 
-Stopped, waiting for sign-in and failed-send notices stay at their affected reply
-per 0023. Preserve partial text and drafts. Neutral for stopped/waiting; destructive
-for failure, with the reference, Diagnostics and Retry. Errors end in failed.
+Stopped and waiting for sign-in notices stay at their affected reply per 0023. Preserve partial text and drafts.
+Neutral for stopped/waiting. A message that couldn't be sent stays where it would be, the person's bubble dimmed
+with a quiet Retry under it; its card has Retry too. Errors end in failed.
 Sign in opens Engines in the same Settings panel.
 
 No focus rings anywhere, including the composer. Keyboard focus uses the same

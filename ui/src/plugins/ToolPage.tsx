@@ -5,7 +5,7 @@ import { api, type Failure, type ToolAction, type WebTool } from '../api';
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
 import { ChangeClientId, given } from './ClientId';
-import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
+import { ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { stateOf } from './tool';
 
 interface Props {
@@ -16,14 +16,13 @@ interface Props {
   onEnable: (tool: WebTool, on: boolean) => void;
   onChangeKey: (tool: WebTool, opener: HTMLElement | null) => void;
   onRemove: (tool: WebTool, opener: HTMLElement | null) => void;
-  onReference: (ref: string) => void;
 }
 
 /**
  * A tool's page: its link and state, Change key (Sign in again for one signed in through the browser) and Remove,
  * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now.
  */
-export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove, onReference }: Props) {
+export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove }: Props) {
   const [asked, setAsked] = useState<(WebTool & { actions: ToolAction[] | null; redirect?: string }) | null>(
     null,
   );
@@ -105,14 +104,6 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
         <footer className="agent-actions tool-sign-in">
           <ToolSignInWaiting url={signIn.waiting.url} onCancel={signIn.cancel} />
         </footer>
-      )}
-      {signIn.failed && (
-        <ToolSignInFailed
-          why={signIn.failed.why}
-          reference={signIn.failed.ref}
-          onRetry={signIn.retry}
-          onReference={onReference}
-        />
       )}
       <div className="skill-enabled">
         <span className="skill-enabled-words">

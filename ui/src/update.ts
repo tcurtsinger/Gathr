@@ -6,7 +6,8 @@ import { useNewestWins } from './newest';
 /**
  * Gathr's own version and update (0032), live. Read when it loads and again whenever the live socket
  * missed events (a hand-over to the update drops it), then followed as the service sends it. Of a
- * read and a live state, only the newest started shows.
+ * read and a live state, only the newest started shows. A read that fails says nothing; a refused Update or check
+ * is told.
  */
 export function useAppUpdate(tell: (f: Failure) => void) {
   // Update hands the service over to the new release: its not answering then is the update working.
@@ -21,8 +22,8 @@ export function useAppUpdate(tell: (f: Failure) => void) {
   const [asking, setAsking] = useState(false);
   const newest = useNewestWins();
   const load = useCallback(() => {
-    newest(api.app()).then(setApp, onFailure);
-  }, [newest, onFailure]);
+    newest(api.app()).then(setApp, () => {});
+  }, [newest]);
   useEffect(() => {
     load();
     return listen((event) => {

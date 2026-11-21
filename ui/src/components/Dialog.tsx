@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WindowBand } from '../TopLine';
+import { useModal } from './Corner';
 import { IconButton } from './IconButton';
 import './dialog.css';
 
@@ -52,6 +53,7 @@ export function Dialog({
       back.current = null;
     }
   }, [open]);
+  useModal(dialog, open);
 
   return (
     <dialog

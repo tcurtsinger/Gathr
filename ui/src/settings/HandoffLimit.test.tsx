@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { HandoffLimit } from './HandoffLimit';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -23,7 +24,12 @@ test('the hand-off limit saves when picked, No limit as none; a refused pick say
     return shown();
   });
   const opened: string[] = [];
-  const screen = await render(<HandoffLimit onReference={(ref) => opened.push(ref)} />);
+  const screen = await render(
+    <>
+      <HandoffLimit />
+      <Corner onReference={(ref) => opened.push(ref)} />
+    </>,
+  );
   const pick = screen.getByRole('combobox', { name: 'Pause after' });
   const choose = async (choice: string) => {
     await pick.click();

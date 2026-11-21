@@ -3,25 +3,25 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
 import { danger } from '../components/Confirm';
+import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
-import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
 import { Team } from './ProjectTeam';
 import { Page, Row } from './Row';
 import './projects.css';
 
-type Open = (ref: string) => void;
 export type Seat = { agent: string; role: Role };
 
 /**
  * Settings > Projects: the projects listed, each with its folder and team; one opens a page of its own, its
  * name, folder and team in one draft with one Save.
  */
-export function Projects({ start, onReference }: { start?: string; onReference: Open }) {
+export function Projects({ start }: { start?: string }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const [opened, setOpened] = useState<string | null>(start ?? null);
   /** The project last saved, so its page says so until it changes again. */
   const [saved, setSaved] = useState<string | null>(null);
@@ -38,7 +38,6 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
   }, [load]);
 
   const project = projects?.find((p) => p.id === opened);
-  const notice = failure && <FailureNotice failure={failure} onReference={onReference} />;
   if (project)
     return (
       // A new form for each project, so one project's draft never carries to another.
@@ -47,7 +46,6 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
         project={project}
         agents={agents}
         saved={saved === project.id}
-        notice={notice}
         onBack={() => setOpened(null)}
         onSaved={(done) => {
           setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
@@ -58,13 +56,11 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
           setOpened(null);
           setFailure(left);
         }}
-        onReference={onReference}
       />
     );
   const face = (id: string, name: string) => agents.find((a) => a.id === id) ?? { id, name };
   return (
     <Page title="Projects" line="Each project’s folder and the team a new chat starts with.">
-      {notice}
       {projects?.length === 0 && <p className="settings-empty">No projects</p>}
       {projects && projects.length > 0 && (
         <ul className="settings-rows settings-top">
@@ -109,22 +105,20 @@ interface PageProps {
   project: Project;
   agents: Agent[];
   saved: boolean;
-  /** A failure of the list's own, shown over the page. */
-  notice: React.ReactNode;
   onBack: () => void;
   onSaved: (project: Project) => void;
   /** What the delete couldn't remove yet, if anything. */
   onDeleted: (left: Failure | null) => void;
-  onReference: Open;
 }
 
-function ProjectPage({ project, agents, saved, notice, onBack, onSaved, onDeleted, onReference }: PageProps) {
+function ProjectPage({ project, agents, saved, onBack, onSaved, onDeleted }: PageProps) {
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   // Only the fields edited here, over the project as saved, so Save never writes an untouched one back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const team = project.members.map(({ agent, role }) => ({ agent, role }));
   const fields: Fields = { ...project, team, ...edits };
   const edit = (more: Partial<Fields>) => setEdits((e) => ({ ...e, ...more }));
@@ -172,7 +166,6 @@ function ProjectPage({ project, agents, saved, notice, onBack, onSaved, onDelete
         </Button>
       }
     >
-      {notice}
       {deleting && (
         <DeleteConfirm
           kind="project"
@@ -181,7 +174,6 @@ function ProjectPage({ project, agents, saved, notice, onBack, onSaved, onDelete
           opener={deleting}
           onCancel={() => setDeleting(null)}
           onDeleted={onDeleted}
-          onReference={onReference}
         />
       )}
       <form className="project-form" aria-label={project.name} onSubmit={submit}>
@@ -205,7 +197,6 @@ function ProjectPage({ project, agents, saved, notice, onBack, onSaved, onDelete
           </Row>
         </div>
         <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
-        {failure && <FailureNotice failure={failure} onReference={onReference} />}
         <footer className="settings-foot">
           <span className="muted" role="status">
             {saved && !changed ? 'Saved' : ''}

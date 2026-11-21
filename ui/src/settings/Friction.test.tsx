@@ -1,6 +1,7 @@
 // The service is the edge here: fetch answers as it would, from made-up reports.
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { Friction } from './Friction';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -57,6 +58,11 @@ test('with nothing reported it says so, and a failure shows with its reference',
 
   const error = { error: 'Friction failed', why: 'made-up refusal', ref: 'made-up-ref' };
   vi.stubGlobal('fetch', async () => new Response(JSON.stringify(error), { status: 500 }));
-  const failed = await render(<Friction />);
+  const failed = await render(
+    <>
+      <Friction />
+      <Corner onReference={() => {}} />
+    </>,
+  );
   await expect.element(failed.getByText('made-up refusal')).toBeVisible();
 });

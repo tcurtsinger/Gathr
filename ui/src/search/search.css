@@ -37,8 +37,3 @@
   color: var(--attention);
   font-weight: 600;
 }
-.flyout-body > .notice {
-  min-height: 0;
-  margin: 8px 0;
-  padding: 12px;
-}

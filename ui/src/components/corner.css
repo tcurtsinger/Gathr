@@ -1,0 +1,95 @@
+/* Failures (Corner.tsx), the owner's pick of 2026-11-21 (Shared/designs/failures, c-5): small cards in the
+   bottom-left corner, just right of the rail, stacked upward with the newest nearest the corner. */
+.corner {
+  position: fixed;
+  left: 56px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 330px;
+  max-width: calc(100vw - 68px);
+  pointer-events: none;
+}
+.corner:empty {
+  display: none;
+}
+.corner-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: start;
+  padding: 12px 10px 12px 14px;
+  border-radius: 12px;
+  background: var(--popover);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 14px 36px #00000059;
+  font-size: 13px;
+  line-height: 18px;
+  pointer-events: auto;
+}
+:root.light .corner-card {
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 10px 30px #0000001f;
+}
+.corner-mark {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--danger);
+  stroke-width: 1.75;
+}
+.corner-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.corner-words strong {
+  font-weight: 500;
+}
+/* The service's why can carry a tool's whole output: five lines, the rest scrolls. */
+.corner-words > span {
+  max-height: 90px;
+  overflow-y: auto;
+  color: var(--muted-foreground);
+}
+.corner-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.corner-foot .ref {
+  min-height: 0;
+  padding: 0;
+  font:
+    11.5px ui-monospace,
+    "Cascadia Mono",
+    Consolas,
+    monospace;
+  color: var(--muted-foreground);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  text-underline-offset: 3px;
+}
+.corner-foot .ref:hover {
+  color: var(--foreground);
+}
+.corner-foot [data-slot="button"] {
+  padding: 0 10px;
+}
+.corner-x {
+  margin-top: -3px;
+  color: var(--muted-foreground);
+}
+.corner-x svg {
+  width: 15px;
+  height: 15px;
+}

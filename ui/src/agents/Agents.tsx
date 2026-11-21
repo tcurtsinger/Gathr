@@ -2,9 +2,9 @@ import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, type Agent, api, type Failure, type Model } from '../api';
+import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
 import { Face } from '../components/Face';
-import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
 import { Screen } from '../Screen';
@@ -16,7 +16,6 @@ const NEW = 'new';
 const NONE = 'none';
 
 interface Props {
-  onReference: (ref: string) => void;
   /** The assistant was changed here: a new chat's greeting names it. */
   onAssistant: () => void;
 }
@@ -25,10 +24,11 @@ interface Props {
  * The Agents screen (agents/v1, 0026), in place of the chat list and the chat, as Plugins is: every agent in its
  * sidebar; the list with the assistant and Add; each agent's page with its account, model, effort and approvals.
  */
-export function Agents({ onReference, onAssistant }: Props) {
+export function Agents({ onAssistant }: Props) {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   /** The agent whose page is open, NEW for Add, or null for the list. */
   const [open, setOpen] = useState<string | null>(null);
   const [assistant, setAssistant] = useState<string | null>(null);
@@ -100,7 +100,6 @@ export function Agents({ onReference, onAssistant }: Props) {
         </div>
       }
     >
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       {ready && (agent || open === NEW) && accounts.length > 0 && (
         // A new page for each agent, so one agent's draft never carries to another.
         <AgentPage
@@ -124,7 +123,6 @@ export function Agents({ onReference, onAssistant }: Props) {
             setFailure(left);
             show(null);
           }}
-          onReference={onReference}
         />
       )}
       {ready && !agent && open !== NEW && (

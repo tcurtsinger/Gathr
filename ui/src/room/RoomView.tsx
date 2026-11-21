@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   type Agent,
@@ -16,9 +16,10 @@ import {
 } from '../api';
 import { ChatMenu } from '../components/ChatMenu';
 import { Composer, type Person } from '../components/Composer';
+import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
+import { FileTiles, LocalTile } from '../components/FileTile';
 import { kept, type Picked } from '../components/mention';
-import { FailureNotice } from '../components/Notice';
 import { ProjectPick } from '../components/ProjectPick';
 import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
@@ -52,7 +53,6 @@ interface Props {
   /** The files added to the draft, kept until Send. */
   files?: File[];
   onFiles: (files: File[]) => void;
-  openSettings: (page: 'engines' | 'turns', turn?: string) => void;
   unsent: Unsent[];
   onUnsent: (update: (list: Unsent[]) => Unsent[]) => void;
   onNamed: () => void;
@@ -60,28 +60,26 @@ interface Props {
   onProject: (project: string) => void;
   onNewProject: () => void;
   onStart: (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => void;
-  notice?: ReactNode;
   pauses: Pauses;
   onPause: (action: 'pause' | 'resume' | 'stop', scope: PauseScope) => Promise<void>;
   onArchive?: (opener: HTMLElement | null) => void;
   onDelete?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
-  restoreFailure?: Failure;
-  onReference?: (ref: string) => void;
   /** The message a search hit opened the chat at. */
   found?: Found;
   /** Whether the sidebar is open, as the person left it in this chat; unset, it opens with more than one agent. */
   sidebar?: boolean;
   onSidebar: (open: boolean) => void;
-  onFailure: (f: Failure) => void;
 }
 
 /** A chat: the middle of the window, and its sidebar. */
 export function RoomView(props: Props) {
-  const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent, onReference } = props;
+  const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent } = props;
   const { state, failure, reload, approve, answer } = useRoom(chat.id);
-  // A refused Stop, Pause or like: it shows above the message box, with its reference.
+  useCard(failure, { label: 'Retry', run: reload });
+  // A refused Stop, Pause or like.
   const [refused, setRefused] = useState<Failure>();
+  useCard(refused);
   // The questions panel: closed, open, or open on one question.
   const [asking, setAsking] = useState<number | null>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
@@ -137,11 +135,9 @@ export function RoomView(props: Props) {
   const stop = () => attempt(() => props.onPause('stop', thisChat));
   const run = runOf(props.pauses, chat.id);
   const resume = () => attempt(() => props.onPause('resume', run.scope ?? thisChat));
-  const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('turns'));
   const acts = {
     approve,
     ask: setAsking,
-    reference,
     like: chat.archived
       ? undefined
       : (message: string, give: boolean) =>
@@ -179,14 +175,12 @@ export function RoomView(props: Props) {
               at={asking}
               onOpen={setAsking}
               onAnswer={answer}
-              onReference={reference}
             />
             <WorkspaceToggle open={sidebar} onToggle={() => props.onSidebar(!sidebar)} />
           </div>
         )}
       </TopLine>
       <main className="chat room" aria-label={chat.title} ref={column}>
-        {props.notice}
         <Room
           chat={chat.id}
           state={state}
@@ -194,7 +188,7 @@ export function RoomView(props: Props) {
           acts={acts}
           found={props.found}
           header={
-            fresh ? (
+            fresh && (
               <div className="room-greeting">
                 {ahead && <Face agent={{ id: ahead.id, name: ahead.name }} size={56} />}
                 <p>
@@ -203,51 +197,19 @@ export function RoomView(props: Props) {
                     : greeting(new Date().getHours(), props.you.person_name)}
                 </p>
               </div>
-            ) : (
-              failure && (
-                <FailureNotice
-                  failure={failure}
-                  onReference={onReference}
-                  action={
-                    <Button type="button" variant="outline" onClick={reload}>
-                      Retry
-                    </Button>
-                  }
-                />
-              )
             )
           }
-        >
-          {unsent.map((u) => (
-            <FailureNotice
-              key={u.id}
-              failure={u.failure}
-              onReference={onReference}
-              links={<span className="room-unsent">{u.text || u.files?.map((f) => f.name).join(', ')}</span>}
-              action={
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => send(u.text, u.agent, u.picks, u.files, u)}
-                >
-                  Retry
-                </Button>
-              }
-            />
+          after={unsent.map((u) => (
+            <NotSent key={u.id} unsent={u} onRetry={() => send(u.text, u.agent, u.picks, u.files, u)} />
           ))}
-          {refused && <FailureNotice failure={refused} onReference={onReference} />}
+        >
           {chat.archived ? (
-            <>
-              {props.restoreFailure && (
-                <FailureNotice failure={props.restoreFailure} onReference={onReference} />
-              )}
-              <p className="room-archived">
-                Archived
-                <Button size="sm" variant="outline" onClick={props.onRestore}>
-                  Restore
-                </Button>
-              </p>
-            </>
+            <p className="room-archived">
+              Archived
+              <Button size="sm" variant="outline" onClick={props.onRestore}>
+                Restore
+              </Button>
+            </p>
           ) : (
             <>
               {fresh && (
@@ -283,8 +245,36 @@ export function RoomView(props: Props) {
           )}
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat={chat.id} onFailure={props.onFailure} />}
+      {sidebar && <RoomSidebar chat={chat.id} />}
     </>
+  );
+}
+
+/** A message the service didn't take: the person's own bubble, dimmed where it would be, with Retry; told too. */
+function NotSent({ unsent: u, onRetry }: { unsent: Unsent; onRetry: () => void }) {
+  useCard(u.failure, { label: 'Retry', run: onRetry });
+  const tiles = !!u.files?.length && (
+    <FileTiles>
+      {u.files.map((f, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the same file may be attached twice
+        <LocalTile key={i} file={f} />
+      ))}
+    </FileTiles>
+  );
+  return (
+    <div className="room-item room-unsent">
+      {u.text ? (
+        <div className="room-you">
+          <span className="room-words">{u.text}</span>
+          {tiles}
+        </div>
+      ) : (
+        <div className="room-you-files">{tiles}</div>
+      )}
+      <Button type="button" variant="ghost" size="xs" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
   );
 }
 

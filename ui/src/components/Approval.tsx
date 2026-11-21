@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import type { Failure } from '../api';
-import { FailureNotice } from './Notice';
+import { useCard } from './Corner';
 
 export interface Approval {
   turn: string;
@@ -12,13 +12,12 @@ export interface Approval {
   answer?: { allow: boolean; failure?: Failure };
 }
 
-/** What an approval's buttons do: answer it, and open a refusal's reference. */
+/** What an approval's buttons do: answer it. */
 interface Actions {
   approve: (request: string, allow: boolean) => void;
-  reference: (ref: string) => void;
 }
 
-/** An approval: sending shows on the card, and a refused answer shows under it, to answer again. */
+/** An approval: sending shows on the card, and a refused answer is told, to answer again. */
 export function AskApproval({
   approval: a,
   agent,
@@ -31,6 +30,7 @@ export function AskApproval({
   const card = useRef<HTMLDivElement>(null);
   const failure = a.answer?.failure;
   const sending = a.answer && !failure;
+  useCard(failure);
   // The answer's button went while it was sent: on a refusal, focus goes back to it.
   useEffect(() => {
     if (!failure || document.activeElement !== document.body) return;
@@ -39,26 +39,23 @@ export function AskApproval({
   }, [failure, a.answer?.allow]);
   const { tool, command } = asked(a);
   return (
-    <>
-      <ApprovalCard
-        ref={card}
-        state={sending ? 'running' : 'request'}
-        statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
-        title={`Allow ${tool}?`}
-        command={command}
-        data-approval={a.request}
-        description={
-          tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.' : undefined
-        }
-        style={{ overflowWrap: 'anywhere' }}
-        subtitle={agent}
-        allowOnceLabel="Allow"
-        denyLabel="Deny"
-        onAllowOnce={() => actions.approve(a.request, true)}
-        onDeny={() => actions.approve(a.request, false)}
-      />
-      {failure && <FailureNotice failure={failure} onReference={actions.reference} />}
-    </>
+    <ApprovalCard
+      ref={card}
+      state={sending ? 'running' : 'request'}
+      statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
+      title={`Allow ${tool}?`}
+      command={command}
+      data-approval={a.request}
+      description={
+        tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.' : undefined
+      }
+      style={{ overflowWrap: 'anywhere' }}
+      subtitle={agent}
+      allowOnceLabel="Allow"
+      denyLabel="Deny"
+      onAllowOnce={() => actions.approve(a.request, true)}
+      onDeny={() => actions.approve(a.request, false)}
+    />
   );
 }
 

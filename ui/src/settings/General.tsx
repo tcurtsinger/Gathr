@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
+import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
-import { FailureNotice } from '../components/Notice';
 import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
@@ -12,26 +12,29 @@ import { HandoffLimit } from './HandoffLimit';
 import { Page, Row } from './Row';
 import { YourName } from './YourName';
 
-type Open = (ref: string) => void;
-
 /** Settings > General (startup/v1): the person's name, what Gathr does on this computer, and its version. */
-export function General({ onReference }: { onReference: Open }) {
+export function General() {
   const [theme, setShown] = useState(savedTheme);
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const newest = useNewestWins();
   // A read while a save is out may answer the state before it, so none starts then.
   const pending = useRef(false);
 
-  // Read again on coming back to the window: the person may have changed it in the system's settings.
+  // Read again on coming back to the window: the person may have changed it in the system's settings. A read that
+  // fails says nothing: the switch keeps its last state.
   useEffect(() => {
     const read = () => {
       if (pending.current) return;
-      newest(api.startup()).then((next) => {
-        setOn(next);
-        if (next) setFailure(null);
-      }, setFailure);
+      newest(api.startup()).then(
+        (next) => {
+          setOn(next);
+          if (next) setFailure(null);
+        },
+        () => {},
+      );
     };
     read();
     window.addEventListener('focus', read);
@@ -57,9 +60,8 @@ export function General({ onReference }: { onReference: Open }) {
 
   return (
     <Page title="General" line="Your name, the look of Gathr and its version.">
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="settings-rows">
-        <YourName onReference={onReference} />
+        <YourName />
         <Row
           name={<label htmlFor="theme">Theme</label>}
           line="Applies on this computer only."
@@ -99,20 +101,20 @@ export function General({ onReference }: { onReference: Open }) {
             />
           </Row>
         )}
-        <AppVersion onReference={onReference} />
+        <AppVersion />
       </div>
     </Page>
   );
 }
 
 /** Settings > Teamwork: how agents work together. Which one is the assistant is picked on the Agents screen. */
-export function Teamwork({ onReference }: { onReference: Open }) {
+export function Teamwork() {
   return (
     <Page title="Teamwork" line="How your agents work together.">
       <div className="settings-rows">
-        <HandoffLimit onReference={onReference} />
-        <AutoCompact onReference={onReference} />
-        <AgentFolder onReference={onReference} />
+        <HandoffLimit />
+        <AutoCompact />
+        <AgentFolder />
       </div>
     </Page>
   );

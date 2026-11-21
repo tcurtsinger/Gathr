@@ -53,9 +53,6 @@
 .signin-panel p {
   margin: 0;
 }
-.signin-panel .notice {
-  margin: 0;
-}
 .signin-actions {
   display: flex;
   flex-wrap: wrap;

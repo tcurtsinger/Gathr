@@ -37,12 +37,11 @@ export function people(members: Member[], known: FaceOf[]): People {
   };
 }
 
-/** What the person can do on a card: answer its approval, open its question, open a refusal's reference, like it. */
+/** What the person can do on a card: answer its approval, open its question, like it. */
 export interface Acts {
   approve: (request: string, allow: boolean) => void;
   /** Opens the questions panel on this question. */
   ask: (question: number) => void;
-  reference: (ref: string) => void;
   /** Unset in an archived chat, which reads only. */
   like?: (message: string, give: boolean) => void;
 }
@@ -61,14 +60,16 @@ interface Props {
   acts: Acts;
   /** Scrolled to and marked briefly once it is drawn; a reply's thread opens for it. */
   found?: Found;
-  /** Above the messages: a failure to load, with its Retry. */
+  /** Above the messages: a new chat's greeting. */
   header?: ReactNode;
+  /** After the messages: the person's messages that weren't sent. */
+  after?: ReactNode;
   /** At the foot: the message box. */
   children?: ReactNode;
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ chat, state, people, acts, found, header, children }: Props) {
+export function Room({ chat, state, people, acts, found, header, after, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state, found);
   const ctx = {
@@ -98,6 +99,7 @@ export function Room({ chat, state, people, acts, found, header, children }: Pro
               />
             );
           })}
+          {after}
         </div>
       </div>
       <div className="room-foot">{children}</div>

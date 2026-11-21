@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Failure } from '../api';
-import { FailureNotice } from '../components/Notice';
+import { useCard } from '../components/Corner';
 import { readyVersion, useAppUpdate } from '../update';
 import { Row } from './Row';
 
@@ -15,14 +15,17 @@ const standing: Record<string, string> = {
 
 /**
  * Settings > General: the version that runs, Update when a release is ready, a check now, and the
- * last failure with its reference (0032). Gathr never updates by itself.
+ * last failure (0032). Gathr never updates by itself.
  */
-export function AppVersion({ onReference }: { onReference: (ref: string) => void }) {
+export function AppVersion() {
   const [refused, setRefused] = useState<Failure | null>(null);
   const { app, asking, update, check } = useAppUpdate(setRefused);
-  if (!app?.version) return null;
   const ready = readyVersion(app);
-  const failure = refused ?? (app.failed && new Failure('Update failed', app.failed.why, app.failed.ref));
+  // With nothing ready the row says "The last check failed"; with a release ready, only a card says the update failed.
+  const { why, ref } = app?.failed ?? {};
+  const last = useMemo(() => (ref ? new Failure('Update failed', why ?? null, ref) : null), [why, ref]);
+  useCard(refused ?? (ready ? last : null));
+  if (!app?.version) return null;
   const act = (action: () => void) => () => {
     setRefused(null);
     action();
@@ -39,7 +42,6 @@ export function AppVersion({ onReference }: { onReference: (ref: string) => void
               : standing[app.state]}
         </span>
       }
-      after={failure && <FailureNotice failure={failure} onReference={onReference} />}
     >
       {ready ? (
         <Button type="button" onClick={act(update)} disabled={asking}>

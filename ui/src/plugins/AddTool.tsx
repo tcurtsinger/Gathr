@@ -3,14 +3,13 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
 import { ClientFields, given, noClient } from './ClientId';
-import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
+import { ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { host } from './tool';
 
 interface Props {
   onBack: () => void;
   /** The tool was added: its id, once the list has it. */
   onAdded: (id: string) => void;
-  onReference: (ref: string) => void;
 }
 
 /**
@@ -19,7 +18,7 @@ interface Props {
  * takes a key as well. One whose sign-in service takes no app it doesn't know gets the address for its admin, and the
  * Client ID and secret they send.
  */
-export function AddTool({ onBack, onAdded, onReference }: Props) {
+export function AddTool({ onBack, onAdded }: Props) {
   const [link, setLink] = useState('');
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -172,14 +171,6 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
           </p>
           <ClientFields redirect={redirect} client={client} onChange={setClient} />
         </>
-      )}
-      {signIn.failed && (
-        <ToolSignInFailed
-          why={signIn.failed.why}
-          reference={signIn.failed.ref}
-          onRetry={signIn.retry}
-          onReference={onReference}
-        />
       )}
       <footer className="agent-actions">{footer()}</footer>
     </form>

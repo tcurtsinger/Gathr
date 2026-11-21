@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Agents } from './agents/Agents';
 import {
   type Agent,
@@ -12,9 +11,9 @@ import {
   type Settings,
 } from './api';
 import { Confirm } from './components/Confirm';
+import { Corner, useCard } from './components/Corner';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
-import { FailureNotice } from './components/Notice';
 import { DeleteConfirm } from './DeleteConfirm';
 import { kept, keep as remember } from './kept';
 import { listen } from './live';
@@ -41,8 +40,8 @@ export function App() {
     chat: Chat;
     opener: HTMLElement | null;
   } | null>(null);
-  // Restore asks nothing: a failure shows on the archived chat, opened if it wasn't.
-  const [restoreFailure, setRestoreFailure] = useState<{ chat: string; failure: Failure } | null>(null);
+  // Restore asks nothing.
+  const [restoreFailure, setRestoreFailure] = useState<Failure | null>(null);
   // A project's Delete, from its More (0069).
   const [deleting, setDeleting] = useState<{ project: Project; opener: HTMLElement | null } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -53,7 +52,8 @@ export function App() {
   const [newProject, setNewProject] = useState(false);
   const [fresh, setFresh] = useState<{ project?: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
+  // What a project's Delete couldn't remove yet.
+  const [left, setLeft] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
   // Agents or Plugins, in place of the chat list and the chat until Home or a chat is opened.
   const [opened, setOpened] = useState<Opened>('home');
@@ -61,8 +61,12 @@ export function App() {
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
   const [, redraw] = useState(0);
-  const pauses = usePauses(setFailure);
-  const appUpdate = useAppUpdate(setFailure);
+  const pauses = usePauses();
+  const [updateFailure, setUpdateFailure] = useState<Failure | null>(null);
+  const appUpdate = useAppUpdate(setUpdateFailure);
+  useCard(restoreFailure);
+  useCard(left);
+  useCard(updateFailure);
   // Whether each chat's sidebar is open, as the person left it there.
   const [sidebars, setSidebars] = useState<Record<string, boolean>>({});
   // The message a search hit opened its chat at.
@@ -106,7 +110,7 @@ export function App() {
       // With no chat to open, the window opens on New.
       if (list.length === 0) setFresh((f) => f ?? {});
       timeToPaint('gathr.ui.start', started, { chats: list.length });
-    }, setFailure);
+    }, quiet);
   }, [loadChats]);
 
   useEffect(() => {
@@ -114,7 +118,7 @@ export function App() {
       api.agents().then((a) => {
         setAgents(a.agents);
         setRemoved(a.removed);
-      }, setFailure);
+      }, quiet);
     load();
     return listen((event) => {
       if (event.type === 'agents' || event.type === 'lagged') load();
@@ -124,7 +128,7 @@ export function App() {
   // The person's name and assistant, for a new chat's greeting: read again as Settings closes, as Agents changes the
   // assistant, and when agents change (deleting the assistant clears it).
   const [you, setYou] = useState<Pick<Settings, 'person_name' | 'assistant'>>({});
-  const loadYou = useCallback(() => api.settings().then(setYou, setFailure), []);
+  const loadYou = useCallback(() => api.settings().then(setYou, quiet), []);
   useEffect(() => {
     loadYou();
     return listen((event) => {
@@ -133,7 +137,7 @@ export function App() {
   }, [loadYou]);
 
   useEffect(() => {
-    const load = () => api.projects().then(setProjects, setFailure);
+    const load = () => api.projects().then(setProjects, quiet);
     load();
     return listen((event) => {
       if (event.type === 'project' || event.type === 'lagged') load();
@@ -164,17 +168,14 @@ export function App() {
     if (!next) setFresh({});
   }, []);
   useEffect(() => {
-    api.archivedChats().then(setArchived, setFailure);
+    api.archivedChats().then(setArchived, quiet);
     return listen((event) => {
       if (event.type === 'chat' && event.change === 'deleted') leave(event.chat);
       if (event.type !== 'chat' && event.type !== 'lagged') return;
       // A chat made elsewhere opens only when nothing, not even a draft, is open once the lists are in:
       // the person may have clicked New while they loaded.
       const created = event.type === 'chat' && event.change === 'created';
-      reloadLists().then(
-        () => created && !current.current && setSelected((s) => s ?? event.chat),
-        setFailure,
-      );
+      reloadLists().then(() => created && !current.current && setSelected((s) => s ?? event.chat), quiet);
     });
   }, [reloadLists, leave]);
 
@@ -198,7 +199,7 @@ export function App() {
           setSelected(made.id);
         }
         api.send(made.id, text, agent, picks, undefined, files).then(
-          () => loadChats().then(setChats, setFailure),
+          () => loadChats().then(setChats, quiet),
           (e: Failure) => keep(made.id, failed(e)),
         );
       },
@@ -256,25 +257,19 @@ export function App() {
   const archive = (c: Chat) => api.archive(c.id).then(reloadLists);
   const restore = (c: Chat) => {
     setRestoreFailure(null);
-    api
-      .unarchive(c.id)
-      .then(reloadLists)
-      .catch((f: Failure) => {
-        choose(c.id);
-        setRestoreFailure({ chat: c.id, failure: f });
-      });
+    api.unarchive(c.id).then(reloadLists).catch(setRestoreFailure);
   };
   const remove = async (c: Chat) => {
     await api.deleteChat(c.id);
     leave(c.id);
-    await reloadLists().catch(setFailure);
+    await reloadLists().catch(quiet);
   };
   // Its chats went one by one, each told on the live socket as a chat's Delete is.
   const deleted = (project: string, left: Failure | null) => {
     setDeleting(null);
     setProjects((list) => list.filter((p) => p.id !== project));
-    if (left) setFailure(left);
-    reloadLists().catch(setFailure);
+    setLeft(left);
+    reloadLists().catch(quiet);
   };
   // While its confirm is open, a project's chats are going: none of them is a neighbour to move to.
   const projectChats = (project: string) => [...chats, ...archived].filter((c) => c.project === project);
@@ -288,12 +283,12 @@ export function App() {
   };
   const name = (agent: string | null) =>
     [...agents, ...removed].find((a) => a.id === agent)?.name ?? 'An agent';
-  // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
+  // A chat this window hasn't loaded yet: load the lists first.
   const openChat = (id: string) => {
     if ([...chats, ...archived].some((c) => c.id === id)) choose(id);
     else
       reloadLists()
-        .catch(setFailure)
+        .catch(quiet)
         .finally(() => choose(id));
   };
   const openReference = (reference: string) =>
@@ -304,21 +299,6 @@ export function App() {
       reference,
       opener: s?.opener ?? (document.activeElement as HTMLElement),
     }));
-  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed. All the
-  // app itself does is load and reload: a service that's away (an update's hand-over) shows nothing.
-  const notice = failure && !failure.away && (
-    <div className="reading app-failure">
-      <FailureNotice
-        failure={failure}
-        onReference={openReference}
-        action={
-          <Button type="button" variant="outline" onClick={() => setFailure(null)}>
-            Dismiss
-          </Button>
-        }
-      />
-    </div>
-  );
 
   const screen = chat && {
     chat,
@@ -339,20 +319,16 @@ export function App() {
     unsent: unsent[chat.id] ?? [],
     onUnsent: (update: (list: Unsent[]) => Unsent[]) =>
       setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) })),
-    openSettings,
-    onNamed: () => loadChats().then(setChats, setFailure),
+    onNamed: () => loadChats().then(setChats, quiet),
     projects,
     onProject: (project: string) => setFresh({ project }),
     onStart: start,
     onNewProject: () => setNewProject(true),
-    notice,
     pauses: pauses.pauses,
     onPause: pauses.act,
     onArchive: (opener: HTMLElement | null) => setAsking({ verb: 'Archive', chat, opener }),
     onDelete: (opener: HTMLElement | null) => setAsking({ verb: 'Delete', chat, opener }),
     onRestore: () => restore(chat),
-    restoreFailure: restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined,
-    onReference: openReference,
   };
 
   const app = (
@@ -375,8 +351,8 @@ export function App() {
           onUpdate: appUpdate.update,
         }}
       />
-      {opened === 'agents' && <Agents onReference={openReference} onAssistant={loadYou} />}
-      {opened === 'plugins' && <Plugins onReference={openReference} />}
+      {opened === 'agents' && <Agents onAssistant={loadYou} />}
+      {opened === 'plugins' && <Plugins />}
       {opened === 'home' && (
         <Sidebar
           chats={chats}
@@ -399,7 +375,6 @@ export function App() {
           actions={
             <SearchFlyout
               name={name}
-              onReference={openReference}
               onShortcut={() => showNav(true)}
               onOpen={(hit) => {
                 setFound('message' in hit ? { chat: hit.chat, message: hit.message } : undefined);
@@ -416,12 +391,11 @@ export function App() {
           found={found?.chat === screen.chat.id ? found : undefined}
           sidebar={sidebars[screen.chat.id]}
           onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
-          onFailure={setFailure}
         />
       ) : (
         <>
           <TopLine />
-          <main className="chat">{notice}</main>
+          <main className="chat" />
         </>
       )}
       <NewProject
@@ -434,7 +408,6 @@ export function App() {
           setNewProject(false);
           if (fresh) setFresh({ project: project.id });
         }}
-        onReference={openReference}
       />
       {asking && (
         <Confirm
@@ -447,7 +420,6 @@ export function App() {
           onConfirm={() =>
             (asking.verb === 'Archive' ? archive : remove)(asking.chat).then(() => setAsking(null))
           }
-          onReference={openReference}
         />
       )}
       {deleting && (
@@ -459,7 +431,6 @@ export function App() {
           opener={deleting.opener}
           onCancel={() => cancelDelete(deleting.project.id)}
           onDeleted={(left) => deleted(deleting.project.id, left)}
-          onReference={openReference}
         />
       )}
       <SettingsPanel
@@ -467,16 +438,19 @@ export function App() {
         onPage={(page) =>
           setSettings((s) => s && { ...s, page, project: undefined, turn: undefined, reference: undefined })
         }
-        onReference={openReference}
         onClose={() => {
           setSettings(null);
           loadYou();
         }}
       />
+      <Corner onReference={openReference} />
     </div>
   );
   return <KnownFaces.Provider value={faces}>{app}</KnownFaces.Provider>;
 }
+
+/** What the app only loads or reloads by itself says nothing when it fails: the live socket reloads it. */
+const quiet = () => {};
 
 /** Agents' and Plugins' places in Back and Forward are their names: never a chat's id. */
 const away = (key: string): key is Exclude<Opened, 'home'> => key === 'agents' || key === 'plugins';

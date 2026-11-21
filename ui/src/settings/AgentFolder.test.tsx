@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { Corner } from '../components/Corner';
 import { AgentFolder } from './AgentFolder';
 import { SettingsPanel } from './SettingsPanel';
 
@@ -28,7 +29,12 @@ test('a refused folder keeps what was typed with its reference; a good one saves
   const sent: unknown[] = [];
   service(sent);
   const opened: string[] = [];
-  const screen = await render(<AgentFolder onReference={(ref) => opened.push(ref)} />);
+  const screen = await render(
+    <>
+      <AgentFolder />
+      <Corner onReference={(ref) => opened.push(ref)} />
+    </>,
+  );
   await expect.element(screen.getByText('X:\\Made\\Up')).toBeVisible();
 
   await screen.getByRole('button', { name: 'Change' }).click();
@@ -59,12 +65,7 @@ test('Escape cancels the edit without closing Settings, and saves nothing', asyn
   service(sent);
   let closed = 0;
   const screen = await render(
-    <SettingsPanel
-      target={{ page: 'teamwork', opener: null }}
-      onPage={() => {}}
-      onReference={() => {}}
-      onClose={() => closed++}
-    />,
+    <SettingsPanel target={{ page: 'teamwork', opener: null }} onPage={() => {}} onClose={() => closed++} />,
   );
   await screen.getByRole('button', { name: 'Change' }).click();
   await userEvent.fill(screen.getByRole('textbox', { name: 'Agent folder' }), 'Y:\\Other');
@@ -93,7 +94,12 @@ test('in the desktop window Change opens the system picker: a cancel saves nothi
       return next;
     },
   });
-  const screen = await render(<AgentFolder onReference={() => {}} />);
+  const screen = await render(
+    <>
+      <AgentFolder />
+      <Corner onReference={() => {}} />
+    </>,
+  );
   const change = screen.getByRole('button', { name: 'Change' });
 
   // A click that leaves focus where it was, as WebKit's click on a button does.
@@ -130,7 +136,7 @@ test('Change while the picker is still open opens no second one', async () => {
       });
     },
   });
-  const screen = await render(<AgentFolder onReference={() => {}} />);
+  const screen = await render(<AgentFolder />);
   const change = screen.getByRole('button', { name: 'Change' });
   await change.click();
   await change.click();

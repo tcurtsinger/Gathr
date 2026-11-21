@@ -43,13 +43,14 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.room-unsent {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* A message the service didn't take: the person's own, dimmed, with Retry under it at the right. */
+.room-unsent > :first-child {
+  opacity: 0.6;
 }
-.room-foot .notice {
-  margin: 0 0 8px;
+.room-unsent > [data-slot="button"] {
+  align-self: flex-end;
+  margin-top: 2px;
+  color: var(--muted-foreground);
 }
 .room-scroll {
   flex: 1;
@@ -431,9 +432,6 @@
 }
 .questions-item .room-asks {
   padding: 0;
-}
-.questions-item .notice {
-  margin: 8px 0 0;
 }
 
 /* A search hit opened here: a short attention tint, back to its own background. */

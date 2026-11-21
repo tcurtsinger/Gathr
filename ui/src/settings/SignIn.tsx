@@ -1,7 +1,7 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type Account, api, type Failure } from '../api';
-import { Notice } from '../components/Notice';
+import { type Account, api, Failure } from '../api';
+import { useCard } from '../components/Corner';
 
 type Fail = (f: Failure) => void;
 type Waiting = Extract<NonNullable<Account['sign_in']>, { state: 'waiting' }>;
@@ -55,43 +55,30 @@ export function SignInWaiting({
   );
 }
 
-/** A failed sign-in: why, with its reference; a refused device code also offers Retry and the browser. */
+/** A failed sign-in, told in the corner; a refused device code also offers Retry there, and the browser here. */
 export function SignInFailed({
   account,
   failed,
   onFailure,
-  onReference,
 }: {
   account: string;
   failed: Failed;
   onFailure: Fail;
-  onReference: (ref: string) => void;
 }) {
+  const { why, ref, device } = failed;
+  useCard(
+    useMemo(() => new Failure('Sign-in failed', why, ref), [why, ref]),
+    device ? { label: 'Retry', run: () => api.signIn(account, true).catch(onFailure) } : undefined,
+  );
+  if (!device) return null;
   return (
     <div className="signin-panel">
-      <Notice
-        danger
-        title="Sign-in failed"
-        reference={{ ref: failed.ref, open: onReference }}
-        links={<span className="muted">{failed.why}</span>}
-      />
-      {failed.device && (
-        <>
-          <p className="muted">{ENABLE}</p>
-          <div className="signin-actions">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => api.signIn(account, true).catch(onFailure)}
-            >
-              Retry
-            </Button>
-            <Button type="button" variant="outline" onClick={() => api.signIn(account).catch(onFailure)}>
-              Use browser
-            </Button>
-          </div>
-        </>
-      )}
+      <p className="muted">{ENABLE}</p>
+      <div className="signin-actions">
+        <Button type="button" variant="outline" onClick={() => api.signIn(account).catch(onFailure)}>
+          Use browser
+        </Button>
+      </div>
     </div>
   );
 }

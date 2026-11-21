@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { api, type Failure, type Skill, type WebTool } from '../api';
 import { Confirm } from '../components/Confirm';
+import { useCard } from '../components/Corner';
 import { IconButton } from '../components/IconButton';
-import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { Screen } from '../Screen';
 import { AddTool } from './AddTool';
@@ -37,21 +37,18 @@ type Kind = 'all' | 'tools' | 'skills';
 
 type Removing = { skill: Skill; opener: HTMLElement | null } | { tool: WebTool; opener: HTMLElement | null };
 
-interface Props {
-  onReference: (ref: string) => void;
-}
-
 /**
  * The Plugins screen, in place of the chat list and the chat: its sidebar names every tool and skill installed, the
  * main panel lists them in groups, with one search for both.
  */
-export function Plugins({ onReference }: Props) {
+export function Plugins() {
   const [skills, setSkills] = useState<Skill[] | null>(null);
   const [tools, setTools] = useState<WebTool[] | null>(null);
   const [view, setView] = useState<View>({ page: 'list' });
   const [kind, setKind] = useState<Kind>('all');
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
+  useCard(failure);
   const [removing, setRemoving] = useState<Removing | null>(null);
   const [changingKey, setChangingKey] = useState<{ tool: WebTool; opener: HTMLElement | null } | null>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -252,7 +249,6 @@ export function Plugins({ onReference }: Props) {
           </>
         }
       >
-        {failure && <FailureNotice failure={failure} onReference={onReference} />}
         {skillPage && (
           <SkillPage
             key={skillPage.name}
@@ -272,21 +268,18 @@ export function Plugins({ onReference }: Props) {
             onEnable={enableTool}
             onChangeKey={changeKey}
             onRemove={(tool, opener) => setRemoving({ tool, opener })}
-            onReference={onReference}
           />
         )}
         {view.page === 'new' && (
           <NewSkill
             onBack={() => setView({ page: 'list' })}
             onSave={(skill) => api.newSkill(skill).then((s) => loadSkills().then(() => openSkill(s.name)))}
-            onReference={onReference}
           />
         )}
         {view.page === 'add-tool' && (
           <AddTool
             onBack={() => setView({ page: 'list' })}
             onAdded={(id) => loadTools().then(() => openTool(id))}
-            onReference={onReference}
           />
         )}
         {view.page === 'list' && (
@@ -369,7 +362,6 @@ export function Plugins({ onReference }: Props) {
               setView({ page: 'list' });
             })
           }
-          onReference={onReference}
         />
       )}
       {changingKey && (

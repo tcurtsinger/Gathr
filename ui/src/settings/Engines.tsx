@@ -1,22 +1,20 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Engine, type Failure } from '../api';
-import { FailureNotice } from '../components/Notice';
+import { api, type Engine, Failure } from '../api';
+import { useCard } from '../components/Corner';
 import { Accounts, engines } from './Accounts';
 import { Group, Page, Row } from './Row';
 import './engines.css';
 
-type Open = (ref: string) => void;
-
 /** Settings > Engines (settings-entry/v5): the accounts, then each engine's program once. */
-export function Engines({ onReference }: { onReference: Open }) {
+export function Engines() {
   return (
     <Page title="Engines" line="The accounts your agents sign in with, and each engine’s version.">
-      <Accounts onReference={onReference} />
+      <Accounts />
       <Group title="Versions" />
       <div className="settings-rows settings-top">
         {engines.map(([id, name]) => (
-          <Program key={id} id={id} name={name} onReference={onReference} />
+          <Program key={id} id={id} name={name} />
         ))}
       </div>
     </Page>
@@ -24,7 +22,7 @@ export function Engines({ onReference }: { onReference: Open }) {
 }
 
 /** Gathr's copy of one engine: its version and the release check (0025). */
-function Program({ id, name, onReference }: { id: string; name: string; onReference: Open }) {
+function Program({ id, name }: { id: string; name: string }) {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const title = useId();
@@ -47,9 +45,10 @@ function Program({ id, name, onReference }: { id: string; name: string; onRefere
   };
 
   const copy = engine?.copy;
-  const shown = failure ?? (copy?.failed && { error: 'Update failed', ...copy.failed });
-  const notice = shown && <FailureNotice failure={shown} onReference={onReference} />;
-  if (!engine) return notice;
+  const { why, ref } = copy?.failed ?? {};
+  const last = useMemo(() => (ref ? new Failure('Update failed', why ?? null, ref) : null), [why, ref]);
+  useCard(failure ?? last);
+  if (!engine) return null;
   const status = checking
     ? 'Checking'
     : copy?.state === 'off'
@@ -68,12 +67,7 @@ function Program({ id, name, onReference }: { id: string; name: string; onRefere
           <span role="status">{status}</span>
         </>
       }
-      after={
-        <>
-          {notice}
-          {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
-        </>
-      }
+      after={engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
     >
       {copy?.state !== 'off' && (
         <Button type="button" variant="outline" aria-describedby={title} disabled={checking} onClick={check}>

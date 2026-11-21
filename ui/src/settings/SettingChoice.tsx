@@ -1,5 +1,4 @@
 import { Dropdown } from '../components/Dropdown';
-import { FailureNotice } from '../components/Notice';
 import { Row } from './Row';
 import { useSettings } from './saved';
 
@@ -14,18 +13,16 @@ interface Props {
   choices: { value: number | null; label: string }[];
   /** A value set another way (through the API) that isn't one of the choices, as it reads. */
   other: (value: number) => string;
-  onReference: (ref: string) => void;
 }
 
 /** A setting in Settings > Teamwork picked from a list, saved when picked. */
-export function SettingChoice({ field, label, line, choices, other, onReference }: Props) {
-  const { saved, failure, save } = useSettings();
-  const notice = failure && <FailureNotice failure={failure} onReference={onReference} />;
-  if (!saved) return notice;
+export function SettingChoice({ field, label, line, choices, other }: Props) {
+  const { saved, save } = useSettings();
+  if (!saved) return null;
   const value = saved[field] ?? null;
 
   return (
-    <Row name={<label htmlFor={field}>{label}</label>} line={line} after={notice}>
+    <Row name={<label htmlFor={field}>{label}</label>} line={line}>
       <Dropdown
         id={field}
         value={String(value ?? NONE)}
