@@ -80,6 +80,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0070_agent_description.sql"),
     include_str!("../migrations/0071_agent_marks.sql"),
     include_str!("../migrations/0072_tools.sql"),
+    include_str!("../migrations/0073_tool_sign_in.sql"),
 ];
 
 /// The schema version this build writes.
@@ -734,5 +735,34 @@ mod drop_old_tables_test {
             .query_row("SELECT count(*) FROM tools", [], |r| r.get(0))
             .unwrap();
         assert_eq!(tools, 0);
+    }
+
+    /// 0073 adds a tool's sign-in, empty: a tool from before keeps its name, link and key.
+    #[test]
+    fn a_tool_from_before_keeps_its_key_and_has_no_sign_in() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-sign-in-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..72] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 72;
+             INSERT INTO tools (id, name, link, enabled, key, added_ts) VALUES
+                 ('t1', 'Tracker', 'https://tracker.example.com/mcp', 1, x'0102', 5);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let kept: String = conn
+            .query_row(
+                "SELECT name || ' ' || link || ' ' || hex(key) || ' ' || (sign_in IS NULL) FROM tools",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, "Tracker https://tracker.example.com/mcp 0102 1");
     }
 }

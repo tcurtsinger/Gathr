@@ -32,6 +32,7 @@ mod sign_in;
 mod skills;
 mod startup;
 mod team;
+mod tool_sign_in;
 mod tools;
 mod turns;
 mod ui;

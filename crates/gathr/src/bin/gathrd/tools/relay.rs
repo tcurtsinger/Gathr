@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use axum::http::request::Parts;
-use gathr::web_tools::{self, Remote};
+use gathr::web_tools::{self, Problem, Remote};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, ListToolsResult, PaginatedRequestParams,
     ServerCapabilities, ServerConfig,
@@ -19,6 +19,9 @@ use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, Stream
 use rmcp::{ErrorData, ServerHandler};
 
 use crate::api::State;
+
+/// What an agent's call to a tool whose sign-in has ended is told.
+const SIGN_IN_AGAIN: &str = "This tool needs to be signed in again, in Gathr's Plugins.";
 
 /// Where each tool is served, `{id}` its id.
 pub const PATH: &str = "/mcp/tools/{id}";
@@ -59,25 +62,31 @@ impl Relay {
         if let Some(remote) = known {
             return Ok(remote);
         }
-        let find = id.clone();
+        let (find, writer) = (id.clone(), self.0.writer.clone());
         let saved = self
             .0
             .writer
             .call(move |conn| {
                 let tool = web_tools::get(conn, &find)?;
-                Ok::<_, gathr::Error>((tool, web_tools::key(conn, &find)?))
+                Ok::<_, gathr::Error>((tool, web_tools::access(conn, &find, &writer)))
             })
             .await;
-        let (tool, key) = match saved {
+        let (tool, access) = match saved {
             Some(Ok(saved)) => saved,
             _ => return Err(ErrorData::invalid_request("There's no such tool", None)),
         };
         if !tool.enabled {
             return Err(ErrorData::invalid_request("This tool is disabled", None));
         }
-        let remote = web_tools::connect(&tool.link, key.as_deref(), web_tools::CONNECT)
-            .await
-            .map_err(|_| ErrorData::internal_error("The tool can't be reached", None))?;
+        let connected = match &access {
+            Ok(access) => web_tools::connect(&tool.link, access, web_tools::CONNECT).await,
+            Err(_) if tool.signed_in => Err(Problem::SignIn),
+            Err(_) => Err(Problem::KeyRefused),
+        };
+        let remote = connected.map_err(|problem| match problem {
+            Problem::SignIn => ErrorData::invalid_request(SIGN_IN_AGAIN, None),
+            _ => ErrorData::internal_error(web_tools::UNREACHABLE, None),
+        })?;
         let remote = Arc::new(remote);
         let mut known = REMOTES.lock().unwrap_or_else(|e| e.into_inner());
         known
@@ -120,6 +129,14 @@ impl ServerHandler for Relay {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         let remote = self.remote(&context).await?;
-        kept(&context, web_tools::call(&remote, request).await)
+        let called = kept(&context, web_tools::call(&remote, request).await);
+        // A sign-in that ended during this connection is found by connecting again, to say so.
+        match called {
+            Err(e) if e.message == web_tools::UNREACHABLE => match self.remote(&context).await {
+                Err(again) if again.message == SIGN_IN_AGAIN => Err(again),
+                _ => Err(e),
+            },
+            called => called,
+        }
     }
 }

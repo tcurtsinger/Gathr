@@ -1,9 +1,10 @@
 import { ChevronLeft, Plug } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure, type ToolAction, type WebTool } from '../api';
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
+import { ToolSignInFailed, ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { stateOf } from './tool';
 
 interface Props {
@@ -14,13 +15,19 @@ interface Props {
   onEnable: (tool: WebTool, on: boolean) => void;
   onChangeKey: (tool: WebTool, opener: HTMLElement | null) => void;
   onRemove: (tool: WebTool, opener: HTMLElement | null) => void;
+  onReference: (ref: string) => void;
 }
 
-/** A tool's page: its link and state, Change key and Remove, Enabled, and its actions asked of it now. */
-export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove }: Props) {
+/**
+ * A tool's page: its link and state, Change key (Sign in again for one signed in through the browser) and Remove,
+ * Enabled, and its actions asked of it now.
+ */
+export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove, onReference }: Props) {
   const [asked, setAsked] = useState<(WebTool & { actions: ToolAction[] | null }) | null>(null);
   const changeKey = useRef<HTMLButtonElement>(null);
   const remove = useRef<HTMLButtonElement>(null);
+  // Signed in again: the list's `tools` change asks the page again.
+  const signIn = useToolSignIn(useCallback(() => {}, []));
   // Asked again each time the list changes: a new key or a tool back up comes with one.
   const listed = JSON.stringify(tool);
   useEffect(() => {
@@ -52,15 +59,27 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           </p>
         </div>
         <div className="skill-actions">
-          <Button
-            ref={changeKey}
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onChangeKey(tool, changeKey.current)}
-          >
-            Change key
-          </Button>
+          {tool.signed_in ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!!signIn.waiting}
+              onClick={() => signIn.start({ tool: tool.id })}
+            >
+              Sign in again
+            </Button>
+          ) : (
+            <Button
+              ref={changeKey}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onChangeKey(tool, changeKey.current)}
+            >
+              Change key
+            </Button>
+          )}
           <Button
             ref={remove}
             type="button"
@@ -73,6 +92,19 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           </Button>
         </div>
       </header>
+      {signIn.waiting && (
+        <footer className="agent-actions tool-sign-in">
+          <ToolSignInWaiting url={signIn.waiting.url} onCancel={signIn.cancel} />
+        </footer>
+      )}
+      {signIn.failed && (
+        <ToolSignInFailed
+          why={signIn.failed.why}
+          reference={signIn.failed.ref}
+          onRetry={signIn.retry}
+          onReference={onReference}
+        />
+      )}
       <div className="settingrow skill-enabled">
         <span className="skill-enabled-words">
           <span id="tool-enabled">Enabled</span>
