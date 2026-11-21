@@ -13,6 +13,8 @@ interface Props {
   /** Opens the hit's chat, at the message for a message hit; `at` is when the person picked it. */
   onOpen: (hit: ChatHit | MessageHit, at: number) => void;
   onReference: (ref: string) => void;
+  /** Ctrl K: opens the sidebar too, if it was closed. */
+  onShortcut?: () => void;
 }
 
 type Found = { chats: ChatHit[]; messages: MessageHit[] };
@@ -26,7 +28,7 @@ const SLOW = 300;
  * messages, newest first, with one cursor across both. The query stays between openings; an answer to
  * an older query is dropped.
  */
-export function SearchFlyout({ name, onOpen, onReference }: Props) {
+export function SearchFlyout({ name, onOpen, onReference, onShortcut }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Found | null>(null);
@@ -36,11 +38,14 @@ export function SearchFlyout({ name, onOpen, onReference }: Props) {
   const [tries, setTries] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const asked = useRef(0);
+  const shortcut = useRef(onShortcut);
+  shortcut.current = onShortcut;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
       e.preventDefault();
+      shortcut.current?.();
       setOpen(true);
       input.current?.focus();
       input.current?.select();

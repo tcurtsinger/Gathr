@@ -102,7 +102,8 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
   glyphs at 1px stroke in the foreground colour, a foreground 7% tint under the pointer or keyboard
   focus, Close in `os-close` with a white glyph; they reach the window's top right corner, past the
   shell's margin, and the line's content ends 8px before them. On the Mac the system draws its own
-  three buttons at the band's left, over the rail and the sidebar, where the line holds nothing. In a
+  three buttons at the band's left, over the rail and the sidebar. After them (from the band's left, 8px,
+  on Windows and in a browser) the line holds the sidebar's button, Back and Forward. In a
   browser the line moves nothing and draws no buttons. The top line stays live over a dialog: the
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's

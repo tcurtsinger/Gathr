@@ -1,6 +1,6 @@
 /* The top line (0070): the whole band of shell above the frame, so all of it moves the desktop window. Its
    content starts where the sidebar ends: the chat's title and More, then the faces and the panel's button. Over
-   the rail and the sidebar it holds nothing: the Mac's own three buttons sit there. */
+   the rail and the sidebar it holds the Mac's own three buttons, then the sidebar's button, Back and Forward. */
 .topline {
   position: relative;
   display: flex;
@@ -18,6 +18,30 @@
   left: calc(var(--rail) + var(--nav) - 1px);
   width: 1px;
   background: var(--border);
+}
+/* The sidebar's button, Back and Forward, over the line's left end: Home's column on Windows and in a browser,
+   after the Mac's own three buttons there. With the sidebar closed the line's content starts after them. */
+.app {
+  --lead: 8px;
+}
+.app:has(> .nav-buttons.mac) {
+  --lead: 80px;
+}
+.nav-buttons {
+  position: relative;
+  z-index: 1;
+  grid-area: 1 / 1 / 2 / -1;
+  align-self: center;
+  justify-self: start;
+  display: flex;
+  gap: 4px;
+  margin-left: var(--lead);
+}
+.app.nav-closed > .topline {
+  padding-left: calc(var(--lead) + 124px);
+}
+.app.nav-closed > .topline::before {
+  left: calc(var(--lead) + 103px);
 }
 /* Windows' three buttons, 46 wide and the line's height, at the window's own right edge, past the shell's
    margin. The line's content ends 8px before them, so Summary still opens under its end. */
