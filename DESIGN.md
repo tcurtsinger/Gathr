@@ -119,8 +119,8 @@ lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The
   190 / 360 / 360 at 960.
 - The top line, from the sidebar's edge: a short divider on that edge (12px in from top and bottom),
   20px, the title, then More 4px after it in the same group; the title truncates with an ellipsis and
-  More stays visible. The right holds the questions button, then the sidebar's button, open or
-  closed, 8px from the frame's end (from the window's buttons on Windows). These share one icon-button style: 28px, 8px radius, 4px apart,
+  More stays visible. The right holds the Agents button (the rail's Agents mark), the questions
+  button, then the sidebar's button, open or closed, 8px from the frame's end (from the window's buttons on Windows). These share one icon-button style: 28px, 8px radius, 4px apart,
   17px Lucide icons at 1.75 stroke (More's dots radius 1.4). Pressed (the sidebar's button
   while it is open): foreground 9% background, foreground icon, 12% on hover. The chat has no header of
   its own: the thread starts at the frame's top.

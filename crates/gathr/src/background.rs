@@ -3,6 +3,7 @@
 //! engine, so a start empties the table.
 
 use rusqlite::{Connection, params};
+use serde_json::{Value, json};
 
 use crate::Error;
 use crate::ids::now_us;
@@ -52,6 +53,21 @@ pub fn of(
          WHERE {ENGINE} ORDER BY b.started_ts"
     ))?;
     let rows = stmt.query_map(params![chat, agent], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The chat's background commands, oldest first, as the window lists them under their agents:
+/// `{agent, description, started}`.
+pub fn in_chat(conn: &Connection, chat: &str) -> Result<Vec<Value>, Error> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT t.agent_id, b.description, b.started_ts FROM background b
+         JOIN turns t ON t.id = b.turn_id WHERE t.chat_id = ?1 ORDER BY b.started_ts",
+    )?;
+    let rows = stmt.query_map([chat], |r| {
+        let (agent, description): (Option<String>, String) = (r.get(0)?, r.get(1)?);
+        let started = crate::ids::utc(r.get(2)?);
+        Ok(json!({ "agent": agent, "description": description, "started": started }))
+    })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 

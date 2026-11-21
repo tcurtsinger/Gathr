@@ -189,13 +189,22 @@ pub fn compacted_line(
     Ok(match (before, after) {
         (Some(before), Some(after)) => {
             format!(
-                "Compacted {name}'s conversation: {} to {}",
+                "{COMPACTED}{name}'s conversation: {} to {}",
                 tokens(before),
                 tokens(after)
             )
         }
-        _ => format!("Compacted {name}'s conversation"),
+        _ => format!("{COMPACTED}{name}'s conversation"),
     })
+}
+
+/// How the compacted line starts. No other line of Gathr's does, so history marks it by this
+/// (`compacted`) for the window, which shows it and none of Gathr's other lines.
+const COMPACTED: &str = "Compacted ";
+
+/// Whether a line of Gathr's is the one a compaction left.
+pub fn is_compacted_line(body: &str) -> bool {
+    body.starts_with(COMPACTED)
 }
 
 /// 950, 3.6K, 23K, 1.2M: tokens as the line reads them.

@@ -42,6 +42,14 @@ export interface Asked {
   at: number;
 }
 
+/** The quiet centred line a compaction left: "Compacted Ann's conversation: 468K to 52K". */
+export interface Line {
+  kind: 'line';
+  id: string;
+  text: string;
+  at: number;
+}
+
 export type Item = Card | Said;
 
 const time = (iso?: string | null) => (iso ? Date.parse(iso) : Number.NaN);
@@ -49,12 +57,12 @@ const open = (t: Turn) => t.status === 'running' || t.status === 'queued';
 
 /**
  * The room as the screen shows it: the person's messages and each agent's main message in the main chat, by when
- * they started; a reply, the service's or the person's, under the main message it answers. Gathr's
- * own lines aren't shown (the line that opens an answered question's turn among them: the question's card shows the
- * answer), and a turn that said nothing and ended shows nothing. An agent's question to the person sits in the main
- * chat when it was asked.
+ * they started; a reply, the service's or the person's, under the main message it answers. Of Gathr's own lines only
+ * a compaction's shows, as a quiet line (the line that opens an answered question's turn isn't: the question's card
+ * shows the answer), and a turn that said nothing and ended shows nothing, nor does a compaction's turn. An agent's
+ * question to the person sits in the main chat when it was asked.
  */
-export function shape(s: RoomState): (Item | Asked)[] {
+export function shape(s: RoomState): (Item | Asked | Line)[] {
   const byTurn = new Map<string, Message[]>();
   // The person's message that opened a turn: the service makes the turn just before it, and its card goes after it.
   const opener = new Map<string, number>();
@@ -76,7 +84,7 @@ export function shape(s: RoomState): (Item | Asked)[] {
       created: mine[0]?.time,
     };
     const streaming = s.partial[turn.id];
-    if (turn.status === 'queued' && !streaming) continue;
+    if ((turn.status === 'queued' && !streaming) || turn.opened === 'compaction') continue;
     const said = mine.filter((m) => m.kind === 'text' && typeof m.body === 'string');
     // Only the last words are the message. While the turn runs, words it went on from to a tool are a note already.
     const newest = said.at(-1);
@@ -132,7 +140,10 @@ export function shape(s: RoomState): (Item | Asked)[] {
   const asked = s.questions.map(
     (q): Asked => ({ kind: 'question', id: `q${q.id}`, question: q, at: time(q.asked) }),
   );
-  return [...main, ...asked].sort((a, b) => (a.at || 0) - (b.at || 0));
+  const lines = s.messages.flatMap((m): Line[] =>
+    m.compacted ? [{ kind: 'line', id: m.id, text: m.body as string, at: time(m.time) }] : [],
+  );
+  return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
 /** Whether a card's turn is still under way. */

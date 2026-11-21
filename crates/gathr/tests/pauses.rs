@@ -125,6 +125,28 @@ fn an_engine_that_closed_leaves_no_background_command_behind() {
     );
 }
 
+/// What the Agents panel lists: each command the engine still runs, under the agent that started it,
+/// until the engine no longer lists it.
+#[test]
+fn a_background_command_is_in_the_chats_history_until_the_engine_no_longer_lists_it() {
+    let data = TempDir::new();
+    let (service, chat, lead) = team(&data.0, &recording("background"), &[]);
+    send(&service, &chat, "Run the pings in the background");
+    let history = service.wait_for(&chat, 10, "the command", |h| {
+        h["turns"][0]["status"] == "done"
+            && h["background"].as_array().is_some_and(|b| !b.is_empty())
+    });
+    let command = &history["background"][0];
+    assert_eq!(command["agent"], lead.as_str(), "{history}");
+    assert_eq!(command["description"], "Run first ping in background");
+    assert!(command["started"].is_string(), "{history}");
+
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&chat, 20, "the command gone", |h| {
+        h["background"].as_array().is_some_and(|b| b.is_empty())
+    });
+}
+
 #[test]
 fn a_turn_with_no_progress_is_flagged_never_stopped() {
     let data = TempDir::new();

@@ -179,6 +179,7 @@ const room: RoomState = {
     { turn: bo, request: 'r1', tool: 'Bash', input: { command: 'npm run e2e -- orders --rows 40000' } },
   ],
   questions,
+  background: [],
 };
 const board: BoardLine[] = [
   { id: 1, owner: 'ann', name: 'Ann', text: 'Export from the service', state: 'done' },

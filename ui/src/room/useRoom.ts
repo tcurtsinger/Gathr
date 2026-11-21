@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   api,
+  type Background,
   type Failure,
   type History,
   type Member,
@@ -24,6 +25,8 @@ export interface RoomState {
   reactions: Reaction[];
   approvals: Approval[];
   questions: Question[];
+  /** What its agents' engines still run in the background. */
+  background: Background[];
 }
 
 export const emptyRoom: RoomState = {
@@ -35,6 +38,7 @@ export const emptyRoom: RoomState = {
   reactions: [],
   approvals: [],
   questions: [],
+  background: [],
 };
 
 export function fromHistory(h: History): RoomState {
@@ -52,6 +56,7 @@ export function fromHistory(h: History): RoomState {
       input: a.input,
     })),
     questions: h.questions ?? [],
+    background: h.background ?? [],
   };
 }
 
@@ -94,6 +99,7 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
         ref: e.ref ?? before?.ref ?? '',
         created: e.created ?? before?.created,
         ended: e.ended ?? before?.ended,
+        opened: e.opened ?? before?.opened,
       };
       // A turn that ended waits on nothing.
       const open = e.status === 'running' || e.status === 'queued';
@@ -110,10 +116,20 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
       const rest = s.reactions.filter((r) => !same(r));
       return { ...s, reactions: e.removed ? rest : [...rest, e.reaction] };
     }
-    case 'members':
-      return { ...s, members: e.members };
+    case 'members': {
+      // The event names the team only: each agent keeps the context it had.
+      const had = (m: Member) => s.members.find((x) => x.agent === m.agent)?.context;
+      return { ...s, members: e.members.map((m) => ({ ...m, context: m.context ?? had(m) })) };
+    }
     case 'questions':
       return { ...s, questions: e.questions };
+    case 'context':
+      return {
+        ...s,
+        members: s.members.map((m) => (m.agent === e.agent ? { ...m, context: e.context } : m)),
+      };
+    case 'background':
+      return { ...s, background: e.background };
     default:
       return s;
   }
