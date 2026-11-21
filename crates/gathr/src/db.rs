@@ -82,6 +82,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0072_tools.sql"),
     include_str!("../migrations/0073_tool_sign_in.sql"),
     include_str!("../migrations/0074_tool_client_id.sql"),
+    include_str!("../migrations/0075_no_reviewer.sql"),
 ];
 
 /// The schema version this build writes.
@@ -795,5 +796,43 @@ mod drop_old_tables_test {
             )
             .unwrap();
         assert_eq!(kept, "Tracker https://tracker.example.com/mcp 0102 1");
+    }
+
+    /// 0075 makes every reviewer a member: it stays on its chat and its project, the lead stays.
+    #[test]
+    fn a_reviewer_from_before_stays_as_a_member() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-no-reviewer-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..74] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 74;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts, approvals)
+                 VALUES ('mira', 'Mira', 'mira', 'acc', 1, 'full'), ('rev', 'Rev', 'rev', 'acc', 2, 'full');
+             INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES ('p', 'Notes', 'notes', 'x', 1);
+             INSERT INTO project_members VALUES ('p', 'mira', 'supervisor', 0), ('p', 'rev', 'reviewer', 1);
+             INSERT INTO chats (id, title, created_ts, project_id) VALUES ('c', 'C', 1, 'p');
+             INSERT INTO chat_members VALUES ('c', 'mira', 'supervisor', 1), ('c', 'rev', 'reviewer', 2);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let roles: String = conn
+            .query_row(
+                "SELECT (SELECT group_concat(agent_id || ' ' || role, ', ') FROM project_members)
+                     || '; ' || (SELECT group_concat(agent_id || ' ' || role, ', ') FROM chat_members)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            roles,
+            "mira supervisor, rev member; mira supervisor, rev member"
+        );
     }
 }

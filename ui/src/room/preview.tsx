@@ -25,7 +25,7 @@ const members: Member[] = [
   { agent: 'mira', name: 'Mira', role: 'supervisor' },
   { agent: 'ann', name: 'Ann', role: 'member' },
   { agent: 'bo', name: 'Bo', role: 'member' },
-  { agent: 'rev', name: 'Rev', role: 'reviewer' },
+  { agent: 'rev', name: 'Rev', role: 'member' },
 ];
 
 const start = Date.now() - 25 * 60_000;

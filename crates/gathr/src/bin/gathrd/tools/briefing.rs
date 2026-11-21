@@ -140,8 +140,7 @@ fn worked_here(
 
 fn title_of(role: Role) -> Option<&'static str> {
     match role {
-        Role::Supervisor => Some("Supervisor"),
-        Role::Reviewer => Some("Reviewer"),
+        Role::Supervisor => Some("lead"),
         Role::Member => None,
     }
 }
@@ -185,7 +184,7 @@ const ROOM_TEAM: &str = "How this room works:
 a teammate: they get your words when your turn ends. Name only who needs to act.
 - When your words comment on a teammate's message, start them with REPLY on a line of its own, and they are \
 filed under that message. Never start your answer to the person with REPLY.
-- The Supervisor leads. A message from the person that names nobody goes to it, and its plan or answer is \
+- One of you is the lead. A message from the person that names nobody goes to it, and its plan or answer is \
 checked by the teammates who took no part, before the person relies on it.";
 
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.

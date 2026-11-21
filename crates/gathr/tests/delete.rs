@@ -217,7 +217,7 @@ fn deleting_a_lead_makes_the_next_agent_lead_in_the_project_and_in_each_chat() {
     let team = json!([
         member(&mira, "supervisor"),
         member(&ann, "member"),
-        member(&bo, "reviewer")
+        member(&bo, "member")
     ]);
     let larder = new_project(&service, "Larder", &folder, team);
     let in_larder = chat_in(&service, &larder);
@@ -225,7 +225,7 @@ fn deleting_a_lead_makes_the_next_agent_lead_in_the_project_and_in_each_chat() {
     let plain = new_chat(&service, pair);
 
     delete(&service, &format!("/api/agents/{mira}"));
-    let after = ["Ann supervisor", "Bo reviewer"];
+    let after = ["Ann supervisor", "Bo member"];
     assert_eq!(project_seats(&service, &larder), after);
     assert_eq!(chat_seats(&service, &in_larder), after);
     assert_eq!(chat_seats(&service, &plain), ["Bo supervisor"]);
