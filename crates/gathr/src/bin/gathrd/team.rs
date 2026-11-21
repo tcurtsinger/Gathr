@@ -191,7 +191,10 @@ pub async fn checked(
     let mut team = Vec::new();
     for seat in seats {
         let Some(role) = Role::named(&seat.role) else {
-            let why = format!("{} isn't a role: supervisor, reviewer or member", seat.role);
+            let why = format!(
+                "{} isn't a role: supervisor (the lead) or member",
+                seat.role
+            );
             return Err(bad(t, error, &why));
         };
         team.push((seat.agent, role));

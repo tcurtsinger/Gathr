@@ -58,7 +58,7 @@ impl Tools {
     }
 
     #[tool(
-        description = "Reviewer only: bring a PR you review up to date with its base, as GitHub's Update branch does. \
+        description = "Bring a PR you review up to date with its base, as GitHub's Update branch does. \
                        Give its head as you read it: Gathr refuses a head that moved, a closed PR or one not into the \
                        default branch, and says the head before and after. Then wait for CI on the new head."
     )]

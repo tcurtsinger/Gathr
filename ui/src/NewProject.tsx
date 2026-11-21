@@ -17,13 +17,12 @@ interface Props {
   onCreated: (project: Project) => void;
 }
 
-/** A project: its name, its folder and its team of up to five, one of them the Supervisor (0028). */
+/** A project: its name, its folder and its team of up to five, one of them the lead (0028). */
 export function NewProject({ open, agents, projects, onClose, onCreated }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState('');
   const [team, setTeam] = useState<string[]>([]);
   const [lead, setLead] = useState('');
-  const [reviewer, setReviewer] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(open ? failure : null);
   const supervisor = team.includes(lead) ? lead : team[0];
@@ -36,12 +35,7 @@ export function NewProject({ open, agents, projects, onClose, onCreated }: Props
     if (!ready) return;
     const roles = team.map((agent) => ({
       agent,
-      role:
-        agent === supervisor
-          ? ('supervisor' as const)
-          : agent === reviewer
-            ? ('reviewer' as const)
-            : ('member' as const),
+      role: agent === supervisor ? ('supervisor' as const) : ('member' as const),
     }));
     api.addProject({ name: name.trim(), folder: folder.trim(), members: roles }).then((project) => {
       setName('');
@@ -87,29 +81,15 @@ export function NewProject({ open, agents, projects, onClose, onCreated }: Props
           })}
         </fieldset>
         {team.length > 1 && (
-          <>
-            <div className="agent-field">
-              <label htmlFor="new-project-supervisor">Supervisor</label>
-              <Dropdown
-                id="new-project-supervisor"
-                value={supervisor}
-                onChange={setLead}
-                choices={team.map((id) => ({ value: id, label: nameOf(id) }))}
-              />
-            </div>
-            <div className="agent-field">
-              <label htmlFor="new-project-reviewer">Reviewer</label>
-              <Dropdown
-                id="new-project-reviewer"
-                value={reviewer}
-                onChange={setReviewer}
-                choices={[
-                  { value: '', label: 'None' },
-                  ...team.filter((id) => id !== supervisor).map((id) => ({ value: id, label: nameOf(id) })),
-                ]}
-              />
-            </div>
-          </>
+          <div className="agent-field">
+            <label htmlFor="new-project-lead">Lead</label>
+            <Dropdown
+              id="new-project-lead"
+              value={supervisor}
+              onChange={setLead}
+              choices={team.map((id) => ({ value: id, label: nameOf(id) }))}
+            />
+          </div>
         )}
         <footer className="agent-actions">
           <Button type="button" variant="ghost" onClick={onClose}>
