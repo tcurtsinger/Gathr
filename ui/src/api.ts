@@ -99,7 +99,7 @@ export interface Turn {
   opened?: string | null;
 }
 
-export type Role = 'supervisor' | 'reviewer' | 'member';
+export type Role = 'supervisor' | 'member';
 
 export interface Member {
   agent: string;

@@ -8,11 +8,11 @@ use crate::Error;
 /// The most agents a chat has: past five, nobody can follow it (0013).
 pub const MOST: usize = 5;
 
+/// The lead is stored and sent as `supervisor`, its name before it was called the lead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Supervisor,
-    Reviewer,
     Member,
 }
 
@@ -20,7 +20,6 @@ impl Role {
     pub fn as_str(self) -> &'static str {
         match self {
             Role::Supervisor => "supervisor",
-            Role::Reviewer => "reviewer",
             Role::Member => "member",
         }
     }
@@ -28,7 +27,6 @@ impl Role {
     pub fn named(text: &str) -> Option<Role> {
         match text {
             "supervisor" => Some(Role::Supervisor),
-            "reviewer" => Some(Role::Reviewer),
             "member" => Some(Role::Member),
             _ => None,
         }
@@ -44,7 +42,7 @@ pub struct Member {
 }
 
 /// Why a team is turned down, or `None` when it holds: 1 to 5 agents, each once; with two or more,
-/// one Supervisor; at most one Reviewer, and never on its own.
+/// one lead.
 pub fn refused(team: &[(String, Role)]) -> Option<&'static str> {
     let count = |role| team.iter().filter(|(_, r)| *r == role).count();
     let mut agents: Vec<&str> = team.iter().map(|(a, _)| a.as_str()).collect();
@@ -55,19 +53,15 @@ pub fn refused(team: &[(String, Role)]) -> Option<&'static str> {
     } else if agents.len() < team.len() {
         Some("An agent can join a chat only once")
     } else if count(Role::Supervisor) > 1 {
-        Some("A chat can have only 1 Supervisor")
+        Some("A chat can have only one lead")
     } else if team.len() > 1 && count(Role::Supervisor) == 0 {
-        Some("A team needs a Supervisor")
-    } else if count(Role::Reviewer) > 1 {
-        Some("A chat can have only 1 Reviewer")
-    } else if team.len() == 1 && count(Role::Reviewer) == 1 {
-        Some("A Reviewer needs another agent in the chat")
+        Some("A team needs a lead")
     } else {
         None
     }
 }
 
-/// The chat's agents: the Supervisor first, then in the order they were added.
+/// The chat's agents: the lead first, then in the order they were added.
 pub fn members(conn: &Connection, chat: &str) -> Result<Vec<Member>, Error> {
     let mut statement = conn.prepare_cached(
         "SELECT m.agent_id, a.name, m.role FROM chat_members m JOIN agents a ON a.id = m.agent_id
@@ -77,7 +71,7 @@ pub fn members(conn: &Connection, chat: &str) -> Result<Vec<Member>, Error> {
         Ok(Member {
             agent: r.get(0)?,
             name: r.get(1)?,
-            // The table's CHECK allows only the three.
+            // Migration 0075 made every reviewer a member.
             role: Role::named(&r.get::<_, String>(2)?).unwrap_or(Role::Member),
         })
     })?;
@@ -270,7 +264,7 @@ pub fn join(conn: &mut Connection, chat: &str, plan: Plan) -> Result<Routed, Err
     })
 }
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one
-/// of them; else the Supervisor, or the only agent. A chat with no agents keeps what it was sent
+/// of them; else the lead, or the only agent. A chat with no agents keeps what it was sent
 /// to. The text is never read for names: a name counts only when picked from the window's list,
 /// which sends its agent, so `bob@ann.com` names nobody.
 pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String>, &'static str> {

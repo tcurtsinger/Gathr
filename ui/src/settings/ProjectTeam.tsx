@@ -7,10 +7,9 @@ import type { Seat } from './Projects';
 import { Group, Row } from './Row';
 
 const MOST = 5;
-const roles: Role[] = ['supervisor', 'member', 'reviewer'];
+const roles: Role[] = ['supervisor', 'member'];
 const roleName: Record<Role, string> = {
-  supervisor: 'Supervisor',
-  reviewer: 'Reviewer',
+  supervisor: 'Lead',
   member: 'Member',
 };
 
@@ -21,9 +20,9 @@ interface Props {
 }
 
 /**
- * A project's default team (0028): one Supervisor, at most one Reviewer, up to five agents, never none.
- * The Supervisor changes only by picking another, which makes the one before a Member, as a new Reviewer
- * does; removing the Supervisor makes the next one it; the last agent can't be removed.
+ * A project's default team (0028): one lead, up to five agents, never none. The lead changes only by
+ * picking another, which makes the one before a Member; removing the lead makes the next one it; the last
+ * agent can't be removed.
  */
 export function Team({ seats, agents, onChange }: Props) {
   const name = (id: string) => agents.find((a) => a.id === id)?.name ?? 'An agent';
@@ -50,7 +49,7 @@ export function Team({ seats, agents, onChange }: Props) {
     <>
       <Group
         title="Default team"
-        right={<span className="settings-group-line">One Supervisor, up to five agents.</span>}
+        right={<span className="settings-group-line">One lead, up to five agents.</span>}
       />
       <div className="settings-rows settings-top">
         {seats.map(({ agent, role }) => (

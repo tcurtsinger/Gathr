@@ -35,7 +35,7 @@ a background login watcher is not built yet. External account plugins and tools 
 
 ## Chats, projects and the room
 
-A chat has one to five agents; team chats have a Supervisor and an optional Reviewer.
+A chat has one to five agents; team chats have a lead.
 The service persists messages, replies, reactions, a board, questions to the person, pause/Stop, usage holds and archives.
 Agents use Gathr's in-process MCP server to read chat history, react, set a board line and ask the person.
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).

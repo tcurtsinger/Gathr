@@ -243,7 +243,7 @@ the dark theme and a deep one for the light theme (OKLCH 0.80 and 0.50, the same
 box and never under 1.5px; at 20 and under the Cloud draws six bumps and the Hexagon sharper corners. An agent
 with nothing picked has all three worked out from its id, so it always looks the same. The picture is hidden
 from screen readers beside the name and carries the name where it stands alone.
-Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
+Roles such as Lead and Member use the normal sans-serif.
 
 ### Archive (F11)
 
@@ -312,8 +312,8 @@ model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,
 temperature or extra toggles as product settings. Save affects future turns in
 all chats using the agent; running turns retain their assignment. Roles are
-chat-specific, with one Supervisor for two to five members and an optional,
-distinct Reviewer. Edit agent opens that agent's page on the Agents screen.
+chat-specific, with one lead for two to five members. Edit agent opens that
+agent's page on the Agents screen.
 
 Approvals is Ask, Edits, Auto (new-agent default) or Full, per 0029. The line under
 its name is the chosen mode's sentence. The window has no ? Help anywhere. Switch remains the existing

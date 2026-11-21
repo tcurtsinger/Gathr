@@ -80,21 +80,16 @@ fn role_rules_are_refused_through_the_api() {
             member(c, "member"), member(d, "member"), member(e, "member"), member(f, "member")] }),
         ),
         (
-            "two agents and no Supervisor",
+            "two agents and no lead",
             json!({ "members": [member(a, "member"), member(b, "member")] }),
         ),
         (
-            "two Supervisors",
+            "two leads",
             json!({ "members": [member(a, "supervisor"), member(b, "supervisor")] }),
         ),
         (
-            "two Reviewers",
-            json!({ "members": [member(a, "supervisor"), member(b, "reviewer"),
-            member(c, "reviewer")] }),
-        ),
-        (
-            "a Reviewer alone",
-            json!({ "members": [member(a, "reviewer")] }),
+            "a reviewer, a role no more",
+            json!({ "members": [member(a, "supervisor"), member(b, "reviewer")] }),
         ),
         (
             "one agent twice",
@@ -122,7 +117,7 @@ fn role_rules_are_refused_through_the_api() {
 
     let team = json!([
         member(a, "supervisor"),
-        member(b, "reviewer"),
+        member(b, "member"),
         member(c, "member")
     ]);
     let chat = team_chat(&service, team, None);
@@ -138,18 +133,14 @@ fn role_rules_are_refused_through_the_api() {
         roles,
         [
             ("Orin", "supervisor"),
-            ("Vale", "reviewer"),
+            ("Vale", "member"),
             ("Pia", "member")
         ]
     );
 
-    let no_lead = json!({ "members": [member(b, "reviewer"), member(c, "member")] });
+    let no_lead = json!({ "members": [member(b, "member"), member(c, "member")] });
     let answer = service.send("PATCH", &path, no_lead);
-    assert_eq!(
-        answer.status, 400,
-        "a team without a Supervisor: {}",
-        answer.body
-    );
+    assert_eq!(answer.status, 400, "a team without a lead: {}", answer.body);
     let moved = json!({ "members": [member(b, "supervisor"), member(c, "member")] });
     let answer = service.send("PATCH", &path, moved);
     assert_eq!(answer.status, 200, "{}", answer.body);
@@ -323,7 +314,7 @@ fn a_new_supervisor_reaches_the_next_turns_briefing() {
     send(&service, &chat, json!({ "text": "Start" }));
     service.wait_for(&chat, 10, "Orin's first turn", |h| ended(h, 1));
     let before = last_briefing(&args);
-    assert!(before.contains("as its Supervisor"), "{before}");
+    assert!(before.contains("as its lead"), "{before}");
 
     let swapped = json!({ "members": [member(&ids[0], "member"), member(&ids[1], "supervisor")] });
     let answer = service.send("PATCH", &format!("/api/chats/{chat}"), swapped);
@@ -336,7 +327,7 @@ fn a_new_supervisor_reaches_the_next_turns_briefing() {
     service.wait_for(&chat, 10, "Orin's turn after the swap", |h| ended(h, 2));
     let after = last_briefing(&args);
     assert!(
-        !after.contains("as its Supervisor") && after.contains("Pia (Supervisor)"),
+        !after.contains("as its lead") && after.contains("Pia (lead)"),
         "the engine kept the old roles: {after}"
     );
 }

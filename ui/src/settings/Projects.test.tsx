@@ -77,7 +77,7 @@ test('a refused save says why with its reference, and keeps the draft', async ()
   expect(sent.map((s) => s.body)).toEqual([{ folder: 'X:\\made-up\\elsewhere' }]);
 });
 
-test('the team keeps one Supervisor and at least one agent; a new Supervisor or Reviewer makes the one before a Member', async () => {
+test('the team keeps one lead and at least one agent; a new lead makes the one before a Member', async () => {
   service((body) => new Response(JSON.stringify({ ...project, ...body, members: project.members })));
   const screen = await render(<Projects start="p" />);
   const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
@@ -87,21 +87,16 @@ test('the team keeps one Supervisor and at least one agent; a new Supervisor or 
     await page.getByRole('option', { name: choice, exact: true }).click();
   };
 
-  // The Supervisor isn't demoted directly: another is picked in its place.
+  // The lead isn't demoted directly: another is picked in its place.
   await expect.element(role('Made-up Lead')).toBeDisabled();
-  await pick(role('Made-up Member'), 'Supervisor');
+  await pick(role('Made-up Member'), 'Lead');
   await expect.element(role('Made-up Lead')).toHaveTextContent('Member');
   await expect.element(role('Made-up Member')).toBeDisabled();
 
-  // One Reviewer: a second one makes the first a Member.
+  // Removing the lead makes the next agent it; the last agent stays.
   await pick(screen.getByRole('combobox', { name: 'Add agent' }), 'Made-up Third');
-  await pick(role('Made-up Third'), 'Reviewer');
-  await pick(role('Made-up Lead'), 'Reviewer');
-  await expect.element(role('Made-up Third')).toHaveTextContent('Member');
-
-  // Removing the Supervisor makes the next agent it; the last agent stays.
   await remove('Made-up Member').click();
-  await expect.element(role('Made-up Lead')).toHaveTextContent('Supervisor');
+  await expect.element(role('Made-up Lead')).toHaveTextContent('Lead');
   await remove('Made-up Third').click();
   await expect.element(remove('Made-up Lead')).toBeDisabled();
 
