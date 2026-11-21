@@ -70,7 +70,7 @@ export function SkillPage({ skill, onBack, onFailure, onEnable, onRemove }: Prop
       <p className="skill-folder">
         <span className="muted">Folder</span> <code>{skill.path}</code>
       </p>
-      <div className="settingrow skill-enabled">
+      <div className="skill-enabled">
         <span className="skill-enabled-words">
           <span id="skill-enabled">Enabled</span>
           <span className="muted" id="skill-enabled-why">

@@ -17,11 +17,23 @@ interface Props {
   bare?: boolean;
   /** An X at the top right, named "Close <title>", instead of the text Close (Settings, 0023). */
   closeIcon?: boolean;
+  /** No header bar: the content shows the title itself (Settings, in its left column). */
+  noHeader?: boolean;
   children: ReactNode;
 }
 
 /** Gathr's one modal: centred over the current screen, its title and Close on top. Escape closes it. */
-export function Dialog({ open, title, onClose, opener, className, bare, closeIcon, children }: Props) {
+export function Dialog({
+  open,
+  title,
+  onClose,
+  opener,
+  className,
+  bare,
+  closeIcon,
+  noHeader,
+  children,
+}: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const back = useRef<HTMLElement | null>(null);
   const titled = useId();
@@ -45,7 +57,8 @@ export function Dialog({ open, title, onClose, opener, className, bare, closeIco
     <dialog
       ref={dialog}
       className={cn('dialog', className)}
-      aria-labelledby={titled}
+      aria-labelledby={noHeader ? undefined : titled}
+      aria-label={noHeader ? title : undefined}
       onCancel={(e) => {
         e.preventDefault();
         // React passes it on to a dialog this one sits in: Escape closes only the top one.
@@ -55,14 +68,16 @@ export function Dialog({ open, title, onClose, opener, className, bare, closeIco
     >
       {open && (
         <>
-          <header className="dialog-header">
-            <h2 id={titled}>{title}</h2>
-            {!bare && !closeIcon && (
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Close
-              </Button>
-            )}
-          </header>
+          {!noHeader && (
+            <header className="dialog-header">
+              <h2 id={titled}>{title}</h2>
+              {!bare && !closeIcon && (
+                <Button type="button" variant="ghost" onClick={onClose}>
+                  Close
+                </Button>
+              )}
+            </header>
+          )}
           {children}
           {/* Last, as the prototype's: opening focuses the content, not the X. */}
           {!bare && closeIcon && (

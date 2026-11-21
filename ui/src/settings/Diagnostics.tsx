@@ -1,7 +1,9 @@
+import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
 import { Dropdown } from '../components/Dropdown';
 import { FailureNotice, Notice } from '../components/Notice';
+import { Page } from './Row';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
 
@@ -17,7 +19,7 @@ interface Props {
   reference?: string;
 }
 
-/** Settings > Diagnostics: a chat's turns beside the chosen turn's timeline (diagnostics/v3). */
+/** Settings > Turns: a chat's turns beside the chosen turn's timeline (diagnostics/v3). */
 export function Diagnostics({ reference, ...turns }: Props) {
   return reference ? <Reference reference={reference} /> : <Turns {...turns} />;
 }
@@ -37,10 +39,7 @@ function Reference({ reference }: { reference: string }) {
     .findLast((w) => typeof w === 'string');
 
   return (
-    <section className="diagnostics" aria-labelledby="diagnostics-title">
-      <div className="diagnostics-head">
-        <h3 id="diagnostics-title">Reference {reference}</h3>
-      </div>
+    <Page wide title={`Reference ${reference}`}>
       {failure && <FailureNotice failure={failure} />}
       {events && (
         <div className="trace">
@@ -48,7 +47,7 @@ function Reference({ reference }: { reference: string }) {
           <Steps events={events} />
         </div>
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -84,28 +83,25 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
   }, [list, filter, find]);
   const current = list?.find((t) => t.id === picked);
 
-  if (!chat) return <p className="empty">No chat open</p>;
+  if (!chat) return <Page wide title="Turns" line="No chat open" />;
   return (
-    <section className="diagnostics" aria-labelledby="diagnostics-title">
-      <div className="diagnostics-head">
-        <h3 id="diagnostics-title">{title ?? 'Diagnostics'}</h3>
-        <div className="toolbar">
-          <label htmlFor="diagnostics-filter">Turns</label>
-          <Dropdown
-            id="diagnostics-filter"
-            value={filter}
-            onChange={(v) => setFilter(v as Filter)}
-            choices={filters.map((f) => ({ value: f, label: f }))}
-          />
-          <label>
-            Find{' '}
-            <input value={find} placeholder="Turn or reference" onChange={(e) => setFind(e.target.value)} />
-          </label>
-          {list && <span className="muted">{list.length === 1 ? '1 turn' : `${list.length} turns`}</span>}
-        </div>
+    <Page wide title={title ?? 'Turns'} line="Each turn of this chat, step by step.">
+      <div className="toolbar">
+        <label htmlFor="diagnostics-filter">Turns</label>
+        <Dropdown
+          id="diagnostics-filter"
+          value={filter}
+          onChange={(v) => setFilter(v as Filter)}
+          choices={filters.map((f) => ({ value: f, label: f }))}
+        />
+        <label>
+          Find{' '}
+          <input value={find} placeholder="Turn or reference" onChange={(e) => setFind(e.target.value)} />
+        </label>
+        {list && <span className="muted">{list.length === 1 ? '1 turn' : `${list.length} turns`}</span>}
       </div>
       {failure && <FailureNotice failure={failure} />}
-      {list?.length === 0 && <p className="empty">No turns yet</p>}
+      {list?.length === 0 && <p className="settings-empty">No turns yet</p>}
       {list && list.length > 0 && (
         <div className="split">
           <div className="turnlist">
@@ -117,7 +113,7 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
                 aria-pressed={t.id === picked}
                 onClick={() => setPicked(t.id)}
               >
-                Turn {t.n}: {said(t.status)}
+                Turn {t.n}: <b data-status={t.status}>{said(t.status)}</b>
                 <span>{t.asked}</span>
                 <span>{facts(t).summary}</span>
               </button>
@@ -126,7 +122,7 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
           {current && <Timeline turn={current} />}
         </div>
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -153,7 +149,7 @@ function Timeline({ turn }: { turn: TurnTimeline }) {
           </div>
         ))}
         {f.given.map(([label, size]) => (
-          <div key={label}>
+          <div key={label} className="two">
             <dt>{label}</dt>
             <dd>{size}</dd>
           </div>
@@ -177,7 +173,10 @@ function Steps({ events }: { events: TurnEvent[] }) {
         step.kind === 'tools' ? (
           <li key={step.key}>
             <details>
-              <summary>{step.events.length} tool calls</summary>
+              <summary>
+                <ChevronRight aria-hidden="true" />
+                {step.events.length} tool calls
+              </summary>
               <ol className="events">
                 {step.events.map((e) => (
                   <Event key={e.key} label={e.label} at={e.at} duration={e.duration} failed={e.failed} />

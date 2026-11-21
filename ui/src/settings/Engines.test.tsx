@@ -1,6 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Engine } from '../api';
 import { Engines } from './Engines';
@@ -46,10 +46,13 @@ const codex: Engine['copy'] = { ...copy('idle'), version: '0.166.0' };
 test('Rename on another account opens its own name, not the last draft', async () => {
   service([copy('idle')]);
   const screen = await render(<Engines onReference={() => {}} />);
-  const rows = screen.getByRole('listitem');
-  await rows.filter({ hasText: 'Made-up one' }).getByRole('button', { name: 'Rename' }).click();
+  const rename = async (name: string) => {
+    await screen.getByRole('button', { name: `More for ${name}` }).click();
+    await page.getByRole('menuitem', { name: 'Rename' }).click();
+  };
+  await rename('Made-up one');
   await screen.getByRole('textbox', { name: 'Name' }).fill('Replacement');
-  await rows.filter({ hasText: 'Made-up two' }).getByRole('button', { name: 'Rename' }).click();
+  await rename('Made-up two');
   await expect.element(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Made-up two');
 });
 
@@ -62,18 +65,22 @@ test('Remove asks first: Escape keeps the account and Settings open, Remove dele
     </dialog>,
   );
   const row = screen.getByRole('listitem').filter({ hasText: 'Made-up two' });
-  const remove = row.getByRole('button', { name: 'Remove' });
+  const more = row.getByRole('button', { name: 'More for Made-up two' });
+  const remove = async () => {
+    await more.click();
+    await page.getByRole('menuitem', { name: 'Remove' }).click();
+  };
 
-  await remove.click();
+  await remove();
   const question = row.getByRole('group', { name: 'Remove Made-up two?' });
   await expect.element(question.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   await userEvent.keyboard('{Escape}');
   await expect.element(question).not.toBeInTheDocument();
-  await expect.element(remove).toHaveFocus();
+  await expect.element(more).toHaveFocus();
   expect(screen.container.querySelector('dialog')?.open).toBe(true);
   expect(removed).toEqual([]);
 
-  await remove.click();
+  await remove();
   await question.getByRole('button', { name: 'Remove' }).click();
   await expect.poll(() => removed).toEqual(['DELETE /api/accounts/b']);
   await expect.element(screen.getByRole('button', { name: 'Add' })).toHaveFocus();
@@ -116,7 +123,7 @@ test('a sign-in shows the code field only when its engine takes a pasted code', 
   const paste = rows.filter({ hasText: 'Made-up paste' });
   const browser = rows.filter({ hasText: 'Made-up browser' });
   await expect.element(paste.getByRole('textbox', { name: 'Code' })).toBeVisible();
-  await expect.element(browser.getByText('Codex / Signing in')).toBeVisible();
+  await expect.element(browser.getByText('Codex · Signing in')).toBeVisible();
   await expect.element(browser.getByRole('textbox', { name: 'Code' })).not.toBeInTheDocument();
   await browser.getByRole('button', { name: 'Open sign-in page' }).click();
   expect(opened).toEqual([page]);

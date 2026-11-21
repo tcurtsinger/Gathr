@@ -1,27 +1,29 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { ChevronLeft, ChevronRight, Folder } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
 import { danger } from '../components/Confirm';
+import { Face } from '../components/Face';
 import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
 import { Team } from './ProjectTeam';
-import './agents.css';
+import { Page, Row } from './Row';
 import './projects.css';
 
 type Open = (ref: string) => void;
 export type Seat = { agent: string; role: Role };
 
 /**
- * Settings > Projects (0043, the owner's pick B): the projects listed as Agents lists agents, the picked
- * one's name, folder and team, in one draft with one Save.
+ * Settings > Projects: the projects listed, each with its folder and team; one opens a page of its own, its
+ * name, folder and team in one draft with one Save.
  */
 export function Projects({ start, onReference }: { start?: string; onReference: Open }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [selected, setSelected] = useState<string | null>(start ?? null);
-  /** The project last saved, so its form says so until it changes again. */
+  const [opened, setOpened] = useState<string | null>(start ?? null);
+  /** The project last saved, so its page says so until it changes again. */
   const [saved, setSaved] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -35,72 +37,94 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
     });
   }, [load]);
 
-  const shown = selected ?? projects?.[0]?.id ?? null;
-  const project = projects?.find((p) => p.id === shown);
+  const project = projects?.find((p) => p.id === opened);
+  const notice = failure && <FailureNotice failure={failure} onReference={onReference} />;
+  if (project)
+    return (
+      // A new form for each project, so one project's draft never carries to another.
+      <ProjectPage
+        key={project.id}
+        project={project}
+        agents={agents}
+        saved={saved === project.id}
+        notice={notice}
+        onBack={() => setOpened(null)}
+        onSaved={(done) => {
+          setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
+          setSaved(done.id);
+        }}
+        onDeleted={(left) => {
+          setProjects((list) => list?.filter((p) => p.id !== project.id) ?? null);
+          setOpened(null);
+          setFailure(left);
+        }}
+        onReference={onReference}
+      />
+    );
+  const face = (id: string, name: string) => agents.find((a) => a.id === id) ?? { id, name };
   return (
-    <section className="agents" aria-label="Projects">
-      <div className="agent-list">
-        {projects?.map((p) => (
-          <button
-            type="button"
-            key={p.id}
-            aria-current={p.id === shown ? 'true' : undefined}
-            onClick={() => {
-              setSelected(p.id);
-              setSaved(null);
-            }}
-          >
-            {p.name}
-          </button>
-        ))}
-      </div>
-      <div className="agent-form">
-        {failure && <FailureNotice failure={failure} onReference={onReference} />}
-        {projects?.length === 0 && <p className="muted">No projects</p>}
-        {project && (
-          // A new form for each project, so one project's draft never carries to another.
-          <ProjectForm
-            key={project.id}
-            project={project}
-            agents={agents}
-            saved={saved === project.id}
-            onSaved={(done) => {
-              setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
-              setSaved(done.id);
-            }}
-            onDeleted={(left) => {
-              setProjects((list) => list?.filter((p) => p.id !== project.id) ?? null);
-              setSelected(null);
-              setFailure(left);
-            }}
-            onReference={onReference}
-          />
-        )}
-      </div>
-    </section>
+    <Page title="Projects" line="Each project’s folder and the team a new chat starts with.">
+      {notice}
+      {projects?.length === 0 && <p className="settings-empty">No projects</p>}
+      {projects && projects.length > 0 && (
+        <ul className="settings-rows settings-top">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                className="project-open"
+                onClick={() => {
+                  setOpened(p.id);
+                  setSaved(null);
+                }}
+              >
+                <Row
+                  lead={
+                    <span className="project-tile" aria-hidden="true">
+                      <Folder />
+                    </span>
+                  }
+                  name={p.name}
+                  line={<code>{p.folder}</code>}
+                >
+                  <span className="project-faces">
+                    {p.members.map((m) => (
+                      <Face key={m.agent} agent={face(m.agent, m.name)} size={24} />
+                    ))}
+                  </span>
+                  <ChevronRight className="project-chevron" aria-hidden="true" />
+                </Row>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Page>
   );
 }
 
 type Fields = Pick<Project, 'name' | 'folder'> & { team: Seat[] };
 
-interface FormProps {
+interface PageProps {
   project: Project;
   agents: Agent[];
   saved: boolean;
+  /** A failure of the list's own, shown over the page. */
+  notice: React.ReactNode;
+  onBack: () => void;
   onSaved: (project: Project) => void;
   /** What the delete couldn't remove yet, if anything. */
   onDeleted: (left: Failure | null) => void;
   onReference: Open;
 }
 
-function ProjectForm({ project, agents, saved, onSaved, onDeleted, onReference }: FormProps) {
+function ProjectPage({ project, agents, saved, notice, onBack, onSaved, onDeleted, onReference }: PageProps) {
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   // Only the fields edited here, over the project as saved, so Save never writes an untouched one back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const title = useId();
   const team = project.members.map(({ agent, role }) => ({ agent, role }));
   const fields: Fields = { ...project, team, ...edits };
   const edit = (more: Partial<Fields>) => setEdits((e) => ({ ...e, ...more }));
@@ -128,24 +152,15 @@ function ProjectForm({ project, agents, saved, onSaved, onDeleted, onReference }
     );
   };
   return (
-    <form className="project-form" aria-labelledby={title} onSubmit={submit}>
-      <h3 id={title}>{project.name}</h3>
-      <label className="agent-field">
-        Name
-        <input value={fields.name} maxLength={80} onChange={(e) => edit({ name: e.target.value })} />
-      </label>
-      <label className="agent-field">
-        Folder
-        <input
-          className="project-folder"
-          value={fields.folder}
-          spellCheck={false}
-          onChange={(e) => edit({ folder: e.target.value })}
-        />
-      </label>
-      <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
-      <div className="agent-actions">
+    <Page
+      title={project.name}
+      back={
+        <button type="button" className="settings-back" onClick={onBack}>
+          <ChevronLeft aria-hidden="true" />
+          Projects
+        </button>
+      }
+      action={
         <Button
           type="button"
           variant="outline"
@@ -155,27 +170,58 @@ function ProjectForm({ project, agents, saved, onSaved, onDeleted, onReference }
         >
           Delete
         </Button>
-        {deleting && (
-          <DeleteConfirm
-            kind="project"
-            id={project.id}
-            name={project.name}
-            opener={deleting}
-            onCancel={() => setDeleting(null)}
-            onDeleted={onDeleted}
-            onReference={onReference}
-          />
-        )}
-        <span className="muted" role="status">
-          {saved && !changed ? 'Saved' : ''}
-        </span>
-        <Button type="button" variant="ghost" onClick={() => setEdits({})} disabled={busy || !changed}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={busy || !changed || !fields.name.trim() || !fields.folder.trim()}>
-          Save
-        </Button>
-      </div>
-    </form>
+      }
+    >
+      {notice}
+      {deleting && (
+        <DeleteConfirm
+          kind="project"
+          id={project.id}
+          name={project.name}
+          opener={deleting}
+          onCancel={() => setDeleting(null)}
+          onDeleted={onDeleted}
+          onReference={onReference}
+        />
+      )}
+      <form className="project-form" aria-label={project.name} onSubmit={submit}>
+        <div className="settings-rows settings-top">
+          <Row name={<label htmlFor="project-name">Name</label>}>
+            <input
+              id="project-name"
+              value={fields.name}
+              maxLength={80}
+              onChange={(e) => edit({ name: e.target.value })}
+            />
+          </Row>
+          <Row name={<label htmlFor="project-folder">Folder</label>}>
+            <input
+              id="project-folder"
+              className="project-folder"
+              value={fields.folder}
+              spellCheck={false}
+              onChange={(e) => edit({ folder: e.target.value })}
+            />
+          </Row>
+        </div>
+        <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
+        {failure && <FailureNotice failure={failure} onReference={onReference} />}
+        <footer className="settings-foot">
+          <span className="muted" role="status">
+            {saved && !changed ? 'Saved' : ''}
+          </span>
+          <Button type="button" variant="outline" onClick={() => setEdits({})} disabled={busy || !changed}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={busy || !changed || !fields.name.trim() || !fields.folder.trim()}
+          >
+            Save
+          </Button>
+        </footer>
+      </form>
+    </Page>
   );
 }

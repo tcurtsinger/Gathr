@@ -22,7 +22,7 @@ function service(app: Partial<AppState>) {
 test('the version shows, with Update when a release is ready', async () => {
   service({ state: 'ready', update: { version: '9.9.9' } });
   const screen = await render(<AppVersion onReference={() => {}} />);
-  await expect.element(screen.getByRole('heading', { name: 'Version 9.9.8' })).toBeVisible();
+  await expect.element(screen.getByText('Version 9.9.8')).toBeVisible();
   await expect.element(screen.getByText('9.9.9 is ready')).toBeVisible();
   await screen.getByRole('button', { name: 'Update to 9.9.9' }).click();
   await expect.poll(() => sent).toEqual([{ install: true }]);

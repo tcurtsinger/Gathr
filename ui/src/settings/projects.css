@@ -1,54 +1,72 @@
-/* Settings > Projects (0036, option B): the Agents layout. */
-.agent-form .project-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 100%;
+/* Settings > Projects: the list, each row opening the project's page. */
+.project-open {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
 }
-/* Save and Cancel at the editor's foot, as in the mock-up. */
-.project-form > .agent-actions {
-  position: sticky;
-  bottom: -24px;
-  margin: auto -24px -24px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+.project-open:hover {
+  background: none;
 }
-/* The team opens with a rule. */
-.project-team {
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+.project-open:hover .setting-name {
+  text-decoration: underline;
 }
-.project-form h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-.project-form p {
-  margin: 0;
-}
-.project-folder {
-  font-family: ui-monospace, monospace;
-}
-.project-seat {
+.project-tile {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px auto;
-  align-items: center;
-  gap: 12px;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted);
 }
-/* The face and the name, as a message's speaker shows them. */
-.project-seat-who {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.project-tile svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+.project-open code,
+.settings-col .project-folder {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+}
+.project-open .setting-words > div {
   min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
 }
-.project-team .project-add {
-  justify-self: start;
-  width: auto;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 14px;
+.project-open .setting-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-faces {
+  display: flex;
+  gap: 4px;
+  margin-right: 6px;
+}
+.project-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+}
+
+/* A project's page: its fields and team in denser rows. */
+.project-form .setting {
+  min-height: 54px;
+}
+#project-name,
+#project-folder {
+  width: 240px;
+}
+.settings-col .project-role {
+  width: 124px;
+  min-width: 0;
+}
+.settings-col .project-add {
+  width: 140px;
+}
+.project-add[data-placeholder] > span {
+  color: var(--muted);
 }

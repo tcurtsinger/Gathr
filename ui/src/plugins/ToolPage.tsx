@@ -105,7 +105,7 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           onReference={onReference}
         />
       )}
-      <div className="settingrow skill-enabled">
+      <div className="skill-enabled">
         <span className="skill-enabled-words">
           <span id="tool-enabled">Enabled</span>
           <span className="muted" id="tool-enabled-why">
