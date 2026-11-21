@@ -11,7 +11,7 @@ export interface FaceOf extends Chosen {
 /** Every agent the window knows, removed ones too, by id: a place that knows only the id draws the saved picture. */
 export const KnownFaces = createContext<ReadonlyMap<string, FaceOf>>(new Map());
 
-/** 56 in Settings > Agents' form and the new chat; the others wherever an agent shows. */
+/** 56 on an agent's page and the new chat; the others wherever an agent shows. */
 export type FaceSize = 56 | 36 | 28 | 24 | 20 | 16;
 
 interface Props {

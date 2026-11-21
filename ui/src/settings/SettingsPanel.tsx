@@ -1,7 +1,6 @@
-import { Activity, Bot, Cpu, Flag, Folder, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
+import { Activity, Cpu, Flag, Folder, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Dialog } from '../components/Dialog';
-import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import { Friction } from './Friction';
@@ -9,7 +8,7 @@ import { General, Teamwork } from './General';
 import { Projects } from './Projects';
 import './settings.css';
 
-export type Page = 'general' | 'engines' | 'teamwork' | 'agents' | 'projects' | 'turns' | 'friction';
+export type Page = 'general' | 'engines' | 'teamwork' | 'projects' | 'turns' | 'friction';
 
 export interface SettingsTarget {
   page: Page;
@@ -45,7 +44,6 @@ const groups: [string, [Page, string, LucideIcon][]][] = [
     'Team',
     [
       ['teamwork', 'Teamwork', Users],
-      ['agents', 'Agents', Bot],
       ['projects', 'Projects', Folder],
     ],
   ],
@@ -105,8 +103,6 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
               <Engines onReference={onReference} />
             ) : target.page === 'teamwork' ? (
               <Teamwork onReference={onReference} />
-            ) : target.page === 'agents' ? (
-              <Agents onReference={onReference} />
             ) : target.page === 'projects' ? (
               <Projects start={target.project} onReference={onReference} />
             ) : target.page === 'friction' ? (

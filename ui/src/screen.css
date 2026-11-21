@@ -1,0 +1,142 @@
+/* A screen in place of the chat list and the chat (Screen.tsx): Plugins and Agents. Its navigation is the sidebar's
+   (sidebar.css), its main panel a page of rows, as the approved mock-ups draw them. */
+.screen-nav .brand {
+  justify-content: space-between;
+}
+.screen-nav .brand .row-icon {
+  width: 24px;
+  opacity: 1;
+}
+.screen-nav .navbutton[aria-current="page"] {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.screen-nav .chatrow[data-disabled] .chat-link {
+  color: var(--muted-foreground);
+}
+.app > .chat.screen {
+  overflow: auto;
+  background: var(--frame);
+}
+.screen-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+.screen-page h1 {
+  margin: 0 0 18px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.screen-page > .notice {
+  margin: 0 0 16px;
+}
+.screen-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.screen-add {
+  margin-left: auto;
+}
+.screen-empty {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.screen-empty h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.screen-empty p {
+  margin: 0;
+}
+.screen-group + .screen-group {
+  margin-top: 22px;
+}
+.screen-group h2 {
+  margin: 0 0 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.screen-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.screen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.screen-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 9px 4px;
+  border-radius: 0;
+  text-align: left;
+}
+.screen-open:hover {
+  background: none;
+}
+.screen-words {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.screen-words strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.screen-open:hover strong {
+  text-decoration: underline;
+}
+.screen-words span {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.screen-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 0 18px -4px;
+  padding: 2px 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.screen-back svg {
+  width: 14px;
+  height: 14px;
+}
+.screen-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.screen-title {
+  flex: 1;
+  min-width: 0;
+}
+.screen-title h1 {
+  margin: 0;
+}
+.screen-title p {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+.screen-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}

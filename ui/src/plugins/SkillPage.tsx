@@ -28,15 +28,15 @@ export function SkillPage({ skill, onBack, onFailure, onEnable, onRemove }: Prop
   }, [name, listed, onFailure]);
   return (
     <article className="skill-page">
-      <button type="button" className="plugins-back" onClick={onBack}>
+      <button type="button" className="screen-back" onClick={onBack}>
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>
-      <header className="skill-head">
+      <header className="screen-head">
         <span className="plugin-tile" aria-hidden="true">
           <BookOpen />
         </span>
-        <div className="skill-title">
+        <div className="screen-title">
           <h1>{skill.name}</h1>
           {skill.problem ? (
             <p className="plugin-problem">{skill.problem}</p>
@@ -44,7 +44,7 @@ export function SkillPage({ skill, onBack, onFailure, onEnable, onRemove }: Prop
             <p className="muted">{skill.description}</p>
           )}
         </div>
-        <div className="skill-actions">
+        <div className="screen-actions">
           {desktop() && (
             <Button
               type="button"

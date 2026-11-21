@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Agents } from './agents/Agents';
 import {
   type Agent,
   api,
@@ -20,7 +21,7 @@ import { listen } from './live';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
 import { Plugins } from './plugins/Plugins';
-import { Rail } from './Rail';
+import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
 import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
@@ -54,8 +55,8 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
-  // The Plugins screen, in place of the chat list and the chat until Home or a chat is opened.
-  const [plugins, setPlugins] = useState(false);
+  // Agents or Plugins, in place of the chat list and the chat until Home or a chat is opened.
+  const [opened, setOpened] = useState<Opened>('home');
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
@@ -120,8 +121,8 @@ export function App() {
     });
   }, []);
 
-  // The person's name and assistant, for a new chat's greeting: read again as Settings closes, and when agents
-  // change (deleting the assistant clears it).
+  // The person's name and assistant, for a new chat's greeting: read again as Settings closes, as Agents changes the
+  // assistant, and when agents change (deleting the assistant clears it).
   const [you, setYou] = useState<Pick<Settings, 'person_name' | 'assistant'>>({});
   const loadYou = useCallback(() => api.settings().then(setYou, setFailure), []);
   useEffect(() => {
@@ -181,7 +182,7 @@ export function App() {
   const newChat = useCallback((project?: string) => {
     setFresh({ project });
     setSelected(null);
-    setPlugins(false);
+    setOpened('home');
   }, []);
   const keep = (chat: string, f: Unsent) => setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
   const start = (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => {
@@ -214,12 +215,12 @@ export function App() {
     if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
     setSelected(id);
     setFresh(null);
-    setPlugins(false);
+    setOpened('home');
   };
-  // What the main area showed this run, a chat's id, '' for New or PLUGINS, for Back and Forward. Opening
-  // something after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
+  // What the main area showed this run, a chat's id, '' for New, 'agents' or 'plugins', for Back and Forward.
+  // Opening something after going back drops what was ahead, as a browser does; a chat deleted since is skipped.
   const [trail, setTrail] = useState<{ list: string[]; at: number }>({ list: [], at: -1 });
-  const shown = plugins ? PLUGINS : (selected ?? (fresh ? '' : null));
+  const shown = opened !== 'home' ? opened : (selected ?? (fresh ? '' : null));
   useEffect(() => {
     if (shown === null) return;
     setTrail((t) =>
@@ -227,13 +228,13 @@ export function App() {
     );
   }, [shown]);
   const there = (key: string) =>
-    key !== shown && (key === '' || key === PLUGINS || [...chats, ...archived].some((c) => c.id === key));
+    key !== shown && (key === '' || away(key) || [...chats, ...archived].some((c) => c.id === key));
   const back = trail.list.findLastIndex((key, i) => i < trail.at && there(key));
   const ahead = trail.list.findIndex((key, i) => i > trail.at && there(key));
   const go = (at: number) => {
     setTrail((t) => ({ ...t, at }));
     const key = trail.list[at];
-    if (key === PLUGINS) setPlugins(true);
+    if (away(key)) setOpened(key);
     else if (key) choose(key);
     else newChat();
   };
@@ -358,15 +359,14 @@ export function App() {
     <div className={nav ? 'app' : 'app nav-closed'}>
       <NavButtons
         open={nav}
-        lists={plugins ? 'plugins' : 'chats'}
+        lists={opened === 'home' ? 'chats' : opened}
         onToggle={() => showNav(!nav)}
         onBack={back < 0 ? undefined : () => go(back)}
         onForward={ahead < 0 ? undefined : () => go(ahead)}
       />
       <Rail
-        plugins={plugins}
-        onHome={() => setPlugins(false)}
-        onPlugins={() => setPlugins(true)}
+        open={opened}
+        onOpen={setOpened}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
         update={{
           ready: readyVersion(appUpdate.app),
@@ -375,8 +375,9 @@ export function App() {
           onUpdate: appUpdate.update,
         }}
       />
-      {plugins && <Plugins onReference={openReference} />}
-      {!plugins && (
+      {opened === 'agents' && <Agents onReference={openReference} onAssistant={loadYou} />}
+      {opened === 'plugins' && <Plugins onReference={openReference} />}
+      {opened === 'home' && (
         <Sidebar
           chats={chats}
           archived={archived}
@@ -408,7 +409,7 @@ export function App() {
           }
         />
       )}
-      {plugins ? null : screen ? (
+      {opened !== 'home' ? null : screen ? (
         <RoomView
           key={screen.chat.id || 'new'}
           {...screen}
@@ -477,8 +478,8 @@ export function App() {
   return <KnownFaces.Provider value={faces}>{app}</KnownFaces.Provider>;
 }
 
-/** The Plugins screen's place in Back and Forward: never a chat's id. */
-const PLUGINS = 'plugins';
+/** Agents' and Plugins' places in Back and Forward are their names: never a chat's id. */
+const away = (key: string): key is Exclude<Opened, 'home'> => key === 'agents' || key === 'plugins';
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */
 function neighbour(chat: Chat, list: Chat[]): Chat | undefined {

@@ -7,10 +7,10 @@ import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
 import { AgentFolder } from './AgentFolder';
 import { AppVersion } from './AppVersion';
-import { Assistant, YourName } from './Assistant';
 import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
 import { Page, Row } from './Row';
+import { YourName } from './YourName';
 
 type Open = (ref: string) => void;
 
@@ -105,12 +105,11 @@ export function General({ onReference }: { onReference: Open }) {
   );
 }
 
-/** Settings > Teamwork: how agents take a new chat and work together. */
+/** Settings > Teamwork: how agents work together. Which one is the assistant is picked on the Agents screen. */
 export function Teamwork({ onReference }: { onReference: Open }) {
   return (
-    <Page title="Teamwork" line="How your agents take a new chat and work together.">
+    <Page title="Teamwork" line="How your agents work together.">
       <div className="settings-rows">
-        <Assistant onReference={onReference} />
         <HandoffLimit onReference={onReference} />
         <AutoCompact onReference={onReference} />
         <AgentFolder onReference={onReference} />

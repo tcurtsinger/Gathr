@@ -1,37 +1,41 @@
 import { CircleArrowUp, House, LoaderCircle, Settings } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { IconButton } from './components/IconButton';
+import { EYES, SHAPES } from './components/pictures';
 import './rail.css';
 
+/** The screen in the frame: the chats (Home), Agents or Plugins. */
+export type Opened = 'home' | 'agents' | 'plugins';
+
 interface Props {
-  /** Whether the Plugins screen is open: its icon is lit, else Home's. */
-  plugins: boolean;
-  onHome: () => void;
-  onPlugins: () => void;
+  /** Its icon is lit. */
+  open: Opened;
+  onOpen: (screen: Opened) => void;
   onSettings: (opener: HTMLElement) => void;
   /** Gathr's own update (0032): the version ready to install, or that it's installing now. */
   update: { ready: string | null; updating: boolean; asking: boolean; onUpdate: () => void };
 }
 
-/** The rail on the window's shell (0070): Home and Plugins at the top, the open one lit; Update and Settings at the foot. */
-export function Rail({ plugins, onHome, onPlugins, onSettings, update }: Props) {
+/**
+ * The rail on the window's shell (0070): Home, Agents and Plugins at the top, the open one lit; Update and Settings
+ * at the foot.
+ */
+export function Rail({ open, onOpen, onSettings, update }: Props) {
+  const button = (screen: Opened, name: string, icon: ReactNode) => (
+    <IconButton
+      aria-label={name}
+      aria-current={open === screen ? 'page' : undefined}
+      className="rail-button"
+      onClick={() => onOpen(screen)}
+    >
+      {icon}
+    </IconButton>
+  );
   return (
     <div className="rail">
-      <IconButton
-        aria-label="Home"
-        aria-current={plugins ? undefined : 'page'}
-        className="rail-button"
-        onClick={onHome}
-      >
-        <House aria-hidden="true" />
-      </IconButton>
-      <IconButton
-        aria-label="Plugins"
-        aria-current={plugins ? 'page' : undefined}
-        className="rail-button"
-        onClick={onPlugins}
-      >
-        <PlugMark />
-      </IconButton>
+      {button('home', 'Home', <House aria-hidden="true" />)}
+      {button('agents', 'Agents', <AgentsMark />)}
+      {button('plugins', 'Plugins', <PlugMark />)}
       <div className="rail-foot">
         {update.ready && (
           <IconButton
@@ -57,6 +61,32 @@ export function Rail({ plugins, onHome, onPlugins, onSettings, update }: Props) 
         </IconButton>
       </div>
     </div>
+  );
+}
+
+const cloud = SHAPES.find((s) => s.key === 'cloud')?.d;
+const ovals = EYES.find((e) => e.key === 'ovals')?.d ?? [];
+
+/** Agents' own mark: an agent's picture, the Cloud with the Ovals eyes, scaled to the icon set's grid and line. */
+function AgentsMark() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <g transform="translate(12 12) scale(0.6) translate(-24 -24.6)" strokeWidth={2.92}>
+        <path d={cloud} />
+        <g transform="translate(24 24)">
+          {ovals.map((d) => (
+            <path key={d} d={d} />
+          ))}
+        </g>
+      </g>
+    </svg>
   );
 }
 

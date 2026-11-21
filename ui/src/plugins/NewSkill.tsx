@@ -34,7 +34,7 @@ export function NewSkill({ onBack, onSave, onReference }: Props) {
         save();
       }}
     >
-      <button type="button" className="plugins-back" onClick={onBack}>
+      <button type="button" className="screen-back" onClick={onBack}>
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>

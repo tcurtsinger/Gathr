@@ -98,7 +98,7 @@ export function AddTool({ onBack, onAdded, onReference }: Props) {
         if (needs !== 'sign_in') add();
       }}
     >
-      <button type="button" className="plugins-back" onClick={onBack}>
+      <button type="button" className="screen-back" onClick={onBack}>
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>

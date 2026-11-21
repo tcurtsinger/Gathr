@@ -328,9 +328,3 @@ html.light .settings-panel {
 .settings-pages button[aria-current] svg {
   color: var(--foreground);
 }
-
-/* Agents keeps its own editor (agents.css) until it gets a screen of its own. */
-.settings-page > .agents h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
