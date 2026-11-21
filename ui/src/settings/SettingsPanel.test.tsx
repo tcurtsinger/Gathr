@@ -26,7 +26,7 @@ test('the X and Escape both close Settings and give focus back to what opened it
   const opener = screen.getByRole('button', { name: 'Settings' });
 
   await opener.click();
-  await screen.getByRole('button', { name: 'Diagnostics' }).click();
+  await screen.getByRole('button', { name: 'Turns' }).click();
   await screen.getByRole('button', { name: 'Close Settings' }).click();
   await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
   await expect.element(opener).toHaveFocus();

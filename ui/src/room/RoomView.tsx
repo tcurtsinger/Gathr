@@ -52,7 +52,7 @@ interface Props {
   /** The files added to the draft, kept until Send. */
   files?: File[];
   onFiles: (files: File[]) => void;
-  openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
+  openSettings: (page: 'engines' | 'turns', turn?: string) => void;
   unsent: Unsent[];
   onUnsent: (update: (list: Unsent[]) => Unsent[]) => void;
   onNamed: () => void;
@@ -137,7 +137,7 @@ export function RoomView(props: Props) {
   const stop = () => attempt(() => props.onPause('stop', thisChat));
   const run = runOf(props.pauses, chat.id);
   const resume = () => attempt(() => props.onPause('resume', run.scope ?? thisChat));
-  const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('diagnostics'));
+  const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('turns'));
   const acts = {
     approve,
     ask: setAsking,

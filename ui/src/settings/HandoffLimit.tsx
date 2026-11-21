@@ -6,24 +6,13 @@ const choices = [
   { value: null, label: 'No limit' },
 ];
 
-/**
- * Settings > General: how many messages between agents in a row a team chat takes before it pauses
- * (plans/agent-messages.md).
- */
+/** Settings > Teamwork: how many messages between agents in a row a team chat takes before it pauses. */
 export function HandoffLimit({ onReference }: { onReference: (ref: string) => void }) {
   return (
     <SettingChoice
       field="handoff_limit"
       label="Pause after"
-      help={{
-        label: 'About hand-offs',
-        text: (
-          <p>
-            Messages between agents in a row, with nothing from you and no task finished between them. Past
-            the limit the chat pauses until you resume it.
-          </p>
-        ),
-      }}
+      line="A chat pauses after this many agent messages in a row."
       choices={choices}
       // A limit set another way (the API takes 1 to 1000) still shows as it is.
       other={(n) => `${n} hand-offs`}

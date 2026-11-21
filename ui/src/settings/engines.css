@@ -1,10 +1,9 @@
 .pathfield {
-  margin-top: 28px;
+  padding: 2px 0 10px;
 }
 .pathfield label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 6px;
 }
 .pathline {
   display: flex;
@@ -14,109 +13,48 @@
   flex: 1;
 }
 .field-error {
+  margin: 0 0 10px;
   color: var(--danger);
-  font-size: 14px;
 }
-.account-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.settings-page .account-heading h3 {
-  margin: 0;
-}
-.account-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.account-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
-}
-.account-row > :nth-child(n + 3) {
-  grid-column: 1 / -1;
-}
-.account-row strong,
-.account-row small {
-  display: block;
-  overflow-wrap: anywhere;
-}
-.account-row strong {
-  font-weight: 500;
-}
-.account-row small {
-  color: var(--muted);
-  font-size: 14px;
-}
-.account-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
+/* Add or Rename, over the list. */
 .account-form {
   display: grid;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 16px;
-  border: 1px solid var(--control);
-  border-radius: 8px;
+  gap: 10px;
+  margin: 8px 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
 }
-.account-form h4 {
+.account-form h5 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
 }
-.account-form > label,
 .account-field {
   display: grid;
   gap: 6px;
-  font-size: 14px;
 }
 .account-form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
-.engine-list {
-  margin-top: 32px;
-}
-.settings-page .engine-list h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-@media (max-width: 767px) {
-  .account-row {
-    grid-template-columns: 1fr;
-  }
-}
 .pathfield a {
   display: inline-block;
   margin-top: 8px;
   color: var(--accent);
-  font-size: 14px;
 }
+/* A sign-in under its account's row. */
 .signin-panel {
   display: grid;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 10px;
+  padding: 2px 0 12px;
 }
 .signin-panel p {
   margin: 0;
 }
-.signin-panel p.muted {
-  font-size: 14px;
+.signin-panel .notice {
+  margin: 0;
 }
 .signin-actions {
   display: flex;

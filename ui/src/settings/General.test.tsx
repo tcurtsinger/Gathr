@@ -96,7 +96,6 @@ test('Space turns it on; a change that fails puts it back with its reference and
   const screen = await render(<General onReference={() => {}} />);
   const toggle = screen.getByRole('switch', { name: 'Open at login' });
   await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
-  await expect.element(toggle).toHaveAccessibleDescription('This computer');
 
   toggle.element().focus();
   await userEvent.keyboard(' ');

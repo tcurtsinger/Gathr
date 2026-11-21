@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Failure } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { readyVersion, useAppUpdate } from '../update';
+import { Row } from './Row';
 
 /** How Gathr's update stands, in a few words. */
 const standing: Record<string, string> = {
@@ -27,17 +28,19 @@ export function AppVersion({ onReference }: { onReference: (ref: string) => void
     action();
   };
   return (
-    <div className="settingrow">
-      <div>
-        <h4>Version {app.version}</h4>
-        <p className="muted" role="status">
+    <Row
+      name={`Version ${app.version}`}
+      line={
+        <span role="status">
           {ready
             ? `${ready} is ready`
             : app.failed && app.state === 'idle'
               ? 'The last check failed'
               : standing[app.state]}
-        </p>
-      </div>
+        </span>
+      }
+      after={failure && <FailureNotice failure={failure} onReference={onReference} />}
+    >
       {ready ? (
         <Button type="button" onClick={act(update)} disabled={asking}>
           Update to {ready}
@@ -49,7 +52,6 @@ export function AppVersion({ onReference }: { onReference: (ref: string) => void
           </Button>
         )
       )}
-      {failure && <FailureNotice failure={failure} onReference={onReference} />}
-    </div>
+    </Row>
   );
 }

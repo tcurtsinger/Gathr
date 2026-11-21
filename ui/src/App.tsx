@@ -297,7 +297,7 @@ export function App() {
   };
   const openReference = (reference: string) =>
     setSettings((s) => ({
-      page: 'diagnostics',
+      page: 'turns',
       chat: chat?.id,
       title: chat?.title,
       reference,
@@ -462,7 +462,9 @@ export function App() {
       )}
       <SettingsPanel
         target={settings}
-        onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}
+        onPage={(page) =>
+          setSettings((s) => s && { ...s, page, project: undefined, turn: undefined, reference: undefined })
+        }
         onReference={openReference}
         onClose={() => {
           setSettings(null);

@@ -52,7 +52,7 @@ passes its lead on and keeps its row as removed, so its old messages keep its na
 ## Events and diagnostics
 
 The local event record stores turn, tool and lifecycle events, timings and failure references.
-Engine frames are recorded for replay and troubleshooting. Settings > Diagnostics shows turn timelines;
+Engine frames are recorded for replay and troubleshooting. Settings > Turns shows turn timelines;
 `gathr diag` supports `health`, `trace`, `failures`, `friction`, `query`, `turn --raw`, `words` and `bundle`.
 OTLP export, retention/pruning, daily rollups, `diag stalls` and `diag usage` are not built yet.
 [0011](archive/decisions/0011-event-record.md), [0019](archive/decisions/0019-troubleshooting.md).

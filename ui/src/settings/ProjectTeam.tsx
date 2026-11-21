@@ -1,10 +1,10 @@
 import { X } from 'lucide-react';
-import { useId } from 'react';
 import type { Agent, Role } from '../api';
 import { Dropdown } from '../components/Dropdown';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import type { Seat } from './Projects';
+import { Group, Row } from './Row';
 
 const MOST = 5;
 const roles: Role[] = ['supervisor', 'member', 'reviewer'];
@@ -26,7 +26,6 @@ interface Props {
  * does; removing the Supervisor makes the next one it; the last agent can't be removed.
  */
 export function Team({ seats, agents, onChange }: Props) {
-  const heading = useId();
   const name = (id: string) => agents.find((a) => a.id === id)?.name ?? 'An agent';
   const setRole = (agent: string, role: Role) =>
     onChange(
@@ -48,41 +47,54 @@ export function Team({ seats, agents, onChange }: Props) {
   const others = agents.filter((a) => !seats.some((s) => s.agent === a.id));
 
   return (
-    <fieldset className="agent-field project-team" aria-labelledby={heading}>
-      <h4 id={heading}>Default team</h4>
-      <p className="muted">One Supervisor, up to five agents.</p>
-      {seats.map(({ agent, role }) => (
-        <div key={agent} className="project-seat">
-          <span className="project-seat-who">
-            <Face agent={agents.find((a) => a.id === agent) ?? { id: agent, name: name(agent) }} size={24} />
-            {name(agent)}
-          </span>
-          <Dropdown
-            aria-label={`Role of ${name(agent)}`}
-            disabled={role === 'supervisor'}
-            value={role}
-            onChange={(v) => setRole(agent, v as Role)}
-            choices={roles.map((r) => ({ value: r, label: roleName[r] }))}
-          />
-          <IconButton
-            type="button"
-            aria-label={`Remove ${name(agent)}`}
-            disabled={seats.length === 1}
-            onClick={() => remove(agent)}
-          >
-            <X />
-          </IconButton>
-        </div>
-      ))}
-      <Dropdown
-        aria-label="Add agent"
-        className="project-add"
-        value=""
-        placeholder="Add agent"
-        disabled={seats.length >= MOST || others.length === 0}
-        onChange={add}
-        choices={others.map((a) => ({ value: a.id, label: a.name }))}
+    <>
+      <Group
+        title="Default team"
+        right={<span className="settings-group-line">One Supervisor, up to five agents.</span>}
       />
-    </fieldset>
+      <div className="settings-rows settings-top">
+        {seats.map(({ agent, role }) => (
+          <Row
+            key={agent}
+            lead={
+              <Face
+                agent={agents.find((a) => a.id === agent) ?? { id: agent, name: name(agent) }}
+                size={24}
+              />
+            }
+            name={name(agent)}
+          >
+            <Dropdown
+              aria-label={`Role of ${name(agent)}`}
+              className="project-role"
+              disabled={role === 'supervisor'}
+              value={role}
+              onChange={(v) => setRole(agent, v as Role)}
+              choices={roles.map((r) => ({ value: r, label: roleName[r] }))}
+            />
+            <IconButton
+              type="button"
+              aria-label={`Remove ${name(agent)}`}
+              className="settings-more"
+              disabled={seats.length === 1}
+              onClick={() => remove(agent)}
+            >
+              <X />
+            </IconButton>
+          </Row>
+        ))}
+        <div className="setting">
+          <Dropdown
+            aria-label="Add agent"
+            className="project-add"
+            value=""
+            placeholder="Add agent"
+            disabled={seats.length >= MOST || others.length === 0}
+            onChange={add}
+            choices={others.map((a) => ({ value: a.id, label: a.name }))}
+          />
+        </div>
+      </div>
+    </>
   );
 }
