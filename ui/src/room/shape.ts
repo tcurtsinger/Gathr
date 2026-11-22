@@ -160,7 +160,9 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
       at: time(st.time),
       agent: st.agent,
     });
-  return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0));
+  // An agent joins just before its first turn is made, often in the same millisecond: its line comes first.
+  const first = (i: Item | Asked | Line) => Number(i.kind !== 'line');
+  return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0) || first(a) - first(b));
 }
 
 /** What a tool added by an agent needs from the person before it works. */
