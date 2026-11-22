@@ -1,5 +1,6 @@
-//! `note`: an agent keeps a line in Memory (`gathr::memory`), about the person, its chat's project or
-//! its own work. Its answer is the line the chat shows under the agent's message: the step keeps it.
+//! `note`: an agent keeps a line in Memory (`gathr::memory`), about the person, its chat's project,
+//! its own work or a tool the person added. Its answer is the line the chat shows under the agent's
+//! message: the step keeps it. A tool's answer names its place too, for the line to open it.
 
 use std::time::Instant;
 
@@ -10,7 +11,7 @@ use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
-use rusqlite::OptionalExtension;
+use rusqlite::{Connection, OptionalExtension};
 use serde_json::json;
 
 use super::server::{Tools, caller_of};
@@ -24,11 +25,15 @@ pub enum About {
     Project,
     /// A lesson about doing your work: it stays with you in every project.
     Work,
+    /// What you learned about using a tool the person added: every agent that can use it gets it.
+    Tool,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct Note {
     about: About,
+    /// With about tool: the tool's name.
+    tool: Option<String>,
     /// The note: one line, at most 200 characters.
     text: String,
     /// The exact text of a note there that this one takes the place of.
@@ -39,8 +44,8 @@ pub struct Note {
 impl Tools {
     #[tool(
         description = "Keep one short line that will still matter in later chats: about the person, this project, \
-                       or your own work. Agents get these notes when they start. To change a note, give its text \
-                       as replaces."
+                       your own work, or a tool. Agents get these notes when they start. To change a note, give its \
+                       text as replaces."
     )]
     async fn note(
         &self,
@@ -72,10 +77,14 @@ impl Tools {
                         (Place::Project(id), format!("about {name}"))
                     }
                     About::Work => (Place::Agent(agent.clone()), "for own work".to_string()),
+                    About::Tool => {
+                        let (id, name) = tool(c, ask.tool.as_deref().unwrap_or(""))?;
+                        (Place::Tool(id), format!("about {name}"))
+                    }
                 };
                 let path = memory::file(c, &memory::root(c, &data)?, &place)?;
                 let by = gathr::agents::name_of(c, &agent)?;
-                let said = match &ask.replaces {
+                let mut said = match &ask.replaces {
                     Some(was) => {
                         let note = memory::replace(&path, was, &ask.text, &by)?;
                         format!("Changed a note {about}:\n{}", note.text)
@@ -85,6 +94,9 @@ impl Tools {
                         format!("Noted {about}:\n{}", note.text)
                     }
                 };
+                if let Place::Tool(_) = place {
+                    said.push_str(&format!("\nplace {}", place.id()));
+                }
                 Ok::<_, Error>(said)
             })
             .await
@@ -95,4 +107,30 @@ impl Tools {
         let said = kept.map_err(|e| e.to_string());
         Ok(self.respond(&caller, "note", started, said).await)
     }
+}
+
+/// The tool added in Plugins that `named` names, ignoring case: by its name there, or as an engine
+/// names it in a call (`seed_catalogue`, `mcp__seed_catalogue__find_seeds`). Its id and name.
+fn tool(c: &Connection, named: &str) -> Result<(String, String), Error> {
+    let named = named.trim();
+    let server = named.strip_prefix("mcp__").unwrap_or(named);
+    let server = server.split("__").next().unwrap_or(server);
+    let tools = gathr::web_tools::list(c)?;
+    let entries = gathr::web_tools::entries(c)?;
+    let by_entry = entries
+        .iter()
+        .find(|(entry, _)| entry.eq_ignore_ascii_case(server));
+    let found = tools.iter().find(|t| {
+        t.name.to_lowercase() == named.to_lowercase() || by_entry.is_some_and(|(_, id)| *id == t.id)
+    });
+    if let Some(t) = found {
+        return Ok((t.id.clone(), t.name.clone()));
+    }
+    let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+    let there = format!("The tools there: {}.", names.join(", "));
+    Err(Error::Refused(match (names.is_empty(), named.is_empty()) {
+        (true, _) => "There are no tools in Plugins to keep a note about.".into(),
+        (false, true) => format!("Give the tool's name, as Plugins shows it. {there}"),
+        (false, false) => format!("\"{named}\" isn't a tool in Plugins. {there}"),
+    }))
 }

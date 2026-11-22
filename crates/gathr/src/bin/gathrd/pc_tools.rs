@@ -13,6 +13,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
+use gathr::memory;
 use gathr::pc_tools::{self, Printed, Runs};
 use gathr::platform::env::Vars;
 use gathr::web_tools::{self, Remote, Tool};
@@ -245,18 +246,17 @@ pub async fn change(
     };
     let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
     let changing = id.clone();
+    let data = s.data.path().to_path_buf();
     let saved = db(s, t, "Save failed", move |conn| {
         let was = pc_tools::saved(conn, &changing)?;
         let runs = match read {
             Some(read) => pc_tools::kept(read.runs, &was),
             None => was,
         };
-        Ok(json!(pc_tools::change(
-            conn,
-            &changing,
-            name.as_deref(),
-            &runs
-        )?))
+        let named = web_tools::get(conn, &changing)?.name;
+        let tool = pc_tools::change(conn, &changing, name.as_deref(), &runs)?;
+        memory::renamed(&memory::root(conn, &data)?, &named, &tool.name)?;
+        Ok(json!(tool))
     });
     let Json(tool) = saved.await?;
     relay::forget(&id);

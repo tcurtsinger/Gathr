@@ -1,7 +1,9 @@
 //! Memory: short notes agents keep across chats, in plain files in `<agent folder>/Memory`. The folder
 //! is the list, as with Skills: `You.md` about the person, `Projects/<project>.md` for whoever works in
-//! a project, `Agents/<agent>.md` an agent's own notes about doing its work. Each file is named by the
-//! folder name Gathr chose once for its project or agent, so a rename leaves it where it is.
+//! a project, `Agents/<agent>.md` an agent's own notes about doing its work, `Tools/<tool>.md` what
+//! agents learned about using a tool the person added in Plugins. Each project's or agent's file is
+//! named by the folder name Gathr chose once for it, so a rename leaves it where it is; a tool's is
+//! named by the tool's name, so a tool added again finds its notes, and they follow a rename.
 //!
 //! A note is a line that starts with `- `, maybe ending in who added it and when, as an HTML comment:
 //! `- Prefers one pull request per ask <!-- Ann · 2026-11-21T14:02:00Z -->`. Every other line is the
@@ -18,6 +20,7 @@ use crate::{Error, folders};
 pub const FOLDER: &str = "Memory";
 pub const PROJECTS: &str = "Projects";
 pub const AGENTS: &str = "Agents";
+const TOOLS: &str = "Tools";
 const YOU: &str = "You.md";
 /// The longest note, in characters.
 pub const LONGEST: usize = 200;
@@ -32,21 +35,23 @@ pub struct Note {
     pub when: Option<String>,
 }
 
-/// Where a note is kept: about the person, a project's, or an agent's own.
+/// Where a note is kept: about the person, a project's, an agent's own, or a tool's.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Place {
     You,
     Project(String),
     Agent(String),
+    Tool(String),
 }
 
 impl Place {
-    /// `you`, `project:<id>` or `agent:<id>`.
+    /// `you`, `project:<id>`, `agent:<id>` or `tool:<id>`.
     pub fn parse(id: &str) -> Result<Place, Error> {
         match id.split_once(':') {
             None if id == "you" => Ok(Place::You),
             Some(("project", p)) if !p.is_empty() => Ok(Place::Project(p.to_string())),
             Some(("agent", a)) if !a.is_empty() => Ok(Place::Agent(a.to_string())),
+            Some(("tool", t)) if !t.is_empty() => Ok(Place::Tool(t.to_string())),
             _ => Err(Error::Refused(format!("\"{id}\" isn't a place in Memory"))),
         }
     }
@@ -56,8 +61,36 @@ impl Place {
             Place::You => "you".to_string(),
             Place::Project(id) => format!("project:{id}"),
             Place::Agent(id) => format!("agent:{id}"),
+            Place::Tool(id) => format!("tool:{id}"),
         }
     }
+}
+
+/// The place's name: `About you`, or its project's, agent's or tool's.
+pub fn name(conn: &Connection, place: &Place) -> Result<String, Error> {
+    Ok(match place {
+        Place::You => "About you".to_string(),
+        Place::Project(id) => crate::projects::get(conn, id)?
+            .map(|p| p.name)
+            .unwrap_or_default(),
+        Place::Agent(id) => crate::agents::name_of(conn, id)?,
+        Place::Tool(id) => crate::web_tools::get(conn, id)?.name,
+    })
+}
+
+/// A tool's file name under `Memory/Tools`: its name made safe, so it is always a file in there.
+fn tool_file(name: &str) -> String {
+    format!("{}.md", folders::safe_name(name, "Tool"))
+}
+
+/// A renamed tool's notes go with it, unless a file is already there under its new name.
+pub fn renamed(root: &Path, was: &str, now: &str) -> Result<(), Error> {
+    let dir = root.join(FOLDER).join(TOOLS);
+    let (from, to) = (dir.join(tool_file(was)), dir.join(tool_file(now)));
+    if from.is_file() && !to.exists() {
+        std::fs::rename(from, to)?;
+    }
+    Ok(())
 }
 
 /// The agent folder, as the disk names it: Memory is its `Memory`.
@@ -87,17 +120,24 @@ pub fn file(conn: &Connection, root: &Path, place: &Place) -> Result<PathBuf, Er
             let name = folders::agent_name(conn, root, id)?;
             dir.join(AGENTS).join(format!("{name}.md"))
         }
+        Place::Tool(id) => {
+            let tool = crate::web_tools::get(conn, id)?;
+            dir.join(TOOLS).join(tool_file(&tool.name))
+        }
     })
 }
 
-/// What an agent starting in `chat` knows: about the person, the chat's project and its own work,
-/// each place that has notes with its file and its notes.
+/// A place that has notes: with its name, its file and its notes.
+pub type Known = (Place, String, PathBuf, Vec<Note>);
+
+/// What an agent starting in `chat` knows: about the person, the chat's project, its own work and
+/// each enabled tool, each place that has notes.
 pub fn known(
     conn: &Connection,
     root: &Path,
     chat: &str,
     agent: Option<&str>,
-) -> Result<Vec<(Place, PathBuf, Vec<Note>)>, Error> {
+) -> Result<Vec<Known>, Error> {
     let project: Option<String> = conn
         .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
             r.get(0)
@@ -109,12 +149,17 @@ pub fn known(
         project.map(Place::Project),
         agent.map(|a| Place::Agent(a.to_string())),
     ];
+    let tools = crate::web_tools::list(conn)?
+        .into_iter()
+        .filter(|t| t.enabled);
+    let tools = tools.map(|t| Place::Tool(t.id));
     let mut known = Vec::new();
-    for place in places.into_iter().flatten() {
+    for place in places.into_iter().flatten().chain(tools) {
         let path = file(conn, root, &place)?;
         let notes = notes(&path)?;
         if !notes.is_empty() {
-            known.push((place, path, notes));
+            let name = name(conn, &place)?;
+            known.push((place, name, path, notes));
         }
     }
     Ok(known)
@@ -319,6 +364,41 @@ mod tests {
         }
         assert!(add(&path, &"x".repeat(200), "Ann").is_ok());
         assert!(matches!(remove(&path, "Not there"), Err(Error::Refused(_))));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tools_notes_stay_inside_memory_tools_whatever_it_is_called() {
+        let dir = std::env::temp_dir().join(format!("gathr-memory-{}", crate::ids::span_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = crate::db::open(&dir.join("gathr.db")).unwrap();
+        let tools = dir.join(FOLDER).join(TOOLS);
+        let names = [
+            "..",
+            "../../You",
+            r"..\..\Projects\Seeds",
+            "C:/Windows/notes",
+            "CON",
+            "nul.txt",
+            "COM1",
+            "Seed: catalogue?",
+            " . ",
+        ];
+        for name in names {
+            let tool = crate::web_tools::add(&conn, name, "https://seeds.test/mcp", None).unwrap();
+            let path = file(&conn, &dir, &Place::Tool(tool.id)).unwrap();
+            assert_eq!(path.parent(), Some(tools.as_path()), "{name}");
+            add(&path, &format!("A note for {name}"), "Ann").unwrap();
+            assert!(path.is_file(), "{name}");
+        }
+        let memory: Vec<_> = std::fs::read_dir(dir.join(FOLDER))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(memory.len(), 1, "only Tools is in Memory");
+        for written in std::fs::read_dir(&tools).unwrap().flatten() {
+            assert!(written.file_type().unwrap().is_file());
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

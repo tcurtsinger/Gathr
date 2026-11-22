@@ -64,7 +64,7 @@ tool or a skill when the person asks (`add_tool`, `add_skill`) and read or updat
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
-The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.
+The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool (about the person, a project, their own work or a tool added in Plugins) and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.
 The service owns worktrees, engine-lifetime temp folders and cleanup, preserving work still in use.
 It supplies allowed folders to the engines and file-write guard; the limits in 0029 still apply.
 Gathr asks the person before a risky push (to the default branch, rewriting or deleting a branch, or to anywhere

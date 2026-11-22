@@ -497,10 +497,10 @@ export interface Skill {
   problem: string | null;
 }
 
-/** A place in Memory: `you`, `project:<id>` or `agent:<id>`, with how many notes it holds. */
+/** A place in Memory: `you`, `project:<id>`, `agent:<id>` or `tool:<id>`, with how many notes it holds. */
 export interface MemoryPlace {
   id: string;
-  kind: 'you' | 'project' | 'agent';
+  kind: 'you' | 'project' | 'agent' | 'tool';
   name: string;
   count: number;
 }

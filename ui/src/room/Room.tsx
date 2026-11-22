@@ -460,9 +460,11 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
   const openPlugin = useContext(OpenPlugin);
   const kept = keptOf(card.steps);
   if (!kept.length) return null;
-  const place = (label: string) => {
-    if (label === 'Noted about you' || label === 'Changed a note about you') return 'you';
-    if (label.endsWith(' own work')) return `agent:${card.turn.agent}`;
+  // A tool's note names its place; the others are known by their label.
+  const place = (k: Extract<(typeof kept)[number], { kind: 'note' }>) => {
+    if (k.place) return k.place;
+    if (k.label === 'Noted about you' || k.label === 'Changed a note about you') return 'you';
+    if (k.label.endsWith(' own work')) return `agent:${card.turn.agent}`;
     return `project:${ctx.project}`;
   };
   return (
@@ -488,7 +490,7 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: as above
           <span key={i} className="room-kept">
-            <button type="button" className="room-kept-line" onClick={() => openMemory?.(place(k.label))}>
+            <button type="button" className="room-kept-line" onClick={() => openMemory?.(place(k))}>
               <MemoryMark />
               <span>{noteWords(k.label)}:</span> <b>{k.text}</b>
             </button>
