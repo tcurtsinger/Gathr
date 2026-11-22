@@ -156,7 +156,14 @@ pub struct Chats {
     pauses: Mutex<Vec<Pause>>,
     /// The version Gathr is updating to: the turns Gathr queued wait while it's set (0032).
     updating: Mutex<Option<String>>,
+    /// What each Allow of a write outside the agent's folders covers, by agent and chat: for the
+    /// rest of that chat, and in memory only, so a restart forgets it. A Deny remembers nothing;
+    /// another agent, or the same one in another chat, is asked again.
+    covered: Mutex<HashMap<AgentInChat, Vec<gathr::approvals::Cover>>>,
 }
+
+/// An agent (none for a turn sent to no agent) and a chat.
+type AgentInChat = (Option<String>, String);
 
 impl Chats {
     pub fn new(
@@ -180,7 +187,31 @@ impl Chats {
             picking: tokio::sync::Mutex::default(),
             pauses: Mutex::default(),
             updating: Mutex::default(),
+            covered: Mutex::default(),
         })
+    }
+
+    /// Remembers what an Allow covers for `agent` in `chat`.
+    pub fn cover(&self, agent: Option<String>, chat: String, cover: gathr::approvals::Cover) {
+        let mut covered = self.covered.lock().expect("never poisoned");
+        let covers = covered.entry((agent, chat)).or_default();
+        if !covers.contains(&cover) {
+            covers.push(cover);
+        }
+    }
+
+    /// The folder an earlier Allow covers a write to `path` with, for `agent` in `chat`.
+    pub fn covering(&self, agent: Option<&str>, chat: &str, path: &Path) -> Option<PathBuf> {
+        let key = (agent.map(String::from), chat.to_string());
+        let covers = self
+            .covered
+            .lock()
+            .expect("never poisoned")
+            .get(&key)
+            .cloned()?;
+        let data = self.data.path();
+        let found = covers.into_iter().find(|c| c.covers(path, data))?;
+        Some(found.folder().to_path_buf())
     }
 
     /// The account a turn sent to no agent runs on, if there's one.

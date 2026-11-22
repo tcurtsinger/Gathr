@@ -1,7 +1,8 @@
 //! Gathr's own asks, on top of the agent's mode (0029): before a push, and before a file tool
 //! writes outside the agent's folders: the one its engine runs in, its own folder and its
 //! project's Shared (0034), or into Gathr's data folder whatever those say. Claude Code asks Gathr
-//! through a hook before each such tool, whatever its mode or a project's rules would allow.
+//! through a hook before each such tool, whatever its mode or a project's rules would allow. One
+//! Allow of a write outside covers its folder for that agent in that chat (`Cover`).
 
 use std::path::{Component, Path, PathBuf};
 
@@ -10,6 +11,10 @@ use serde_json::Value;
 /// How the reason of every approval Gathr itself asks for begins: the window lets these through
 /// an app-wide pause (0058).
 pub const GATHR_ASKS: &str = "Gathr asks because";
+
+/// Why Gathr asks before a file tool writes outside the agent's folders: the one ask an Allow
+/// remembers (`cover`).
+pub const OUTSIDE: &str = "it writes outside the agent's folders";
 
 /// Why Gathr asks the person before this tool call, or `None` to leave it to the agent's mode.
 /// `folders` are where it writes without asking, the engine's own first: a relative path is in it.
@@ -22,26 +27,101 @@ pub fn ask(
     data: &Path,
     from_before: bool,
 ) -> Option<&'static str> {
-    let text = |key: &str| input.get(key).and_then(Value::as_str);
     match tool {
         "Write" | "Edit" | "NotebookEdit" => {
-            let path = text("file_path").or_else(|| text("notebook_path"))?;
+            let path = written(tool, input, folders)?;
             let own = folders.first()?;
-            let path = own.join(path);
             // Read again at each write: a link made since the engine started counts too.
             let old_own = from_before && !linked(own, data) && inside(&path, own);
             if reaches(&path, data) && !old_own {
                 return Some("it writes in Gathr's data folder");
             }
             let inside_one = folders.iter().any(|folder| inside(&path, folder));
-            (!inside_one).then_some("it writes outside the agent's folders")
+            (!inside_one).then_some(OUTSIDE)
         }
         "Bash" | "PowerShell" => {
-            let command = text("command").filter(|_| runs_push(tool, input))?;
+            let command = input.get("command").and_then(Value::as_str);
+            let command = command.filter(|_| runs_push(tool, input))?;
             pushes_risky(command).then_some("it may force, delete or skip Gathr's push hook")
         }
         _ => None,
     }
+}
+
+/// The file a file tool writes, a relative path in the engine's own folder (`folders`' first);
+/// `None` for any other tool.
+pub fn written(tool: &str, input: &Value, folders: &[PathBuf]) -> Option<PathBuf> {
+    let text = |key: &str| input.get(key).and_then(Value::as_str);
+    let path = match tool {
+        "Write" | "Edit" | "NotebookEdit" => text("file_path").or_else(|| text("notebook_path"))?,
+        _ => return None,
+    };
+    Some(folders.first()?.join(path))
+}
+
+/// What one Allow of a write outside the agent's folders covers, for that agent in that chat, so
+/// a file edited six times asks once (the owner's pick: once per folder).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Cover {
+    /// The top folder of a git checkout, and everything under it.
+    Checkout(PathBuf),
+    /// A folder in no checkout: the files directly in it, not its subfolders.
+    Files(PathBuf),
+}
+
+/// What an Allow of a write to `path` covers: the top of the git checkout it's in (the nearest
+/// folder at or above its own that holds a `.git`), or in none, the files in its own folder. The
+/// folder as the disk names it, links followed.
+pub fn cover(path: &Path) -> Option<Cover> {
+    let file = crate::folders::real(&lexical(path));
+    let folder = file.parent()?;
+    let git = |dir: &&Path| std::fs::symlink_metadata(dir.join(".git")).is_ok();
+    Some(match folder.ancestors().find(git) {
+        Some(top) => Cover::Checkout(top.to_path_buf()),
+        None => Cover::Files(folder.to_path_buf()),
+    })
+}
+
+impl Cover {
+    pub fn folder(&self) -> &Path {
+        match self {
+            Cover::Checkout(folder) | Cover::Files(folder) => folder,
+        }
+    }
+
+    /// Whether a write to `path` is covered, compared as `ask` compares: never one that may land
+    /// in Gathr's data folder.
+    pub fn covers(&self, path: &Path, data: &Path) -> bool {
+        if reaches(path, data) {
+            return false;
+        }
+        match self {
+            Cover::Checkout(top) => inside(path, top),
+            Cover::Files(folder) => directly_in(path, folder),
+        }
+    }
+
+    /// What the card says Allow covers, after why Gathr asks.
+    pub fn said(&self) -> String {
+        match self {
+            Cover::Checkout(top) => format!("Allow covers {} in this chat.", top.display()),
+            Cover::Files(folder) => {
+                format!("Allow covers files in {} in this chat.", folder.display())
+            }
+        }
+    }
+}
+
+/// Whether `path` is a file directly in `folder`, either way `..` is worked out, links followed.
+fn directly_in(path: &Path, folder: &Path) -> bool {
+    let Some(base) = real(folder).map(|b| fold(&b)) else {
+        return false;
+    };
+    let path = folder.join(path);
+    [real(&path), real(&lexical(&path))].iter().all(|p| {
+        p.as_ref()
+            .is_some_and(|p| fold(p).parent() == Some(base.as_path()))
+    })
 }
 
 /// Whether the call is a shell command that reads as a push. The worktree's `pre-push` hook is
@@ -392,6 +472,74 @@ mod tests {
             super::overlaps(&shared, &data.join("accounts")),
             "a link above it"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn one_allow_covers_the_checkout_or_the_files_beside_the_one_written() {
+        let root = std::env::temp_dir().join(format!("gathr-cover-{}", crate::ids::span_id()));
+        let (repo, loose, data) = (root.join("notes"), root.join("loose"), root.join("data"));
+        for dir in [
+            repo.join("src").join("deep"),
+            loose.join("sub"),
+            data.clone(),
+        ] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        std::fs::create_dir_all(root.join("notes-2")).unwrap();
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        let real = |p: &Path| crate::folders::real(p);
+
+        let checkout = cover(&repo.join("src").join("a.rs")).unwrap();
+        assert_eq!(checkout, Cover::Checkout(real(&repo)), "the checkout's top");
+        let covers = |c: &Cover, p: PathBuf| c.covers(&p, &data);
+        assert!(covers(
+            &checkout,
+            repo.join("src").join("deep").join("b.rs")
+        ));
+        assert!(
+            covers(&checkout, repo.join("new").join("c.md")),
+            "a new folder in it"
+        );
+        assert!(covers(&checkout, repo.join("README.md")));
+        let sibling = root.join("notes-2").join("a.rs");
+        assert!(
+            !covers(&checkout, sibling),
+            "a sibling whose name starts the same"
+        );
+        let climbs = repo.join("..").join("loose").join("a.md");
+        assert!(!covers(&checkout, climbs), "climbs out");
+        assert!(
+            checkout.said().ends_with(" in this chat."),
+            "{}",
+            checkout.said()
+        );
+
+        let files = cover(&loose.join("a.md")).unwrap();
+        assert_eq!(files, Cover::Files(real(&loose)), "no checkout: its folder");
+        assert!(covers(&files, loose.join("b.md")), "a file beside it");
+        assert!(
+            !covers(&files, loose.join("sub").join("c.md")),
+            "a subfolder"
+        );
+        assert!(!covers(&files, root.join("d.md")), "the folder above");
+        assert!(files.said().starts_with("Allow covers files in "));
+
+        // A link in a covered folder that leads out, to the data folder or elsewhere.
+        link(&root.join("loose"), &repo.join("out"));
+        link(&data, &repo.join("db"));
+        link(&data, &loose.join("db"));
+        let out = repo.join("out").join("a.md");
+        assert!(!covers(&checkout, out), "through a link out");
+        assert!(
+            !covers(&checkout, repo.join("db").join("gathr.db")),
+            "into data"
+        );
+        assert!(!covers(&files, loose.join("db").join("x")), "into data");
+        // A checkout that holds the data folder still never covers it.
+        let holds = Cover::Checkout(root.clone());
+        assert!(!covers(&holds, data.join("gathr.db")), "the data folder");
+        assert!(covers(&holds, root.join("x.md")));
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -33,10 +33,29 @@ impl Task {
             turn.push_allowed = true;
         }
         let turn = turn.ids.turn.clone();
+        if allow {
+            self.cover(&tool, &input);
+        }
         let Some(answer) = self.driver.approval(request_id, allow, &input) else {
             return false;
         };
         self.write(&answer, Some(&turn)).await.is_ok()
+    }
+
+    /// An Allow of a write Gathr asked about because it's outside the agent's folders covers its
+    /// folder for the rest of the chat (`Chats::cover`), worked out again from the tool's own input.
+    fn cover(&self, tool: &str, input: &Value) {
+        let pass = self.pass.as_ref();
+        let Some(caller) = pass.and_then(|p| self.chats.passes.caller(&p.token)) else {
+            return;
+        };
+        let (folders, data) = (&caller.folders, self.chats.data.path());
+        let asked = gathr::approvals::ask(tool, input, folders, data, caller.from_before);
+        let path = gathr::approvals::written(tool, input, folders);
+        let cover = path.filter(|_| asked == Some(gathr::approvals::OUTSIDE));
+        if let Some(cover) = cover.and_then(|p| gathr::approvals::cover(&p)) {
+            self.chats.cover(caller.agent, caller.chat, cover);
+        }
     }
 
     /// The chat's questions still open, as the live socket sent them, for a window that opens
