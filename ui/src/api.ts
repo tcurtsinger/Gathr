@@ -811,6 +811,8 @@ export const api = {
     call<
       WebTool & { actions: ToolAction[] | null; redirect?: string } & Partial<PcRuns> & {
           printed?: string | null;
+          /** A tool on this PC: its variables that have no value yet, by name. */
+          empty?: string[];
         }
     >('GET', `/api/tools/${id}`),
   /** What Gathr would run for text pasted from a tool's instructions. Nothing runs. */

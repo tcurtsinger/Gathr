@@ -262,6 +262,7 @@
 /* What the turn kept: a note, a tool, a skill. A quiet line each, under its words; a click opens it. */
 .room-noted {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   padding: 0 12px 8px;
 }
@@ -272,6 +273,25 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+/* An added tool or skill: one row, however narrow, its name cut before its button is pushed down. */
+.room-kept-row {
+  min-width: 0;
+  white-space: nowrap;
+}
+.room-kept-row > * {
+  flex: none;
+}
+.room-kept-row > .room-kept-cut {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-kept > button:disabled {
+  opacity: 0.5;
 }
 .room-kept-line {
   display: inline-flex;

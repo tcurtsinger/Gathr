@@ -1,7 +1,7 @@
 import { BookOpen, Check, ChevronRight, Plug, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { Member, Message, Reaction } from '../api';
+import { api, type Member, type Message, type Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { DesignsMark } from '../components/DesignsMark';
 import { Face, type FaceOf } from '../components/Face';
@@ -12,8 +12,9 @@ import { Markdown } from '../components/Markdown';
 import { MemoryMark } from '../components/MemoryMark';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
+import { listen } from '../live';
 import { OpenMemory } from '../memory/Memory';
-import { OpenPlugin, type PluginAt, type ToolNext } from '../plugins/Plugins';
+import { OpenPlugin, type ToolNext } from '../plugins/Plugins';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
 import {
@@ -352,17 +353,88 @@ function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
   );
 }
 
-/** What a tool's line asks of the person, and its button: the tool's page opens straight there. */
-const ASKS: Record<Needs['what'], { next: ToolNext; button: string }> = {
-  key: { next: 'key', button: 'Add key' },
-  'sign-in': { next: 'sign-in', button: 'Sign in' },
-  value: { next: 'change', button: 'Add it' },
+/** What a tool's line asks of the person: its button, the button once it's given, and where the tool's page opens. */
+const ASKS: Record<Needs['what'], { next: ToolNext; button: string; given: string }> = {
+  key: { next: 'key', button: 'Add', given: 'Added' },
+  'sign-in': { next: 'sign-in', button: 'Sign in', given: 'Signed in' },
+  value: { next: 'change', button: 'Add', given: 'Added' },
 };
 
+/** What an added tool needs, in a word or two: "needs a key", "needs NOTES_KEY", "needs 4 values". */
+function needsWords(needs: Needs) {
+  if (needs.what !== 'value') return needs.what === 'key' ? 'needs a key' : 'needs sign-in';
+  const names = needs.names.split(' and ');
+  return names.length === 1 ? `needs ${names[0]}` : `needs ${names.length} values`;
+}
+
 /**
- * What the turn kept that lasts, a quiet line each under its words: "Noted about you: …" opens Memory there, "Added the
- * tool Notes" and "Wrote the skill branch-names" open its page in Plugins. A tool that needs something says so, with
- * a button for it.
+ * Whether the tool still needs what its line said: asked of the tool as the line shows and again when the tools
+ * change. `given` once it has it, `gone` once the tool is removed; as its line said until the tool answers, and
+ * while it's disabled.
+ */
+function useNeeds(id: string, needs?: Needs['what']): 'needs' | 'given' | 'gone' {
+  const [now, setNow] = useState<'needs' | 'given' | 'gone'>('needs');
+  useEffect(() => {
+    if (!needs) return;
+    let live = true;
+    const ask = () =>
+      api.tool(id).then(
+        (t) => {
+          const still = {
+            key: t.state === 'needs_key',
+            'sign-in': t.state === 'sign_in',
+            value: !!t.empty?.length,
+          };
+          if (live) setNow(!t.enabled || still[needs] ? 'needs' : 'given');
+        },
+        () => live && setNow('gone'),
+      );
+    ask();
+    const stop = listen((event) => {
+      if (event.type === 'tools' || event.type === 'lagged') ask();
+    });
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [id, needs]);
+  return now;
+}
+
+/** "Added tool Notes", on one row; what it needs from the person, with a button that reads Added once it has it. */
+function ToolLine({ tool }: { tool: Extract<ReturnType<typeof keptOf>[number], { kind: 'tool' }> }) {
+  const openPlugin = useContext(OpenPlugin);
+  const now = useNeeds(tool.id, tool.needs?.what);
+  const asks = tool.needs && now !== 'gone' && ASKS[tool.needs.what];
+  return (
+    <span className="room-kept">
+      <button
+        type="button"
+        className="room-kept-line room-kept-row"
+        onClick={() => openPlugin?.({ tool: tool.id })}
+      >
+        <Plug aria-hidden="true" />
+        <span>Added tool</span> <b className="room-kept-cut">{tool.name}</b>
+        {tool.needs && now === 'needs' && <span className="room-kept-cut">· {needsWords(tool.needs)}</span>}
+      </button>
+      {asks && (
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={now === 'given'}
+          onClick={() => openPlugin?.({ tool: tool.id, next: asks.next })}
+        >
+          {now === 'given' ? asks.given : asks.button}
+        </Button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What the turn kept that lasts, a quiet line each under its words: "Noted about you: …" opens Memory there, "Added
+ * tool Notes" and "Added skill branch-names" open its page in Plugins.
  */
 function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
   const openMemory = useContext(OpenMemory);
@@ -374,52 +446,33 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
     if (label.endsWith(' own work')) return `agent:${card.turn.agent}`;
     return `project:${ctx.project}`;
   };
-  const line = (k: (typeof kept)[number]) => {
-    if (k.kind === 'note') {
-      const words = (
-        <>
-          <MemoryMark aria-hidden="true" />
-          <span>{k.label}:</span> <b>{k.text}</b>
-        </>
-      );
-      return { words, open: () => openMemory?.(place(k.label)) };
-    }
-    const Mark = k.kind === 'tool' ? Plug : BookOpen;
-    const words = (
-      <>
-        <Mark aria-hidden="true" />
-        <span>{k.label}</span> <b>{k.name}</b>
-        {k.kind === 'tool' && k.needs && (
-          <span>
-            · it needs {k.needs.what === 'value' ? `a value for ${k.needs.names}` : `a ${k.needs.what}`}
-          </span>
-        )}
-      </>
-    );
-    const at: PluginAt = k.kind === 'tool' ? { tool: k.id } : { skill: k.name };
-    return { words, open: () => openPlugin?.(at) };
-  };
   return (
     <div className="room-noted">
       {kept.map((k, i) => {
-        const { words, open } = line(k);
-        const asks = k.kind === 'tool' && k.needs && ASKS[k.needs.what];
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: a turn's lines only grow, in order
-          <span key={i} className="room-kept">
-            <button type="button" className="room-kept-line" onClick={open}>
-              {words}
-            </button>
-            {k.kind === 'tool' && asks && (
-              <Button
+        // biome-ignore lint/suspicious/noArrayIndexKey: a turn's lines only grow, in order
+        if (k.kind === 'tool') return <ToolLine key={i} tool={k} />;
+        if (k.kind === 'skill')
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: as above
+            <span key={i} className="room-kept">
+              <button
                 type="button"
-                size="xs"
-                variant="outline"
-                onClick={() => openPlugin?.({ tool: k.id, next: asks.next })}
+                className="room-kept-line room-kept-row"
+                onClick={() => openPlugin?.({ skill: k.name })}
               >
-                {asks.button}
-              </Button>
-            )}
+                <BookOpen aria-hidden="true" />
+                <span>{k.label.startsWith('Changed') ? 'Changed skill' : 'Added skill'}</span>{' '}
+                <b className="room-kept-cut">{k.name}</b>
+              </button>
+            </span>
+          );
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: as above
+          <span key={i} className="room-kept">
+            <button type="button" className="room-kept-line" onClick={() => openMemory?.(place(k.label))}>
+              <MemoryMark aria-hidden="true" />
+              <span>{k.label}:</span> <b>{k.text}</b>
+            </button>
           </span>
         );
       })}
