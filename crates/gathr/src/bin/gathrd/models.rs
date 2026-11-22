@@ -184,11 +184,13 @@ async fn ask(
     // Its exit takes another 0.6 s, which the list needn't wait for, but shutdown does.
     // Never killed for being slow: it runs on the account's login and may be renewing it (0001).
     // Only shutdown kills, after the grace every engine gets.
-    close_later(s, engine);
+    close_later(s, engine, "gathr.engine.models.close");
     answer
 }
 
-fn close_later(s: &State, mut engine: Engine) {
+/// Closes an engine once it has answered, the gentle way: it exits on its own, or shutdown kills it
+/// after its grace, recording its end as `name`.
+pub fn close_later(s: &State, mut engine: Engine, name: &'static str) {
     let (writer, pid) = (s.writer.clone(), engine.pid);
     let mut stopping = s.stopping.subscribe();
     let close = async move {
@@ -198,15 +200,11 @@ fn close_later(s: &State, mut engine: Engine) {
             () = async { _ = stopping.wait_for(|stop| *stop).await } => engine.close(CLOSE_GRACE).await,
         };
         let event = match closed {
-            Closed::Exited(code) => Event::point("gathr.engine.models.close")
-                .ok()
-                .attr("process.exit.code", code),
-            Closed::Killed => Event::point("gathr.engine.models.close")
-                .error("killed")
-                .attr(
-                    "killed_because",
-                    "it hadn't exited 10 s after its input closed, at shutdown",
-                ),
+            Closed::Exited(code) => Event::point(name).ok().attr("process.exit.code", code),
+            Closed::Killed => Event::point(name).error("killed").attr(
+                "killed_because",
+                "it hadn't exited 10 s after its input closed, at shutdown",
+            ),
         };
         writer.record_now(event.attr("process.pid", pid)).await;
     };
@@ -305,7 +303,7 @@ async fn ask_codex(
         () = s.stopped() => Err("the service is stopping".into()),
     };
     gate.release();
-    close_later(s, client.engine);
+    close_later(s, client.engine, "gathr.engine.models.close");
     answer
 }
 

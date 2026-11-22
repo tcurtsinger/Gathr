@@ -21,6 +21,7 @@ interface Props {
   onDeleteProject: (project: Project, opener: HTMLElement | null) => void;
   /** Under New: the Tasks flyout. */
   actions?: ReactNode;
+  onRename: (chat: Chat, opener: HTMLElement | null) => void;
   onArchive: (chat: Chat, opener: HTMLElement | null) => void;
   onDelete: (chat: Chat, opener: HTMLElement | null) => void;
   onRestore: (chat: Chat) => void;
@@ -51,6 +52,7 @@ export function Sidebar(props: Props) {
         label={`More for ${c.title}`}
         className="row-icon row-more"
         archived={!!c.archived}
+        onRename={(opener) => props.onRename(c, opener)}
         onArchive={(opener) => props.onArchive(c, opener)}
         onRestore={() => props.onRestore(c)}
         onDelete={(opener) => props.onDelete(c, opener)}

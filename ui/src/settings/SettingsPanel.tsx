@@ -1,6 +1,16 @@
-import { Activity, Cpu, Flag, Folder, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
+import {
+  Activity,
+  Cpu,
+  Flag,
+  Folder,
+  type LucideIcon,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Dialog } from '../components/Dialog';
+import { Background } from './Background';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import { Friction } from './Friction';
@@ -8,7 +18,7 @@ import { General, Teamwork } from './General';
 import { Projects } from './Projects';
 import './settings.css';
 
-export type Page = 'general' | 'engines' | 'teamwork' | 'projects' | 'turns' | 'friction';
+export type Page = 'general' | 'engines' | 'background' | 'teamwork' | 'projects' | 'turns' | 'friction';
 
 export interface SettingsTarget {
   page: Page;
@@ -36,6 +46,7 @@ const groups: [string, [Page, string, LucideIcon][]][] = [
     [
       ['general', 'General', SlidersHorizontal],
       ['engines', 'Engines', Cpu],
+      ['background', 'Background', Sparkles],
     ],
   ],
   [
@@ -99,6 +110,8 @@ export function SettingsPanel({ target, onPage, onClose }: Props) {
               <General />
             ) : target.page === 'engines' ? (
               <Engines />
+            ) : target.page === 'background' ? (
+              <Background />
             ) : target.page === 'teamwork' ? (
               <Teamwork />
             ) : target.page === 'projects' ? (

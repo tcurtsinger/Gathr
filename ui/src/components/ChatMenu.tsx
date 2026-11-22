@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, MoreHorizontal, Pause, Play, Settings, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, MoreHorizontal, Pause, Pencil, Play, Settings, Trash2 } from 'lucide-react';
 import { Fragment, type ReactElement, useRef } from 'react';
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ interface Props {
   /** An archived chat offers Restore where a listed one offers Archive (F11). */
   archived?: boolean;
   /** Each gets the menu's button, for a confirm to give focus back to. */
+  onRename?: (opener: HTMLElement | null) => void;
   onArchive?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
   onDelete?: (opener: HTMLElement | null) => void;
@@ -35,14 +36,15 @@ interface Props {
 }
 
 /**
- * A More menu (the prototype's ChatActions): the pause item, then Archive or Restore, then Delete,
- * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, a
+ * A More menu (the prototype's ChatActions): the pause item, then Rename, then Archive or Restore, then Delete,
+ * each after a separator. The chat's header has them all, a sidebar row Rename, Archive and Delete, a
  * project's row Project settings and Delete.
  */
 export function ChatMenu({
   label = 'More',
   pause,
   archived,
+  onRename,
   onArchive,
   onRestore,
   onDelete,
@@ -60,6 +62,14 @@ export function ChatMenu({
         {running ? <Pause /> : <Play />}
         {running ? 'Pause' : pause.state === 'stopped' ? 'Restart' : 'Resume'}
         {pause.all && !running && ' all'}
+      </DropdownMenuItem>,
+    ]);
+  if (onRename)
+    items.push([
+      'rename',
+      <DropdownMenuItem key="rename" onSelect={() => onRename(trigger.current)}>
+        <Pencil />
+        Rename
       </DropdownMenuItem>,
     ]);
   if (archived && onRestore)

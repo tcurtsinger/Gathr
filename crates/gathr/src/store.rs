@@ -283,7 +283,7 @@ pub const UNTITLED: &str = "New chat";
 
 /// A chat's name from its first message: the first line with text, up to 60 characters. The lines
 /// naming its files don't count, nor the @Names it starts with, unless it is only those.
-pub(crate) fn title_from(text: &str) -> Option<String> {
+pub fn title_from(text: &str) -> Option<String> {
     let words = text.lines().map(str::trim).filter(|line| !line.is_empty());
     let mut words = words.filter(|line| !line.starts_with(crate::files::ATTACHED));
     let line = words.next()?;

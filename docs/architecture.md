@@ -33,6 +33,17 @@ a background login watcher is not built yet. External account plugins and tools 
 [0025](archive/decisions/0025-engine-copies.md), [0026](archive/decisions/0026-agent-settings.md),
 [0029](archive/decisions/0029-approvals.md).
 
+The background model (`gathrd/naming.rs`, `titles.rs`) is a small, quick model on one of the person's signed-in
+accounts, for work nobody waits on. Its one job: a moment after a new chat's first message of 40 characters or
+more, a name of 2 to 5 words. Settings > Background picks it; left unset, Gathr takes the first Claude Code
+account's model whose id holds `haiku` (Codex names no small model, so none is picked there by itself). Each run is
+the engine's one-shot mode, never a chat session: `claude -p` (no tools, `--safe-mode`, no session kept) or
+`codex exec` (`--ephemeral`, no `config.toml`, read-only), on the account's own folder, in the empty
+`<data>/background`, with the question in its arguments and the message on its input. It passes the account's
+renewal gate as every start does, and past 30 s its answer is let go but it is never killed. One
+`gathr.background.name` event says `named`, `skipped` or `failed` and why, never the words. A rename by the person
+is final: the name lands only while the title is still the one the first line gave.
+
 ## Chats, projects and the room
 
 A chat has one to five agents; team chats have a lead.
