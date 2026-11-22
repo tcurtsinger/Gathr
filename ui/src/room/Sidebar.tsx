@@ -220,6 +220,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           <Designs
             chat={chat}
             room={room}
+            open={tabs.at === DESIGN}
             onOpen={(d) => show(chat, { path: d.path, crumbs: [d.name], design: true })}
           />,
         )}
@@ -231,6 +232,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
               chat={chat}
               design={f}
               room={room}
+              open={tabs.at === f.path}
               onShow={(page) => show(chat, { ...f, page })}
               onAnswer={onAnswer}
               onNote={onNote}
