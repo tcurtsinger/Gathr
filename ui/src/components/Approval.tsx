@@ -67,10 +67,13 @@ const ADDS: Record<string, [string, 'command' | 'folder']> = {
   mcp__gathr__add_skill: ['adding a skill', 'folder'],
 };
 
-/** Why Gathr itself asks, as a short line: `Writes outside the agent's folders.` None for an engine's own ask. */
+/**
+ * Why Gathr itself asks, as a short line: `Writes outside the agent's folders.`, with what Allow covers when the
+ * service says. None for an engine's own ask.
+ */
 function gathrsWhy(why?: string | null) {
   const own = why?.match(/^Gathr asks because (?:it )?(.+)$/)?.[1];
-  return own ? `${own[0].toUpperCase()}${own.slice(1)}.` : undefined;
+  return own ? `${own[0].toUpperCase()}${own.slice(1)}${own.endsWith('.') ? '' : '.'}` : undefined;
 }
 
 /**

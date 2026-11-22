@@ -359,3 +359,111 @@ fn a_push_the_person_allowed_as_a_command_asks_no_twice() {
     assert!(pushed, "the allowed push didn't go through: {said}");
     std::fs::write(&go, "").unwrap();
 }
+
+/// The live `approval` recording with its question a Write of `file`, held once it's answered.
+fn write_recording(dir: &Path, file: &Path) -> PathBuf {
+    let mut rows = Vec::new();
+    for row in std::fs::read_to_string(recording("approval"))
+        .unwrap()
+        .lines()
+    {
+        let mut row: Value = serde_json::from_str(row).unwrap();
+        let mut frame: Value = serde_json::from_str(row["line"].as_str().unwrap()).unwrap();
+        let answered = row["dir"] == "out" && frame["type"] == "control_response";
+        if frame["request"]["subtype"] == "can_use_tool" {
+            frame["request"]["input"] = json!({ "file_path": file, "content": "hi" });
+            row["line"] = json!(frame.to_string());
+        }
+        rows.push(row.to_string());
+        if answered {
+            rows.push(json!({ "dir": "hold" }).to_string());
+        }
+    }
+    let path = dir.join("write-outside.jsonl");
+    std::fs::write(&path, rows.join("\n")).unwrap();
+    path
+}
+
+/// Owner's pick: one Allow of a write outside the agent's folders covers the folder for that
+/// agent in that chat; a Deny remembers nothing.
+#[test]
+fn one_allow_covers_the_checkout_for_the_rest_of_the_chat() {
+    let (data, elsewhere) = (TempDir::new(), TempDir::new());
+    let (go, env) = (data.0.join("go"), data.0.join("env.jsonl"));
+    let _release = Release(go.clone());
+    let repo = elsewhere.0.join("notes-mcp");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let first = repo.join("server.ts");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &write_recording(&data.0, &first)),
+            ("GATHR_REPLAY_HOLD", &go),
+            ("GATHR_REPLAY_ENV", &env),
+        ],
+    );
+    let account = service.add_account("Work");
+    sign_in_account(&data.0, &account);
+    let made = service.send(
+        "POST",
+        "/api/agents",
+        json!({ "name": "Rook", "account": account }),
+    );
+    let rook = made.json()["id"].as_str().unwrap().to_string();
+    let port = service.info.port;
+    let write = |token: &str, path: &Path| {
+        let answer = common::hook(port, token, "Write", json!({ "file_path": path }));
+        assert_eq!(answer.status, 200, "{}", answer.body);
+        answer.json()["hookSpecificOutput"].clone()
+    };
+    let start = |n: usize| {
+        let chat = service.new_chat();
+        let path = format!("/api/chats/{chat}/messages");
+        service.send("POST", &path, json!({ "text": "Write it", "agent": rook }));
+        let token = nth(&env, n)["GATHR_AGENT_TOKEN"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        (chat, token)
+    };
+    let answer = |chat: &str, allow: bool| {
+        let (request, tool) = open_push(&service, chat);
+        assert_eq!(tool, "Write");
+        let to = format!("/api/chats/{chat}/approvals/{request}");
+        let answered = service.send("POST", &to, json!({ "allow": allow }));
+        assert_eq!(answered.status, 200, "{}", answered.body);
+    };
+
+    let (chat, token) = start(0);
+    let asked = write(&token, &first);
+    assert_eq!(asked["permissionDecision"], "ask", "{asked}");
+    let top = gathr::folders::real(&repo);
+    let said = format!(
+        "Gathr asks because it writes outside the agent's folders. Allow covers {} in this chat.",
+        top.display()
+    );
+    assert_eq!(asked["permissionDecisionReason"], said.as_str());
+    answer(&chat, true);
+    let again = repo.join("src").join("tools.ts");
+    let covered = write(&token, &again);
+    assert_eq!(covered["permissionDecision"], "allow", "the same checkout");
+    let other = elsewhere.0.join("other").join("a.md");
+    assert_eq!(
+        write(&token, &other)["permissionDecision"],
+        "ask",
+        "elsewhere"
+    );
+    let sql = "SELECT json_extract(attrs, '$.folder') AS folder FROM event_log
+               WHERE name = 'gathr.approvals.covered'";
+    let (ok, found) = gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{found}");
+    assert_eq!(found["rows"][0]["folder"], top.display().to_string());
+    std::fs::write(&go, "").unwrap();
+    service.wait_for(&chat, 20, "the turn", |h| h["turns"][0]["status"] == "done");
+
+    // The same agent in another chat is asked again, and a Deny remembers nothing.
+    let (next, token) = start(1);
+    assert_eq!(write(&token, &again)["permissionDecision"], "ask");
+    answer(&next, false);
+    assert_eq!(write(&token, &again)["permissionDecision"], "ask");
+}

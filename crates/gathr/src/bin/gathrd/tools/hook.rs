@@ -1,6 +1,9 @@
 //! Gathr's hook (0029): Claude Code asks it before each file write and command, with the engine's
 //! own token. It answers "ask" before a push or a write outside the agent's folders (0034), which
-//! sends the call to the person as an approval whatever the agent's mode or a project's rules allow.
+//! sends the call to the person as an approval whatever the agent's mode or a project's rules allow;
+//! a write outside that an earlier Allow in the chat covers is answered "allow". With no answer the
+//! engine's own mode would ask again for a file outside its folders (acceptEdits does), and the
+//! card said the Allow covers the folder.
 
 use std::sync::Arc;
 
@@ -67,29 +70,49 @@ async fn pre_tool_use(
     Extension(caller): Extension<Caller>,
     Json(input): Json<Value>,
 ) -> Json<Value> {
+    use gathr::approvals::{GATHR_ASKS, OUTSIDE};
     let tool = input["tool_name"].as_str().unwrap_or("");
-    let Some(why) = gathr::approvals::ask(
+    let tool_input = &input["tool_input"];
+    let asked = gathr::approvals::ask(
         tool,
-        &input["tool_input"],
+        tool_input,
         &caller.folders,
         s.chats.data.path(),
         caller.from_before,
-    ) else {
-        // Empty: the agent's mode decides.
+    );
+    // Empty: the agent's mode decides.
+    let Some(why) = asked else {
         return Json(json!({}));
     };
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
-    let event = Event::point("gathr.approvals.ask")
-        .trace(&trace)
-        .chat(&caller.chat)
-        .ok()
-        .attr("gen_ai.tool.name", tool.to_string())
-        .attr("gen_ai.agent.id", caller.agent.clone())
-        .attr("why", why);
-    s.writer.record(event);
-    let reason = format!("{} {why}", gathr::approvals::GATHR_ASKS);
-    Json(
-        json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
-        "permissionDecision": "ask", "permissionDecisionReason": reason } }),
-    )
+    let event = |name: &str| {
+        let event = Event::point(name).trace(&trace).chat(&caller.chat).ok();
+        let event = event.attr("gen_ai.tool.name", tool.to_string());
+        event.attr("gen_ai.agent.id", caller.agent.clone())
+    };
+    let answer = |decision: &str, reason: String| {
+        Json(
+            json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+            "permissionDecision": decision, "permissionDecisionReason": reason } }),
+        )
+    };
+    // A write outside the agent's folders that an earlier Allow in this chat covers.
+    let path = gathr::approvals::written(tool, tool_input, &caller.folders);
+    let path = path.filter(|_| why == OUTSIDE);
+    let agent = caller.agent.as_deref();
+    let covering = (path.as_ref()).and_then(|p| s.chats.covering(agent, &caller.chat, p));
+    if let Some(folder) = covering {
+        let folder = folder.display().to_string();
+        let reason = format!("The person allowed writes in {folder} in this chat.");
+        s.writer
+            .record(event("gathr.approvals.covered").attr("folder", folder));
+        return answer("allow", reason);
+    }
+    s.writer
+        .record(event("gathr.approvals.ask").attr("why", why));
+    let reason = match path.and_then(|p| gathr::approvals::cover(&p)) {
+        Some(cover) => format!("{GATHR_ASKS} {why}. {}", cover.said()),
+        None => format!("{GATHR_ASKS} {why}"),
+    };
+    answer("ask", reason)
 }
