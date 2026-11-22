@@ -19,6 +19,7 @@ mod files;
 mod github;
 mod likes;
 mod logs;
+mod memory;
 mod mentions;
 mod models;
 mod pauses;

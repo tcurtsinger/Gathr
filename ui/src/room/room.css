@@ -259,6 +259,35 @@
   color: var(--muted-foreground);
 }
 
+/* What the turn kept in Memory: a quiet line each, under its words; a click opens the note there. */
+.room-noted {
+  display: grid;
+  justify-items: start;
+  padding: 0 12px 8px;
+}
+.room-reply .room-noted {
+  padding: 2px 0 0;
+}
+.room-noted button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  text-align: left;
+}
+.room-noted svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+}
+.room-noted b {
+  color: var(--foreground);
+  font-weight: 500;
+}
 /* The turn's tool runs: one quiet line, opened by a click. */
 .room-steps {
   padding: 0 12px 8px;

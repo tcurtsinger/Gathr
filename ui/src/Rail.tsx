@@ -2,11 +2,12 @@ import { CircleArrowUp, House, LoaderCircle, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DesignsMark } from './components/DesignsMark';
 import { IconButton } from './components/IconButton';
+import { MemoryMark } from './components/MemoryMark';
 import { EYES, SHAPES } from './components/pictures';
 import './rail.css';
 
-/** The screen in the frame: the chats (Home), Agents, Plugins or Designs. */
-export type Opened = 'home' | 'agents' | 'plugins' | 'designs';
+/** The screen in the frame: the chats (Home), Agents, Plugins, Designs or Memory. */
+export type Opened = 'home' | 'agents' | 'plugins' | 'designs' | 'memory';
 
 interface Props {
   /** Its icon is lit. */
@@ -18,8 +19,8 @@ interface Props {
 }
 
 /**
- * The rail on the window's shell (0070): Home, Agents, Plugins and Designs at the top, the open one lit; Update and
- * Settings at the foot.
+ * The rail on the window's shell (0070): Home, Agents, Plugins, Designs and Memory at the top, the open one lit; Update
+ * and Settings at the foot.
  */
 export function Rail({ open, onOpen, onSettings, update }: Props) {
   const button = (screen: Opened, name: string, icon: ReactNode) => (
@@ -38,6 +39,7 @@ export function Rail({ open, onOpen, onSettings, update }: Props) {
       {button('agents', 'Agents', <AgentsMark />)}
       {button('plugins', 'Plugins', <PlugMark />)}
       {button('designs', 'Designs', <DesignsMark />)}
+      {button('memory', 'Memory', <MemoryMark aria-hidden="true" />)}
       <div className="rail-foot">
         {update.ready && (
           <IconButton

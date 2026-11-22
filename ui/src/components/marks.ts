@@ -16,6 +16,19 @@ export const FROM_SERVICE: Record<string, Mark> = {
   working: 'working',
 };
 
+/** A short time since: 40m, 2h today, then Yesterday, 3d this week, else the date. */
+export function ago(time: number, now: number) {
+  const minutes = Math.floor((now - time) / 60_000);
+  const day = (t: number) => new Date(new Date(t).toDateString()).getTime();
+  const days = Math.round((day(now) - day(time)) / 86_400_000);
+  if (minutes < 1) return 'Now';
+  if (minutes < 60) return `${minutes}m`;
+  if (days <= 0) return `${Math.floor(minutes / 60)}h`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d`;
+  return new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 /** How long: "40s", "5m", "1m 12s" while it works, "2h 5m", "3d". */
 export function since(ms: number, exact = false): string {
   const s = Math.max(0, Math.floor(ms / 1000));

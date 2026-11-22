@@ -202,6 +202,7 @@ export function RoomView(props: Props) {
       <main className="chat room" aria-label={chat.title} ref={column}>
         <Room
           chat={chat.id}
+          project={chat.project}
           state={state}
           people={team}
           acts={acts}

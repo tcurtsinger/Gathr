@@ -433,6 +433,30 @@ export interface Skill {
   problem: string | null;
 }
 
+/** A place in Memory: `you`, `project:<id>` or `agent:<id>`, with how many notes it holds. */
+export interface MemoryPlace {
+  id: string;
+  kind: 'you' | 'project' | 'agent';
+  name: string;
+  count: number;
+}
+
+/** A note: who added it (an agent's name, `You`, or nobody for a line written in the file) and when. */
+export interface MemoryNote {
+  text: string;
+  by: string | null;
+  when: string | null;
+}
+
+export interface MemoryShown {
+  id: string;
+  name: string;
+  path: string;
+  notes: MemoryNote[];
+}
+
+const memoryPath = (place: string) => `/api/memory/${encodeURIComponent(place)}`;
+
 /** A tool on the web, or on this PC (`kind: 'pc'`, no link): never its key or a variable's value. */
 export interface WebTool {
   id: string;
@@ -745,6 +769,14 @@ export const api = {
   },
   /** Opens its folder in the system's file manager: the desktop window only. */
   openSkill: (name: string) => call<unknown>('POST', `/api/skills/${encodeURIComponent(name)}/open`),
+  /** Every place in Memory: About you, each project, each agent. */
+  memory: () => call<{ folder: string; places: MemoryPlace[] }>('GET', '/api/memory'),
+  /** A place's notes, newest first, and its file. */
+  memoryPlace: (place: string) => call<MemoryShown>('GET', memoryPath(place)),
+  addNote: (place: string, text: string) => call<MemoryShown>('POST', memoryPath(place), { text }),
+  changeNote: (place: string, was: string, text: string) =>
+    call<MemoryShown>('PATCH', memoryPath(place), { was, text }),
+  removeNote: (place: string, text: string) => call<MemoryShown>('DELETE', memoryPath(place), { text }),
   /** Every tool on the web, each enabled one's state asked of it now. */
   tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */
