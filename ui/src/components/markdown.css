@@ -24,7 +24,7 @@
 .markdown [data-streamdown="table"] code {
   white-space: nowrap;
 }
-/* A code block's Copy and Download keep Streamdown's size, not Gathr's 32px buttons. */
+/* A code block's Copy keeps Streamdown's size, not Gathr's 32px buttons. */
 .markdown [data-streamdown="code-block-actions"] button {
   min-height: 0;
 }
@@ -177,11 +177,26 @@
   font-weight: inherit;
   box-decoration-break: clone;
 }
-/* A code block on the bubble keeps the page's own surface, so it doesn't vanish into the bubble's; its code at the
-   label size, relaxed. */
+/* A code block is one frame on the page's own surface, with no bar: Streamdown's outer frame and its language row
+   are gone, and Copy sits in the top right corner. Its code at the label size, relaxed. */
 .markdown [data-streamdown="code-block"] {
+  gap: 0;
+  padding: 0;
+  border: 0;
+  /* The same corners as the frame inside it: Streamdown clips the block's paint to its own. */
   border-radius: 8px;
-  background: var(--background);
+  background: none;
+}
+.markdown [data-streamdown="code-block-header"] {
+  display: none;
+}
+.markdown [data-streamdown="code-block-body"] {
+  padding: 11px 12px;
+  border-radius: 8px;
+}
+.markdown :has(> [data-streamdown="code-block-actions"]) {
+  top: 5px;
+  right: 5px;
 }
 .markdown [data-streamdown="code-block"] pre {
   font-size: 13px;
