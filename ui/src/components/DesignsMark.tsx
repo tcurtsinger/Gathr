@@ -1,7 +1,7 @@
 /**
- * The Designs mark: "pencil-line" from Phosphor Icons (https://phosphoricons.com), Thin, MIT. Its drawing is unchanged:
- * a filled outline, so its lines keep their own width whatever a place gives its icons, and it takes the colour of the
- * words beside it. The notice is designs/notices/designs-mark.txt.
+ * The Designs mark: "pencil-line" from Phosphor Icons (https://phosphoricons.com), Regular, MIT. Its drawing is
+ * unchanged: a filled outline, so its lines keep their own width (1.5 on the icon set's grid) whatever a place gives
+ * its icons, and it takes the colour of the words beside it. The notice is designs/notices/designs-mark.txt.
  */
 export function DesignsMark() {
   return (
@@ -13,11 +13,7 @@ export function DesignsMark() {
 
 // The file's one path, cut into pieces only to keep these lines short.
 const PENCIL = [
-  'M194.82812,122.82861v-.00049L221.1709,96.48584a11.99858,11.99858,0,0,0,0-16.97119L176.48535,34.82812',
-  'a12.01526,12.01526,0,0,0-16.9707.00049l-120.001,120a11.95868,11.95868,0,0,0-2.69995,4.15235c-.01172.',
-  '02783-.01953.05713-.03052.08545A11.98566,11.98566,0,0,0,36,163.31348V208a12.01343,12.01343,0,0,0,12,',
-  '12H216a4,4,0,0,0,0-8H105.65649l89.17163-89.17139ZM165.1709,40.48584a4.00622,4.00622,0,0,1,5.6582-.00',
-  '049l44.68555,44.68653a3.99913,3.99913,0,0,1,0,5.65673l-23.51489,23.51465L141.65649,64ZM45.65637,160,',
-  '136,69.65625,186.34326,120,96,210.34277ZM44,208V169.65625L86.34351,212H48A4.00427,4.00427,0,0,1,44,2',
-  '08Z',
+  'M227.32,73.37,182.63,28.69a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H216',
+  'a8,8,0,0,0,0-16H115.32l112-112A16,16,0,0,0,227.32,73.37ZM136,75.31,152.69,92,68,176.69,51.31,160ZM48,208V179.31',
+  'L76.69,208Zm48-3.31L79.32,188,164,103.31,180.69,120Zm96-96L147.32,64l24-24L216,84.69Z',
 ].join('');
