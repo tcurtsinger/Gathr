@@ -186,6 +186,7 @@ async fn send(
     match answer.await {
         Ok(Ok(mut sent)) => {
             let message = sent["message"].as_str().unwrap_or_default().to_string();
+            crate::naming::after_send(&s, &chat, &message, &t.0);
             let mut first =
                 json!({ "agent": agent, "turn": sent["turn"], "status": sent["status"] });
             if sent["steered"] == true {

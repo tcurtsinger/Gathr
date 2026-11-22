@@ -65,6 +65,7 @@ interface Props {
   onStart: (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => void;
   pauses: Pauses;
   onPause: (action: 'pause' | 'resume' | 'stop', scope: PauseScope) => Promise<void>;
+  onRename?: (opener: HTMLElement | null) => void;
   onArchive?: (opener: HTMLElement | null) => void;
   onDelete?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
@@ -170,6 +171,7 @@ export function RoomView(props: Props) {
                 onResume: resume,
               }}
               archived={!!chat.archived}
+              onRename={props.onRename}
               onArchive={props.onArchive}
               onRestore={props.onRestore}
               onDelete={props.onDelete}

@@ -15,6 +15,7 @@ import { Confirm } from './components/Confirm';
 import { Corner, useCard } from './components/Corner';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
+import { RenameChat } from './components/RenameChat';
 import { DeleteConfirm } from './DeleteConfirm';
 import { Designs } from './designs/Designs';
 import { kept, keep as remember } from './kept';
@@ -45,6 +46,8 @@ export function App() {
     chat: Chat;
     opener: HTMLElement | null;
   } | null>(null);
+  // Rename, from a chat's More: the live `chat` change that follows reloads both lists.
+  const [renaming, setRenaming] = useState<{ chat: Chat; opener: HTMLElement | null } | null>(null);
   // Archive says which open questions it closes unanswered, read from the chat as it asks.
   const [closing, setClosing] = useState<{ body?: string; failure?: Failure } | null>(null);
   useEffect(() => {
@@ -358,6 +361,7 @@ export function App() {
     onAgents: () => setOpened('agents'),
     pauses: pauses.pauses,
     onPause: pauses.act,
+    onRename: (opener: HTMLElement | null) => setRenaming({ chat, opener }),
     onArchive: (opener: HTMLElement | null) => setAsking({ verb: 'Archive', chat, opener }),
     onDelete: (opener: HTMLElement | null) => setAsking({ verb: 'Delete', chat, opener }),
     onRestore: () => restore(chat),
@@ -403,6 +407,7 @@ export function App() {
           chats={chats}
           archived={archived}
           projects={projects}
+          onRename={(c, opener) => setRenaming({ chat: c, opener })}
           onArchive={(c, opener) => setAsking({ verb: 'Archive', chat: c, opener })}
           onDelete={(c, opener) => setAsking({ verb: 'Delete', chat: c, opener })}
           onRestore={restore}
@@ -472,6 +477,14 @@ export function App() {
           onConfirm={() =>
             (asking.verb === 'Archive' ? archive : remove)(asking.chat).then(() => setAsking(null))
           }
+        />
+      )}
+      {renaming && (
+        <RenameChat
+          key={`rename-${renaming.chat.id}`}
+          chat={renaming.chat}
+          opener={renaming.opener}
+          onClose={() => setRenaming(null)}
         />
       )}
       {deleting && (

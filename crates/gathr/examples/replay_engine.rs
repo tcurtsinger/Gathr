@@ -40,6 +40,9 @@
 //! child holding its output pipes, which lives while the file does (a minute at most), as an
 //! engine's own children can outlive it.
 //!
+//! Started with `--no-session-persistence` (the background model's one answer) it answers as
+//! `print_mode` says.
+//!
 //! `GATHR_REPLAY_SESSION=echo` names the id it was started on (`--session-id` or `--resume`) as the
 //! session of every recorded frame that names one, its init too; the Codex stand-in answers it with
 //! the thread it resumes, or a new one. `GATHR_REPLAY_RESUME=missing` answers a `--resume` as
@@ -155,6 +158,10 @@ fn main() {
             .join(".credentials.json")
             .is_file();
         std::process::exit(if signed_in { 0 } else { 1 });
+    }
+    if args.iter().any(|a| a == "--no-session-persistence") {
+        record_start(&args);
+        print_mode();
     }
     // An engine started with its slash commands on (Compact, K4) plays its own recording.
     let slash = !args.iter().any(|a| a == "--disable-slash-commands");
@@ -296,6 +303,29 @@ fn answered_initialize(line: &str, stdout: &mut impl Write) -> bool {
     writeln!(stdout, "{answer}").unwrap();
     stdout.flush().unwrap();
     true
+}
+
+/// Claude Code's print mode for one answer (`cat file | claude -p "<question>"`): it reads its
+/// input to the end, then answers what the file `GATHR_REPLAY_ANSWER` holds, read as it answers:
+/// that text as the answer; `fail`, a failure on stdout and exit 1, as Claude Code reports one inside
+/// a run; `wait`, nothing until the file holds something else (a minute at most). Nothing on its
+/// input fails it.
+fn print_mode() -> ! {
+    let mut input = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).unwrap();
+    let file = std::env::var_os("GATHR_REPLAY_ANSWER").unwrap_or_default();
+    let read = || std::fs::read_to_string(&file).unwrap_or_default();
+    let since = std::time::Instant::now();
+    while read().trim() == "wait" && since.elapsed().as_secs() < 60 {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let answer = read();
+    if input.trim().is_empty() || answer.trim() == "fail" {
+        println!("Failed to authenticate. API Error: 401");
+        std::process::exit(1);
+    }
+    print!("{answer}");
+    std::process::exit(0);
 }
 
 fn auth_login() -> ! {

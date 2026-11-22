@@ -22,6 +22,7 @@ mod logs;
 mod memory;
 mod mentions;
 mod models;
+mod naming;
 mod pauses;
 mod pc_tools;
 mod projects;

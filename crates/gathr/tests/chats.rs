@@ -758,3 +758,117 @@ fn a_key_split_across_streamed_frames_is_never_stored() {
         );
     }
 }
+
+/// The background model (Claude Code's `haiku`, the replay engine's print mode) names a chat from a
+/// first message of 40 characters or more; a failure or a rubbish answer leaves the first line's
+/// title, a short message starts no run, a rename by the person stays, and no event holds the words.
+#[test]
+fn the_background_model_names_a_new_chat_once_and_never_over_the_person() {
+    let data = TempDir::new();
+    let (answer, args) = (data.0.join("answer"), data.0.join("args"));
+    std::fs::write(&answer, "\"Garden plan for spring.\"\n").unwrap();
+    let replay = recording("signed_in");
+    let env = [
+        ("GATHR_REPLAY", replay.as_path()),
+        ("GATHR_REPLAY_ANSWER", answer.as_path()),
+        ("GATHR_REPLAY_ARGS", args.as_path()),
+    ];
+    let service = TestService::with_engine(&data.0, &env);
+    service.signed_in(&data.0);
+    let long =
+        |n: u32| format!("Made-up long message {n}: how should the garden beds be laid out?");
+    let title = |chat: &str| {
+        let list = service.call("GET", "/api/chats").json();
+        let row = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"] == chat)
+            .cloned();
+        row.unwrap()["title"].as_str().unwrap().to_string()
+    };
+    let outcome = |chat: &str| {
+        let sql = format!(
+            "SELECT json_extract(attrs, '$.outcome') AS outcome, json_extract(attrs, '$.why') AS why \
+             FROM event_log WHERE name = 'gathr.background.name' AND conversation_id = '{chat}'"
+        );
+        common::until(20, "the background name's event", || {
+            common::rows(&data.0, &sql).first().cloned()
+        })
+    };
+    let runs = || {
+        engine_runs(&args)
+            .iter()
+            .filter(|run| {
+                run.as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|a| a == "--no-session-persistence")
+            })
+            .count()
+    };
+    let send = |text: &str| {
+        let chat = service.new_chat();
+        let sent = service.send(
+            "POST",
+            &format!("/api/chats/{chat}/messages"),
+            json!({ "text": text }),
+        );
+        assert_eq!(sent.status, 200, "{}", sent.body);
+        chat
+    };
+
+    let named = send(&long(1));
+    assert_eq!(outcome(&named)["outcome"], "named");
+    assert_eq!(title(&named), "Garden plan for spring");
+    // The words go on its input, never in its arguments, which any process can read.
+    let run = engine_runs(&args)
+        .into_iter()
+        .rev()
+        .find(|r| r.to_string().contains("--no-session-persistence"));
+    let run = run.unwrap().to_string();
+    assert!(
+        run.contains("--model=haiku") && !run.contains("garden beds"),
+        "{run}"
+    );
+
+    let rubbish = "Too long a name ".repeat(10);
+    for (said, n) in [("fail", 2), (rubbish.as_str(), 3)] {
+        std::fs::write(&answer, said).unwrap();
+        let chat = send(&long(n));
+        assert_eq!(outcome(&chat)["outcome"], "failed", "{said}");
+        let kept = title(&chat);
+        assert!(
+            kept.starts_with(&format!("Made-up long message {n}")),
+            "{kept}"
+        );
+    }
+
+    let before = runs();
+    let short = send("Made-up short one");
+    assert_eq!(outcome(&short)["outcome"], "skipped");
+    assert_eq!(runs(), before, "a short first message started a run");
+    assert_eq!(title(&short), "Made-up short one");
+
+    // Renamed while the model is still answering: the person's name stays.
+    std::fs::write(&answer, "wait").unwrap();
+    let renamed = send(&long(4));
+    common::until(20, "the run to start", || (runs() > before).then_some(()));
+    let path = format!("/api/chats/{renamed}");
+    let refused = service.send("PATCH", &path, json!({ "title": "  " }));
+    assert_eq!(refused.status, 409, "{}", refused.body);
+    let done = service.send("PATCH", &path, json!({ "title": " Made-up own name " }));
+    assert_eq!(done.status, 200, "{}", done.body);
+    std::fs::write(&answer, "Garden plan for spring").unwrap();
+    assert_eq!(outcome(&renamed)["why"], "the chat was renamed");
+    assert_eq!(title(&renamed), "Made-up own name");
+
+    let words = common::rows(
+        &data.0,
+        "SELECT attrs FROM event_log WHERE attrs LIKE '%garden beds%'",
+    );
+    assert!(
+        words.is_empty(),
+        "the message's words are in an event: {words:?}"
+    );
+}

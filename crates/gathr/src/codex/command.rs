@@ -83,6 +83,36 @@ pub fn outside(entries: &[(String, String)]) -> Vec<String> {
     args
 }
 
+/// `codex exec` for one answer to `ask`, with what it reads on its input after it ("If stdin is piped
+/// and a prompt is also provided, stdin is appended as a `<stdin>` block", 0.166.0's `--help`): it
+/// prints only the final message on stdout (the non-interactive mode page, 2026-11-21). No session
+/// kept (`--ephemeral`), no `config.toml` (`--ignore-user-config`, the login still from `CODEX_HOME`)
+/// and no rules files (`--ignore-rules`), a read-only sandbox in a folder that isn't a repository,
+/// and Gathr's switches as an engine gets them.
+pub fn exec(model: Option<&str>, ask: &str) -> Vec<String> {
+    let mut args: Vec<String> = [
+        "exec",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "read-only",
+        "--color",
+        "never",
+    ]
+    .map(String::from)
+    .into();
+    for (key, value) in SWITCHES {
+        args.extend(["-c".into(), format!("{key}={value}")]);
+    }
+    if let Some(model) = model {
+        args.push(format!("--model={model}"));
+    }
+    args.push(ask.to_string());
+    args
+}
+
 pub use crate::claude::command::{ASKED_TOOLS, PUSH_VAR, TOKEN_VAR};
 
 /// The sandbox and approval policy for an agent's approvals (0029, 0033).

@@ -16,7 +16,16 @@ use crate::api::{State, Trace};
 use crate::routes::{Answer, db, fail};
 
 pub fn routes() -> Router<Arc<State>> {
-    Router::new().route("/api/settings", get(settings).patch(change_settings))
+    Router::new()
+        .route("/api/settings", get(settings).patch(change_settings))
+        .route("/api/settings/background", get(crate::naming::listed))
+}
+
+/// The background model the person picked.
+#[derive(Deserialize)]
+struct Picked {
+    account: String,
+    model: String,
 }
 
 /// Settings > General: the agent folder (0034), the hand-off limit, Auto-compact, the person's name
@@ -41,6 +50,9 @@ struct Change {
     /// The assistant's agent id, never `null`; left out, unchanged.
     #[serde(default, deserialize_with = "not_null")]
     assistant: Option<String>,
+    /// The background model, or `null` for Gathr's own pick; left out, unchanged.
+    #[serde(default, deserialize_with = "present")]
+    background_model: Option<Option<Picked>>,
 }
 
 /// A field that, when there, has a value: `null` is refused as a wrong type.
@@ -92,6 +104,12 @@ async fn change_settings(
         if let (Ok(()), Some(agent)) = (&saved, &body.assistant) {
             saved = assistant::set_assistant(c, agent);
         }
+        if let (Ok(()), Some(picked)) = (&saved, &body.background_model) {
+            let picked = picked
+                .as_ref()
+                .map(|p| (p.account.as_str(), p.model.as_str()));
+            saved = gathr::titles::set_model(c, picked);
+        }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;
         }
@@ -128,5 +146,7 @@ fn shown(
         "auto_compact": auto_compact,
         "person_name": assistant::person_name(c)?,
         "assistant": assistant::assistant(c)?,
+        "background_model": gathr::titles::model(c)?
+            .map(|(account, model)| json!({ "account": account, "model": model })),
     }))
 }
