@@ -1,4 +1,4 @@
-import { BookOpen, Check, ChevronRight, Plug, ThumbsUp } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, Copy, Plug, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Member, type Message, type Reaction } from '../api';
@@ -156,30 +156,27 @@ function holds(item: Item, message?: string) {
 
 /**
  * The person's message: a bubble at the right, its files' tiles under the words, with its replies under it when it has
- * any. Files alone sit without a bubble, the time under them.
+ * any. Files alone sit without a bubble. Its bar is under it.
  */
 function You({ said, ctx }: { said: Said; ctx: Ctx }) {
   const { words: all, files } = split(said.message.body as string);
   const made = ctx.notes.find((n) => n.id === said.message.id);
   const words = made ? (readNote(all)?.words ?? '') : all;
   const tiles = files.length > 0 && <PathTiles chat={ctx.chat} paths={files} />;
-  const time = <span className="room-time"> {clock(said.message.time)}</span>;
   return (
     <div className="room-item">
       {words || made ? (
         <div className="room-you" data-found={holds(said, ctx.found)}>
           {made && <NoteHead made={made} />}
           <Picked message={said.message} words={words} />
-          {time}
           {tiles}
         </div>
       ) : (
         <div className="room-you-files" data-found={holds(said, ctx.found)}>
           {tiles}
-          {time}
         </div>
       )}
-      <Reactions said={[said.message]} ctx={ctx} />
+      <Bar time={said.message.time} text={words} said={[said.message]} ctx={ctx} />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
@@ -287,9 +284,17 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         <Kept card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
-        <Foot said={card.said} last={card.last} ctx={ctx} />
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
+      {!working(card) && (
+        <Bar
+          time={card.turn.ended ?? card.turn.created}
+          text={card.text ?? ''}
+          said={card.said}
+          last={card.last}
+          ctx={ctx}
+        />
+      )}
       {card.replies.length > 0 && <Thread replies={card.replies} ctx={ctx} />}
     </div>
   );
@@ -485,37 +490,61 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
   );
 }
 
-/** The thumbs-ups on a message's words, as a small row under it: "👍 2 Ann, Bo". */
-function Reactions({ said, ctx }: { said: Message[]; ctx: Ctx }) {
-  const ids = new Set(said.map((m) => m.id));
-  const given = ctx.reactions.filter((r) => ids.has(r.message));
-  if (!given.length) return null;
-  const who = [...new Set(given.map((r) => (r.agent === PERSON ? 'You' : ctx.people.name(r.agent))))];
-  return (
-    <div className="room-reactions">
-      <span className="room-react">
-        <span aria-hidden="true">👍</span> {given.length} <span className="room-time">{who.join(', ')}</span>
-      </span>
-    </div>
-  );
+interface BarProps {
+  /** Left out in a thread, where the time is beside the name. */
+  time?: string | null;
+  /** The words Copy takes; none, no Copy. */
+  text: string;
+  /** The messages whose thumbs-ups are counted. */
+  said: Message[];
+  /** An agent's last words: what the person's own thumbs-up goes on. Unset on the person's own message. */
+  last?: Message;
+  ctx: Ctx;
 }
 
-/** An agent's foot: its thumbs-ups, and at the right the person's own, on its last words. */
-function Foot({ said, last, ctx }: { said: Message[]; last?: Message; ctx: Ctx }) {
+/**
+ * The thin row under a message (the owner's pick, 2026-11-22): its time, Copy, then the one thumbs-up with its number
+ * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
+ * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
+ */
+function Bar({ time, text, said, last, ctx }: BarProps) {
+  const [copied, setCopied] = useState(false);
+  const ids = new Set(said.map((m) => m.id));
+  const given = ctx.reactions.filter((r) => ids.has(r.message));
+  const who = [...new Set(given.map((r) => (r.agent === PERSON ? 'You' : ctx.people.name(r.agent))))];
+  const mine = given.some((r) => r.agent === PERSON);
   const like = ctx.acts.like;
-  if (!last || !like) return <Reactions said={said} ctx={ctx} />;
-  const mine = ctx.reactions.some((r) => r.message === last.id && r.agent === PERSON);
+  const press = last && like ? () => like(last.id, !mine) : undefined;
+  const copy = () =>
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => undefined,
+    );
+  if (!time && !text && !press && !given.length) return null;
   return (
-    <div className="room-foot-row">
-      <Reactions said={said} ctx={ctx} />
-      <IconButton
-        aria-label="Like"
-        aria-pressed={mine}
-        className="room-like"
-        onClick={() => like(last.id, !mine)}
-      >
-        <ThumbsUp />
-      </IconButton>
+    <div className="room-bar">
+      {time && <span className="room-time">{clock(time)}</span>}
+      {text && (
+        <IconButton aria-label="Copy" onClick={copy}>
+          {copied ? <Check className="room-bar-icon" /> : <Copy className="room-bar-icon" />}
+        </IconButton>
+      )}
+      {(press || given.length > 0) && (
+        <span className="room-thumb" data-mine={mine || undefined}>
+          {press ? (
+            <IconButton aria-label="Like" aria-pressed={mine} onClick={press}>
+              <ThumbsUp className="room-bar-icon" />
+            </IconButton>
+          ) : (
+            <ThumbsUp className="room-bar-icon room-thumb-still" aria-hidden="true" />
+          )}
+          {given.length > 0 && <b>{given.length}</b>}
+          {who.length > 0 && <span className="room-tip">{who.join(', ')}</span>}
+        </span>
+      )}
     </div>
   );
 }
@@ -587,7 +616,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             </p>
           )}
           {files.length > 0 && <PathTiles chat={ctx.chat} paths={files} />}
-          <Reactions said={[item.message]} ctx={ctx} />
+          <Bar text={words} said={[item.message]} ctx={ctx} />
         </div>
       </div>
     );
@@ -616,7 +645,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           />
         )}
         <Kept card={item} ctx={ctx} />
-        <Foot said={item.said} last={item.last} ctx={ctx} />
+        {!running && <Bar text={item.text ?? ''} said={item.said} last={item.last} ctx={ctx} />}
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>
     </div>
