@@ -121,6 +121,14 @@ impl AppUpdates {
             let Some((version, _)) = shown.ready.clone() else {
                 return Err(Refused::Not("No update ready".into()));
             };
+            // Gone since its check: the hand-over would start the copy that runs again.
+            if !self.copies.path(&version).is_file() {
+                shown.ready = None;
+                drop(shown);
+                self.check_now();
+                self.publish();
+                return Err(Refused::Not("The update is downloading again".into()));
+            }
             shown.installing = Some((version.clone(), Value::Null));
             version
         };

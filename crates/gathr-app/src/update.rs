@@ -10,8 +10,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use gathr::app::Copies;
 use gathr::fetch::parse_version;
+use gathr::http;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -69,12 +69,13 @@ pub fn run(app: &AppHandle) {
 
 /// The window signed in to a service that started anew. One that runs a newer release than this
 /// window took the person's Update: the window's part of that release installs at once, fetched
-/// first if it isn't ready, or if what is ready is older than the service's release.
+/// first if it isn't ready, or if what is ready is older than the service's release. The version
+/// the service runs, not `current.json`'s: a hand-over that started the copy before names the new
+/// one there.
 pub fn signed_in(app: &AppHandle) {
     let window = app.package_info().version.to_string();
-    let service = Copies::new(&app.state::<Service>().data).current();
     let updates = app.state::<Updates>();
-    if let Some(service) = service.map(|c| c.version).filter(|s| newer(s, &window)) {
+    if let Some(service) = service_version(app).filter(|s| newer(s, &window)) {
         updates.asked.store(true, Ordering::SeqCst);
         let mut ready = updates.ready.lock().unwrap();
         if ready
@@ -86,6 +87,13 @@ pub fn signed_in(app: &AppHandle) {
     }
     let app = app.clone();
     std::thread::spawn(move || check(&app));
+}
+
+/// The version the service the window signed in to says it runs.
+fn service_version(app: &AppHandle) -> Option<String> {
+    let info = app.state::<Service>().info.lock().unwrap().clone()?;
+    let answer = http::call(info.port, &info.token, "GET", "/api/app").ok()?;
+    answer.json()["version"].as_str().map(String::from)
 }
 
 /// The window was hidden: a ready update installs now.
