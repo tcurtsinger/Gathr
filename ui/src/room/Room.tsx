@@ -286,7 +286,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           />
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
-        <Shown blocks={card.blocks} />
+        <Shown chat={ctx.chat} blocks={card.blocks} />
         <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />
         <Kept card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
@@ -650,7 +650,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             agent={agent}
           />
         )}
-        <Shown blocks={item.blocks} />
+        <Shown chat={ctx.chat} blocks={item.blocks} />
         <FilesCard steps={item.steps} agent={agent} onView={ctx.acts.changes} />
         <Kept card={item} ctx={ctx} />
         {!running && <Bar text={item.text ?? ''} said={item.said} last={item.last} ctx={ctx} />}

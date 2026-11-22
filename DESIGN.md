@@ -187,8 +187,11 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
 - **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
   table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
   link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
-  row sit side by side), a flow as its Flow graph (laid out by what follows what) or math as its Math block
-  (`^` and `_` raised and lowered), each with its title as a quiet 12.5px line above.
+  row sit side by side), a flow as its Flow graph (laid out by what follows what), math as its Math block
+  (`^` and `_` raised and lowered), a diagram in its Diagram frame (mermaid drawn by beautiful-mermaid in the
+  window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
+  that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, with Open
+  at its top right; each but a diagram with its title as a quiet 12.5px line above, a diagram in its frame.
 - **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" (Memory's
   mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
   for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis. A click opens

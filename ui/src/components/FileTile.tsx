@@ -70,24 +70,29 @@ export function FileTile({ name, src, onRemove, onOpen, preview }: Props) {
           <X aria-hidden="true" />
         </IconButton>
       )}
-      {open && shown && (
-        <Dialog open title={name} onClose={close} className="file-view" noHeader bare>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: a click beside the picture closes it; Escape does too */}
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it, through the dialog */}
-          <div className="file-stage" onClick={(e) => e.target === e.currentTarget && close()}>
-            <figure className="file-large">
-              <figcaption>
-                <span>{name}</span>
-                <IconButton aria-label={`Close ${name}`} onClick={close}>
-                  <X aria-hidden="true" />
-                </IconButton>
-              </figcaption>
-              <img src={shown} alt={name} />
-            </figure>
-          </div>
-        </Dialog>
-      )}
+      {open && shown && <PictureView name={name} src={shown} onClose={close} />}
     </div>
+  );
+}
+
+/** A picture large over the window, its name above it; a click beside it or Escape closes it. */
+export function PictureView({ name, src, onClose }: { name: string; src: string; onClose: () => void }) {
+  return (
+    <Dialog open title={name} onClose={onClose} className="file-view" noHeader bare>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a click beside the picture closes it; Escape does too */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it, through the dialog */}
+      <div className="file-stage" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <figure className="file-large">
+          <figcaption>
+            <span>{name}</span>
+            <IconButton aria-label={`Close ${name}`} onClick={onClose}>
+              <X aria-hidden="true" />
+            </IconButton>
+          </figcaption>
+          <img src={src} alt={name} />
+        </figure>
+      </div>
+    </Dialog>
   );
 }
 
