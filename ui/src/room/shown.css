@@ -1,0 +1,15 @@
+/* Tables and charts an agent showed: under its words in the card, the card's text width. */
+.shown {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 18px 12px;
+}
+.room-reply .shown {
+  padding: 8px 0 2px;
+}
+.shown-title {
+  margin: 0 0 6px 2px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}

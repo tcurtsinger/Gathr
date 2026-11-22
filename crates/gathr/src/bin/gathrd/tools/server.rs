@@ -71,6 +71,7 @@ impl Tools {
             + Tools::note_router()
             + Tools::github_router()
             + Tools::add_router()
+            + Tools::show_router()
     }
 }
 
@@ -197,8 +198,8 @@ fn read(conn: &Connection, chat: &str, ask: &ReadChat) -> Result<String, String>
     Ok(lines.join("\n"))
 }
 
-/// The chat's text messages that pass `filter`, newest first, with who wrote each: an agent's working
-/// notes aren't among them.
+/// The chat's text messages and shown blocks that pass `filter`, newest first, with who wrote each: an
+/// agent's working notes aren't among them, and a block reads as its one line.
 fn rows(
     conn: &Connection,
     filter: &str,
@@ -207,9 +208,9 @@ fn rows(
 ) -> Result<Vec<Row>, String> {
     let said = gathr::room::SAID;
     let query = format!(
-        "SELECT m.id, m.role, a.name, m.body FROM messages m \
+        "SELECT m.id, m.role, a.name, m.body, m.kind FROM messages m \
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id \
-         WHERE m.chat_id = ?1 AND m.kind = 'text' AND {said} {filter} \
+         WHERE m.chat_id = ?1 AND (m.kind = 'block' OR (m.kind = 'text' AND {said})) {filter} \
          ORDER BY m.ts DESC, m.id DESC LIMIT {limit}"
     );
     let row = |r: &rusqlite::Row| {
@@ -220,10 +221,15 @@ fn rows(
             "gathr" => "Gathr".to_string(),
             _ => name.unwrap_or_else(|| "agent".to_string()),
         };
+        let (body, kind): (String, String) = (r.get(3)?, r.get(4)?);
         Ok(Row {
             id: r.get(0)?,
             author,
-            body: r.get(3)?,
+            body: if kind == "block" {
+                super::show::line(&body)
+            } else {
+                body
+            },
         })
     };
     let run = || {

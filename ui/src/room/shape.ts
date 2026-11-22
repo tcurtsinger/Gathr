@@ -1,4 +1,4 @@
-import type { Message, Question, ToolBody, Turn } from '../api';
+import type { Block, Message, Question, ToolBody, Turn } from '../api';
 import type { RoomState } from './useRoom';
 
 /** A block of words an agent wrote before its last words in a turn: kept in the turn's steps, never its message. */
@@ -21,6 +21,8 @@ export interface Card {
   last?: Message;
   /** Its tool runs and its working notes, in the order they came. */
   steps: Step[];
+  /** The tables and charts it showed, in the order it showed them: drawn under its words. */
+  blocks: Block[];
   at: number;
   replies: Item[];
 }
@@ -91,13 +93,16 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
     const moved = mine.findLast((m) => m.kind === 'tool' || m.kind === 'text') !== newest;
     const last = !streaming && newest && !(open(turn) && moved) ? newest : undefined;
     const text = streaming || ((last?.body as string | undefined) ?? '');
-    if (!text && turn.status === 'done') continue;
+    const blocks = mine.flatMap((m) =>
+      m.kind === 'block' && typeof m.body === 'object' ? [m.body as Block] : [],
+    );
+    if (!text && !blocks.length && turn.status === 'done') continue;
     const steps = mine.flatMap((m): Step[] => {
       if (m.kind === 'tool') return [m.body as ToolBody];
       return m.kind === 'text' && m !== last && m.body ? [{ note: m.body as string }] : [];
     });
     const at = Math.max(time(turn.created ?? mine[0]?.time), opener.get(turn.id) ?? 0);
-    cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, last, steps, at, replies: [] });
+    cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, last, steps, blocks, at, replies: [] });
   }
   const cardOf = new Map<string, string>();
   for (const c of cards.values()) for (const m of byTurn.get(c.id) ?? []) cardOf.set(m.id, c.id);

@@ -239,13 +239,13 @@ const MESSAGE: &str =
 const PLACE: &str = "CASE WHEN m.turn_id IS NOT NULL THEN t.position ELSE COALESCE(
      max(t.position) OVER (ORDER BY m.ts), 0) END";
 
-/// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
+/// A message as the API shows it; tool, thinking and block messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
     let role: String = r.get(3)?;
     let compacted = role == "gathr" && kind == "text" && crate::context::is_compacted_line(&body);
     let body = match kind.as_str() {
-        "tool" | "thinking" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
+        "tool" | "thinking" | "block" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
     let mut row = json!({

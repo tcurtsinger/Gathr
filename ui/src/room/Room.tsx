@@ -17,6 +17,7 @@ import { OpenMemory } from '../memory/Memory';
 import { OpenPlugin, type ToolNext } from '../plugins/Plugins';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
+import { Shown } from './Shown';
 import {
   type Card,
   type Item,
@@ -282,6 +283,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           />
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
+        <Shown blocks={card.blocks} />
         <Kept card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
@@ -644,6 +646,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             agent={agent}
           />
         )}
+        <Shown blocks={item.blocks} />
         <Kept card={item} ctx={ctx} />
         {!running && <Bar text={item.text ?? ''} said={item.said} last={item.last} ctx={ctx} />}
         <Asks turn={item.id} agent={agent} ctx={ctx} />
