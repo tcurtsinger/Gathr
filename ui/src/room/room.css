@@ -92,9 +92,11 @@
   font-size: 18px;
   font-weight: 550;
 }
+/* The message box is 12px wider than the chat's column on each side, so a card passing behind it is covered whole
+   and its edge never lines up with the box's. */
 .room-foot {
   position: relative;
-  width: min(760px, calc(100% - 48px));
+  width: min(784px, calc(100% - 24px));
   margin: 8px auto 16px;
 }
 /* The chat runs behind the message box's top edge and round corners, so no blank strip above the box cuts it. Its
@@ -430,22 +432,32 @@
 .room-thumb[data-mine] svg path:last-child {
   stroke: var(--background);
 }
-/* Who gave a thumbs-up, while the pointer or the keyboard is on the thumb. */
+/* Who gave a thumbs-up, while the pointer or the keyboard is on the thumb: beside the number, in the time's own
+   words (the owner's pick). It takes no room, so nothing moves under the pointer. */
 .room-tip {
   position: absolute;
-  z-index: 1;
-  top: 100%;
-  left: 12px;
+  top: 50%;
+  left: 100%;
   display: none;
-  margin-top: 3px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  font-size: 12px;
+  margin-left: 8px;
+  color: var(--muted-foreground);
   white-space: nowrap;
-  transform: translateX(-50%);
+  transform: translateY(-50%);
+}
+/* The person's own row ends at the chat's right edge: there the names go before the time. */
+.room-you + .room-bar,
+.room-you-files + .room-bar {
+  position: relative;
+}
+.room-you + .room-bar .room-thumb,
+.room-you-files + .room-bar .room-thumb {
+  position: static;
+}
+.room-you + .room-bar .room-tip,
+.room-you-files + .room-bar .room-tip {
+  right: 100%;
+  left: auto;
+  margin: 0 8px 0 0;
 }
 .room-thumb:hover .room-tip,
 .room-thumb:focus-within .room-tip {
