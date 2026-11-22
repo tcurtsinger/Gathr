@@ -6,6 +6,9 @@ export interface Schedule {
   /** Its chat's project's name, when it has one. */
   project: string | null;
   agent: string;
+  /** Its short name; one made before names has the first line of its words. */
+  name: string;
+  /** What arrives as the message. */
   words: string;
   when: string;
   enabled: boolean;

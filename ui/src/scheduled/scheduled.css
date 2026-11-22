@@ -1,5 +1,5 @@
 /* The Scheduled screen (Scheduled.tsx), on Plugins' page of a tool (plugins.css): who and where under the title, the
-   When and Next rows under Enabled, and the runs, each opening its chat. */
+   When, Next and Message rows under Enabled, and the runs, each opening its chat. */
 .scheduled-nav .face {
   flex: none;
   mask-image: none;
@@ -31,6 +31,10 @@
 }
 .skill-enabled + .scheduled-row {
   margin-top: -1px;
+}
+.scheduled-words {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .scheduled-runs {
   margin-top: 26px;

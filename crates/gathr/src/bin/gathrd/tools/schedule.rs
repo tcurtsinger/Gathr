@@ -1,6 +1,6 @@
 //! `schedule` and `unschedule`: an agent keeps words that come into its chat at a set time, once or repeating, as a
 //! message to it (`gathr::schedules`), or removes one made in its chat. `schedule`'s answer starts with the line the
-//! chat shows under the agent's message, then the words, then the schedule's id for that line to open it.
+//! chat shows under the agent's message, then the schedule's name, then its id for that line to open it.
 
 use std::time::Instant;
 
@@ -17,6 +17,8 @@ use super::server::{Tools, caller_of};
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct Schedule {
+    /// A short name for it: 2 to 5 words.
+    name: String,
     /// What will arrive, as a message to you: up to 2,000 characters.
     words: String,
     /// HH:MM on this PC's clock.
@@ -63,13 +65,13 @@ impl Tools {
                     in_minutes: ask.in_minutes,
                 };
                 let when = asked.when(c, now)?;
-                let made = schedules::add(c, (&chat, &agent), &ask.words, &when, now)?;
+                let made = schedules::add(c, (&chat, &agent), (&ask.name, &ask.words), &when, now)?;
                 let mut label = made.when.chars();
                 let first = label.next().map(|l| l.to_lowercase().to_string()).unwrap_or_default();
-                let words = ask.words.split_whitespace().collect::<Vec<_>>().join(" ");
                 Ok::<_, Error>(format!(
-                    "Scheduled {first}{}:\n{words}\nschedule {}\nIts id is {}. Next: {}. It is now {} on this PC.",
+                    "Scheduled {first}{}:\n{}\nschedule {}\nIts id is {}. Next: {}. It is now {} on this PC.",
                     label.as_str(),
+                    made.name,
                     made.id,
                     made.id,
                     when::day_time(c, made.next)?,
@@ -100,9 +102,9 @@ impl Tools {
             .chats
             .writer
             .call(move |c| {
-                schedules::delete(c, ask.id.trim(), Some(&chat))?;
+                let name = schedules::delete(c, ask.id.trim(), Some(&chat))?;
                 Ok::<_, Error>(format!(
-                    "Removed {}.\n{}",
+                    "Removed {name} ({}).\n{}",
                     ask.id.trim(),
                     schedules::in_chat(c, &chat)?
                 ))

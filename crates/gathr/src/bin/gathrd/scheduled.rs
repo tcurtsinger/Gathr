@@ -100,7 +100,7 @@ async fn remove(
     Path(id): Path<String>,
 ) -> Answer {
     let removed = db(&s, &t, "Delete failed", move |c| {
-        schedules::delete(c, &id, None).map(|()| json!({ "deleted": true }))
+        schedules::delete(c, &id, None).map(|_| json!({ "deleted": true }))
     })
     .await?;
     s.chats.publish(json!({ "type": "schedules" }));

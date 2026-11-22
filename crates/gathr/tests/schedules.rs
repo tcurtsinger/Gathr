@@ -18,7 +18,13 @@ fn scheduled(history: &Value) -> Vec<Value> {
 }
 
 /// A schedule of `agent`'s in `chat` that is due now: made earlier, with its time the minute this PC's clock shows.
-fn due_now(data: &std::path::Path, chat: &str, agent: &str, words: &str, once: bool) -> String {
+fn due_now(
+    data: &std::path::Path,
+    chat: &str,
+    agent: &str,
+    kept: (&str, &str),
+    once: bool,
+) -> String {
     let conn = gathr::db::open(&data.join("gathr.db")).unwrap();
     let now = gathr::ids::now_us();
     let clock = when::local(&conn, now).unwrap();
@@ -31,11 +37,11 @@ fn due_now(data: &std::path::Path, chat: &str, agent: &str, words: &str, once: b
         true => schedules::add(
             &conn,
             (chat, agent),
-            words,
+            kept,
             &When::Once(now + 60_000_000),
             now,
         ),
-        false => schedules::add(&conn, (chat, agent), words, &every, now),
+        false => schedules::add(&conn, (chat, agent), kept, &every, now),
     };
     let id = made.unwrap().id;
     conn.execute(
@@ -69,7 +75,7 @@ fn a_due_schedule_queues_one_turn_and_a_restart_queues_no_second() {
         &data.0,
         &chat,
         &ann,
-        "Remind me to water the seed trays",
+        ("Water the trays", "Remind me to water the seed trays"),
         false,
     );
     let service = start();
@@ -88,10 +94,12 @@ fn a_due_schedule_queues_one_turn_and_a_restart_queues_no_second() {
         .call("GET", &format!("/api/schedules/{water}"))
         .json();
     assert_eq!(shown["runs"].as_array().unwrap().len(), 1, "{shown}");
+    assert_eq!(shown["name"], "Water the trays");
     assert!(service.stop().success());
 
     // Started again: the first schedule's next time is tomorrow, so only the one due now runs.
-    let report = due_now(&data.0, &chat, &ann, "Send the planting report", true);
+    let report = ("Planting report", "Send the planting report");
+    let report = due_now(&data.0, &chat, &ann, report, true);
     let service = start();
     let history = service.wait_for(&chat, 30, "the second scheduled turn to end", |h| {
         scheduled(h)

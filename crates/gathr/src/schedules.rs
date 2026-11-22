@@ -17,6 +17,8 @@ use when::{Due, clock, day_time, local};
 
 /// The most a schedule's words may be.
 pub const MOST_CHARS: usize = 2000;
+/// The most a schedule's name may be.
+const MOST_NAME: usize = 60;
 /// Why a run was late or skipped.
 const AWAY: &str = "Gathr wasn't running or this PC was asleep.";
 /// The runs a schedule's page shows, newest first.
@@ -27,22 +29,36 @@ struct Row {
     id: String,
     chat: String,
     agent: String,
+    name: String,
     words: String,
     when: When,
     next: Option<i64>,
 }
 
 const ROW: &str =
-    "SELECT id, chat_id, agent_id, words, minute, days, once_ts, next_ts FROM schedules";
+    "SELECT id, chat_id, agent_id, words, minute, days, once_ts, next_ts, name FROM schedules";
+
+/// Its name; one made before names were given has the first line of its words, cut.
+fn named(name: Option<String>, words: &str) -> String {
+    name.unwrap_or_else(|| {
+        crate::text::cut(
+            crate::text::first_line(words).unwrap_or_default(),
+            MOST_NAME,
+            false,
+        )
+    })
+}
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
     let (minute, days, once): (Option<i64>, Option<String>, Option<i64>) =
         (r.get(4)?, r.get(5)?, r.get(6)?);
+    let words: String = r.get(3)?;
     Ok(Row {
         id: r.get(0)?,
         chat: r.get(1)?,
         agent: r.get(2)?,
-        words: r.get(3)?,
+        name: named(r.get(8)?, &words),
+        words,
         when: match (once, minute, days) {
             (Some(at), _, _) => When::Once(at),
             (None, minute, days) => When::Days {
@@ -62,21 +78,32 @@ fn one(conn: &Connection, id: &str) -> Result<Row, Error> {
     found.ok_or_else(|| Error::Refused(format!("there's no schedule {id}")))
 }
 
-/// What `schedule` made: its id, when it runs in words and when it is next due.
+/// What `schedule` made: its id, its name, when it runs in words and when it is next due.
 pub struct Made {
     pub id: String,
+    pub name: String,
     pub when: String,
     pub next: i64,
 }
 
-/// Keeps `words` for `agent` in `chat`, to run `when`, from `now` on: never a time before it.
+/// Keeps `words` named `name` for `agent` in `chat`, to run `when`, from `now` on: never a time before it.
 pub fn add(
     conn: &Connection,
     (chat, agent): (&str, &str),
-    words: &str,
+    (name, words): (&str, &str),
     when: &When,
     now: i64,
 ) -> Result<Made, Error> {
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.is_empty() {
+        return Err(Error::Refused("Give it a short name.".into()));
+    }
+    if name.chars().count() > MOST_NAME {
+        return Err(Error::Refused(format!(
+            "The name is {} characters: at most {MOST_NAME}. Give it 2 to 5 words.",
+            name.chars().count()
+        )));
+    }
     let words = words.trim();
     if words.is_empty() {
         return Err(Error::Refused("Give the words that will arrive.".into()));
@@ -97,12 +124,13 @@ pub fn add(
         When::Once(at) => (None, None, Some(*at)),
     };
     conn.execute(
-        "INSERT INTO schedules (id, chat_id, agent_id, words, minute, days, once_ts, next_ts, created_ts)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![id, chat, agent, words, minute, days, once, next, now],
+        "INSERT INTO schedules (id, chat_id, agent_id, words, minute, days, once_ts, next_ts, created_ts, name)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![id, chat, agent, words, minute, days, once, next, now, name],
     )?;
     Ok(Made {
         id,
+        name,
         when: when.words(conn)?,
         next,
     })
@@ -198,16 +226,23 @@ fn queue_run(
 
 /// Gathr's line before a run's words, for its agent: which schedule, and when it was due.
 pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
-    let found: Option<(String, String, i64, i64)> = conn
+    type Found = (String, String, i64, i64, Option<String>, Option<String>);
+    let found: Option<Found> = conn
         .prepare_cached(
-            "SELECT schedule_id, kind, due_ts, ran_ts FROM schedule_runs WHERE message_id = ?1",
+            "SELECT r.schedule_id, r.kind, r.due_ts, r.ran_ts, s.name, s.words
+             FROM schedule_runs r LEFT JOIN schedules s ON s.id = r.schedule_id WHERE r.message_id = ?1",
         )?
         .query_row([message], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
         })
         .optional()?;
-    let Some((id, kind, due, ran)) = found else {
+    let Some((id, kind, due, ran, name, words)) = found else {
         return Ok(None);
+    };
+    // A schedule deleted since is known by its id alone.
+    let id = match words {
+        Some(words) => format!("{} ({id})", named(name, &words)),
+        None => id,
     };
     let said = match kind.as_str() {
         "now" => format!("Scheduled run of {id}, started now by the person with Run now."),
@@ -251,6 +286,7 @@ fn shown(conn: &Connection, s: &Row) -> Result<Value, Error> {
         "chat_title": title,
         "project": project,
         "agent": s.agent,
+        "name": s.name,
         "words": s.words,
         "when": s.when.words(conn)?,
         "enabled": s.next.is_some(),
@@ -343,21 +379,24 @@ pub fn set_enabled(conn: &Connection, id: &str, on: bool, now: i64) -> Result<Va
     shown(conn, &one(conn, id)?)
 }
 
-/// Deletes a schedule; its runs stay with its chat. With `chat`, only one made in that chat.
-pub fn delete(conn: &Connection, id: &str, chat: Option<&str>) -> Result<(), Error> {
-    let gone = conn.execute(
-        "DELETE FROM schedules WHERE id = ?1 AND chat_id = coalesce(?2, chat_id)",
-        params![id, chat],
-    )?;
+/// Deletes a schedule, answering its name; its runs stay with its chat. With `chat`, only one made in that chat.
+pub fn delete(conn: &Connection, id: &str, chat: Option<&str>) -> Result<String, Error> {
+    let gone: Option<(Option<String>, String)> = conn
+        .query_row(
+            "DELETE FROM schedules WHERE id = ?1 AND chat_id = coalesce(?2, chat_id) RETURNING name, words",
+            params![id, chat],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
     match gone {
-        0 => Err(Error::Refused(format!(
+        None => Err(Error::Refused(format!(
             "There's no schedule {id} in this chat."
         ))),
-        _ => Ok(()),
+        Some((name, words)) => Ok(named(name, &words)),
     }
 }
 
-/// What is scheduled in `chat`, for an agent: each one's id, when, next and words.
+/// What is scheduled in `chat`, for an agent: each one's name, id, when, next and words.
 pub fn in_chat(conn: &Connection, chat: &str) -> Result<String, Error> {
     let rows: Vec<Row> = conn
         .prepare_cached(&format!("{ROW} WHERE chat_id = ?1 ORDER BY created_ts, id"))?
@@ -378,7 +417,8 @@ pub fn in_chat(conn: &Connection, chat: &str) -> Result<String, Error> {
             false,
         );
         lines.push(format!(
-            "- {}: {}, {next}: {words}",
+            "- {} ({}): {}, {next}: {words}",
+            s.name,
             s.id,
             s.when.words(conn)?
         ));

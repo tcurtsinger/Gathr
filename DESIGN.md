@@ -197,7 +197,8 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
 - **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" or "Noted
   about Seed catalogue: …" for a tool's note (Memory's mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
   for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis,
-  "Scheduled weekdays at 9:00: …" (Scheduled's mark; the label stays on one line). A click opens Memory at the note's
+  "Scheduled weekdays at 9:00: Morning pull requests" (Scheduled's mark; the label stays on one line; the
+  schedule's short name, not its words). A click opens Memory at the note's
   place, the tool's or skill's page in Plugins, or the schedule in Scheduled.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
   ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed

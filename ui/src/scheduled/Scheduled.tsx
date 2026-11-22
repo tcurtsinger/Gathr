@@ -27,7 +27,8 @@ const RELOAD = ['schedules', 'agents', 'chat', 'lagged'];
 
 /**
  * The Scheduled screen, in place of the chat list and the chat: everything scheduled in every chat in its sidebar, a
- * disabled one muted; the open one's page with Run now, Delete, Enabled, when it runs, when next, and its last runs.
+ * disabled one muted, each by its name; the open one's page with Run now, Delete, Enabled, when it runs, when next,
+ * its message and its last runs.
  * Nothing here changes its words or time: the person deletes it and asks an agent again.
  */
 export function Scheduled({ at, onAt, onChat }: Props) {
@@ -62,7 +63,7 @@ export function Scheduled({ at, onAt, onChat }: Props) {
                 onClick={() => onAt(s.id)}
               >
                 <Face agent={{ id: s.agent, name: '' }} size={20} />
-                <span>{firstLine(s.words)}</span>
+                <span>{s.name}</span>
               </button>
             </div>
           ))}
@@ -107,7 +108,7 @@ function Page({ schedule: s, onChat, onFailure }: PageProps) {
           <ScheduledMark />
         </span>
         <div className="screen-title">
-          <h1>{s.words}</h1>
+          <h1>{s.name}</h1>
           <p className="muted scheduled-where">
             {agent} · in{' '}
             <button type="button" className="scheduled-chat" onClick={() => onChat(s.chat)}>
@@ -160,6 +161,12 @@ function Page({ schedule: s, onChat, onFailure }: PageProps) {
           </span>
         </div>
       )}
+      <div className="scheduled-row">
+        <span className="skill-enabled-words">
+          <span>Message</span>
+          <span className="muted scheduled-words">{s.words}</span>
+        </span>
+      </div>
       {shown && shown.runs.length > 0 && (
         <section className="tool-actions scheduled-runs">
           <h2>Runs</h2>
@@ -187,7 +194,7 @@ function Page({ schedule: s, onChat, onFailure }: PageProps) {
       )}
       {deleting && (
         <Confirm
-          question={`Delete ${firstLine(s.words)}?`}
+          question={`Delete ${s.name}?`}
           verb="Delete"
           danger
           opener={remove.current}
@@ -207,8 +214,6 @@ const STATES: Record<ScheduleRun['state'], string> = {
   failed: 'Failed',
   stopped: 'Stopped',
 };
-
-const firstLine = (words: string) => words.split('\n').find((l) => l.trim()) ?? words;
 
 /** "Today, 9:00", "Tomorrow, 9:00", "Friday, 9:00", "23 Nov, 9:00": on the 24-hour clock the screen's "When" uses. */
 export function dayTime(iso: string, time = true) {
