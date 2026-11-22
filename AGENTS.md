@@ -63,5 +63,5 @@ Facts, not rules. Read the one your task touches.
 - [docs/window.md](docs/window.md): use and check a screen in the window.
 - [docs/architecture.md](docs/architecture.md): what is built, part by part.
 - [docs/api.md](docs/api.md), [api-engines](docs/api-engines.md), [api-approvals](docs/api-approvals.md), [api-tasks](docs/api-tasks.md): the service's API.
-- [DESIGN.md](DESIGN.md) and [designs/README.md](designs/README.md): the design system and its previews. Their chat parts describe the chat that is being replaced.
+- [DESIGN.md](DESIGN.md) and [designs/README.md](designs/README.md): the design system and its previews. The previews' chat parts still show the chat that was replaced.
 - [docs/archive/README.md](docs/archive/README.md): what was archived, and why.

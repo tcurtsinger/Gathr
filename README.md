@@ -4,7 +4,7 @@ Gathr is an open-source desktop app for working with your own AI agents, from di
 
 ## Status
 
-Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, diagnostics and updates are built. The chat and the way agents work as a team are being started over (2026-11-20): [`AGENTS.md`](AGENTS.md) says what is kept and what is replaced. What is built is in [`docs/architecture.md`](docs/architecture.md). How Gathr was built before that day is in [`docs/archive/`](docs/archive/README.md), as history.
+Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, diagnostics and updates are built. The chat and the way agents work as a team were started over on 2026-11-20: [`AGENTS.md`](AGENTS.md) says what was kept. What is built is in [`docs/architecture.md`](docs/architecture.md). How Gathr was built before that day is in [`docs/archive/`](docs/archive/README.md), as history.
 
 ## Build and check
 
@@ -18,6 +18,7 @@ bash scripts/check-file-size.sh
 node scripts/scrub-frames.check.mjs
 node scripts/registry.check.mjs
 node scripts/docs.check.mjs
+node scripts/release.check.mjs
 ```
 
 In `ui/`:
@@ -37,7 +38,7 @@ cargo dev --port 47100 --data ./dev-data --seed --window
 ```
 
 Use a test folder for `--data`; Ctrl+C stops the service and window.
-CI runs the checks on Windows and macOS for every pull request. [`AGENTS.md`](AGENTS.md) says how to use and diagnose a running service.
+CI runs the checks on Windows and macOS for every pull request and every push to `main`. [`docs/running.md`](docs/running.md) says how to run a service, and [`docs/building.md`](docs/building.md) how to check and diagnose one.
 
 ## Contributing
 
