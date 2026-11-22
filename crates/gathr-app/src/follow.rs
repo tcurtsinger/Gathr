@@ -1,7 +1,8 @@
 //! The window keeps to a running service (0032). After a hand-over to an update, the new service
-//! has its own process and token: the window signs in to it with a fresh one-time link. A service
-//! that stops answering while the window is open is started again through the same start as a
-//! launch, so a new copy that died on trial rolls back at once rather than at the next open.
+//! has its own process but the old one's token and cookie: the window still signs in to it with a
+//! fresh one-time link. A service that stops answering while the window is open is started again
+//! through the same start as a launch, so a new copy that died on trial rolls back at once rather
+//! than at the next open.
 
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};

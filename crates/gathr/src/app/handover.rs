@@ -21,6 +21,12 @@ pub struct HandOver {
     /// Work the stopped service still had after its wait, left to end with the process.
     #[serde(default)]
     pub left_running: bool,
+    /// The stopped service's token and the page's sign-in, taken up by the start of its update,
+    /// so the window and the page stay signed in through the hand-over.
+    #[serde(default)]
+    pub token: Option<String>,
+    #[serde(default)]
+    pub session: Option<String>,
 }
 
 /// The last step: the new copy is starting, and the old one exits once it answers.
@@ -35,6 +41,8 @@ impl HandOver {
             step: String::new(),
             since_us: 0,
             left_running: false,
+            token: None,
+            session: None,
         }
     }
 }
@@ -59,6 +67,16 @@ impl Copies {
         serde_json::from_slice::<HandOver>(&bytes)
             .ok()
             .filter(|h| h.pid == pid)
+    }
+
+    /// The token and page sign-in a service handed over with, for the start that follows it.
+    pub fn handed_over_secrets(&self) -> Option<(String, String)> {
+        let bytes = std::fs::read(self.hand_over_file()).ok()?;
+        let hand_over: HandOver = serde_json::from_slice(&bytes).ok()?;
+        if hand_over.step != STARTING {
+            return None;
+        }
+        Some((hand_over.token?, hand_over.session?))
     }
 
     /// The last hand-over's notes, taken once by the start after it.
