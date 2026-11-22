@@ -479,8 +479,19 @@ export interface WebTool {
   signed_in: boolean;
   /** The Client ID it signs in with, where its sign-in service takes no app it doesn't know: never the secret. */
   client_id: string | null;
-  /** Asked of it when listed; none while it's disabled. A tool on this PC is connected while it runs. */
-  state: 'connected' | 'not_reachable' | 'key_refused' | 'sign_in' | 'starting' | 'not_started' | null;
+  /**
+   * Asked of it when listed; none while it's disabled. A tool on this PC is connected while it runs. `needs_key`: an
+   * agent added it without one.
+   */
+  state:
+    | 'connected'
+    | 'not_reachable'
+    | 'key_refused'
+    | 'needs_key'
+    | 'sign_in'
+    | 'starting'
+    | 'not_started'
+    | null;
 }
 
 /** What a tool on this PC runs: the program found (none when it isn't), as typed, and its variables' names. */

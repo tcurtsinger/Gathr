@@ -59,9 +59,20 @@ export function AskApproval({
   );
 }
 
+/** Gathr's tools that ask as the agent's Approvals say, in plain words, with what each would add. */
+const ADDS: Record<string, [string, 'command' | 'folder']> = {
+  mcp__gathr__add_tool: ['adding a tool', 'command'],
+  mcp__gathr__add_skill: ['adding a skill', 'folder'],
+};
+
 /** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
 function asked(a: Approval): { tool: string; command?: string } {
-  const input = a.input as { command?: unknown; check?: unknown } | null | undefined;
+  const input = a.input as Record<string, unknown> | null | undefined;
+  const adds = ADDS[a.tool];
+  if (adds) {
+    const what = input?.[adds[1]] ?? input?.link;
+    return { tool: adds[0], command: typeof what === 'string' ? what : undefined };
+  }
   // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
   const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
   const tool = typeof claudeCheck === 'string' ? 'wait check' : a.tool;

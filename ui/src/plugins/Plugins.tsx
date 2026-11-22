@@ -1,5 +1,5 @@
 import { BookOpen, Plug, Plus, Search } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,11 +26,18 @@ import { ToolPage } from './ToolPage';
 import { host, stateOf, where } from './tool';
 import './plugins.css';
 
+/** What a tool's page goes straight on to: its key, its sign-in, or Change for a tool on this PC. */
+export type ToolNext = 'key' | 'sign-in' | 'change';
+/** A skill's page, or a tool's, and then perhaps on to its key, sign-in or Change. */
+export type PluginAt = { skill: string } | { tool: string; next?: ToolNext };
+/** Opens Plugins at a page: a line in a chat for a tool or skill an agent added calls it. */
+export const OpenPlugin = createContext<((at: PluginAt) => void) | undefined>(undefined);
+
 /** The list, a skill's or a tool's page, New skill, Add a tool on the web or on this PC, or Change one on this PC. */
 type View =
   | { page: 'list' }
   | { page: 'skill'; name: string }
-  | { page: 'tool'; id: string }
+  | { page: 'tool'; id: string; next?: ToolNext }
   | { page: 'new' }
   | { page: 'add-tool' }
   | { page: 'add-pc' }
@@ -44,10 +51,16 @@ type Removing = { skill: Skill; opener: HTMLElement | null } | { tool: WebTool; 
  * The Plugins screen, in place of the chat list and the chat: its sidebar names every tool and skill installed, the
  * main panel lists them in groups, with one search for both.
  */
-export function Plugins() {
+export function Plugins({ at }: { at?: PluginAt }) {
   const [skills, setSkills] = useState<Skill[] | null>(null);
   const [tools, setTools] = useState<WebTool[] | null>(null);
   const [view, setView] = useState<View>({ page: 'list' });
+  useEffect(() => {
+    if (at)
+      setView(
+        'skill' in at ? { page: 'skill', name: at.skill } : { page: 'tool', id: at.tool, next: at.next },
+      );
+  }, [at]);
   const [kind, setKind] = useState<Kind>('all');
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -163,6 +176,11 @@ export function Plugins() {
   const dot = (tone: 'attention' | 'danger', label: string) => (
     <i className="plugins-dot" data-tone={tone} role="img" aria-label={label} />
   );
+  // A tool that wants something shows a dot in its tone.
+  const flag = (t: WebTool) => {
+    const state = stateOf(t);
+    return state.tone && dot(state.tone, state.words);
+  };
   const title = { all: 'Tools and skills', tools: 'Tools', skills: 'Skills' }[kind];
 
   return (
@@ -222,10 +240,7 @@ export function Plugins() {
                     >
                       <Plug aria-hidden="true" className="plugins-nav-icon" />
                       <span>{t.name}</span>
-                      {t.enabled && t.state === 'key_refused' && dot('attention', 'Key refused')}
-                      {t.enabled && t.state === 'sign_in' && dot('attention', 'Sign in again')}
-                      {t.enabled && t.state === 'not_reachable' && dot('danger', 'Not reachable')}
-                      {t.enabled && t.state === 'not_started' && dot('attention', 'Didn’t start')}
+                      {flag(t)}
                     </button>
                   </div>
                 ))}
@@ -267,6 +282,7 @@ export function Plugins() {
           <ToolPage
             key={toolPage.id}
             tool={toolPage}
+            next={view.page === 'tool' ? view.next : undefined}
             onBack={() => setView({ page: 'list' })}
             onFailure={setFailure}
             onEnable={enableTool}

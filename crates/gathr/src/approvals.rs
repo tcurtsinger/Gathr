@@ -51,6 +51,11 @@ pub fn runs_push(tool: &str, input: &Value) -> bool {
     matches!(tool, "Bash" | "PowerShell") && command.is_some_and(pushes)
 }
 
+/// Whether `path` is in one of `folders` as the disk resolves them, links followed.
+pub fn within(path: &Path, folders: &[PathBuf]) -> bool {
+    folders.iter().any(|folder| inside(path, folder))
+}
+
 /// Whether either folder holds the other, either way the disk may resolve them.
 pub fn overlaps(a: &Path, b: &Path) -> bool {
     reaches(a, b) || reaches(b, a)

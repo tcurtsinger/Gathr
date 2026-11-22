@@ -7,11 +7,14 @@ interface Props {
   onClose: () => void;
 }
 
-/** Change key: one password field. Gathr tries the key first and saves it only when the tool takes it. */
+/**
+ * Change key (Add key for a tool an agent added without one): one password field. Gathr tries the key first and saves
+ * it only when the tool takes it.
+ */
 export function ChangeKey({ tool, opener, onClose }: Props) {
   return (
     <FieldDialog
-      title="Change key"
+      title={tool.has_key ? 'Change key' : 'Add key'}
       label="Key"
       verb="Save"
       password

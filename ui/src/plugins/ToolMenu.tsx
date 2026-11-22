@@ -19,8 +19,8 @@ interface Props {
 }
 
 /**
- * A tool row's More: Change key (not for a tool signed in through the browser, or on this PC), Disable or Enable, then
- * Remove.
+ * A tool row's More: Change key, or Add key for one an agent added without one (not for a tool that signs in through the
+ * browser, or on this PC), Disable or Enable, then Remove.
  */
 export function ToolMenu({ tool, onChangeKey, onEnable, onRemove }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -32,10 +32,10 @@ export function ToolMenu({ tool, onChangeKey, onEnable, onRemove }: Props) {
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8}>
-        {!tool.signed_in && tool.kind !== 'pc' && (
+        {!tool.signed_in && tool.kind !== 'pc' && tool.state !== 'sign_in' && (
           <DropdownMenuItem onSelect={() => onChangeKey(trigger.current)}>
             <KeyRound />
-            Change key
+            {tool.state === 'needs_key' ? 'Add key' : 'Change key'}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => onEnable(!tool.enabled)}>

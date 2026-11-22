@@ -58,8 +58,9 @@ pub struct Session {
     /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id, and whether it's an
     /// MCP tool call's, which Codex asks as an elicitation and is answered as one.
     approvals: HashMap<String, (Value, bool)>,
-    /// The MCP tool call started last, as Gathr names it: what an elicitation asks about.
-    mcp_call: Option<String>,
+    /// The MCP tool call started last, as Gathr names it, and its arguments: what an elicitation
+    /// asks about.
+    mcp_call: Option<(String, Value)>,
     replied: bool,
     total: Option<Usage>,
     baseline: Option<Usage>,
@@ -383,7 +384,7 @@ impl Session {
                 self.replied(read);
                 if let Some(name) = tool_name(item) {
                     if item["type"] == "mcpToolCall" {
-                        self.mcp_call = Some(name.clone());
+                        self.mcp_call = Some((name.clone(), item["arguments"].clone()));
                     }
                     let input = super::steps::step(item);
                     let missing = input.as_ref().err().map(|field| Frame::ToolShape {

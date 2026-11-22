@@ -52,6 +52,14 @@ pub fn args(mcp: Option<&str>) -> Vec<String> {
             "mcp_servers.gathr.tool_timeout_sec",
             TOOL_TIMEOUT_SEC.to_string(),
         );
+        // A tool's own mode wins over the server's (Codex's `McpServerMetadata::tool_approval_mode`,
+        // 0.166.0). `prompt` asks under any policy but Full's `never` with full access, which allows.
+        for tool in ASKED_TOOLS {
+            set(
+                &format!("mcp_servers.gathr.tools.{tool}.approval_mode"),
+                quoted("prompt"),
+            );
+        }
     }
     args
 }
@@ -105,7 +113,7 @@ pub fn exec(model: Option<&str>, ask: &str) -> Vec<String> {
     args
 }
 
-pub use crate::claude::command::{PUSH_VAR, TOKEN_VAR};
+pub use crate::claude::command::{ASKED_TOOLS, PUSH_VAR, TOKEN_VAR};
 
 /// The sandbox and approval policy for an agent's approvals (0029, 0033).
 pub fn policy(approvals: Approvals) -> (&'static str, &'static str, &'static str) {
@@ -188,6 +196,16 @@ mod tests {
         );
         assert!(usable("gathr/0.165.9 (x)").unwrap_err().contains("too old"));
         assert!(usable("nothing").unwrap_err().contains("wasn't read"));
+    }
+
+    #[test]
+    fn gathrs_tools_are_approved_but_the_adding_ones_ask_as_the_approvals_say() {
+        let args = args(Some("http://127.0.0.1:1/mcp")).join(" ");
+        assert!(args.contains(r#"mcp_servers.gathr.default_tools_approval_mode="approve""#));
+        for tool in ["add_tool", "add_skill"] {
+            let own = format!(r#"mcp_servers.gathr.tools.{tool}.approval_mode="prompt""#);
+            assert!(args.contains(&own), "{args}");
+        }
     }
 
     #[test]

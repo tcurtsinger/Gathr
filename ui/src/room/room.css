@@ -259,7 +259,7 @@
   color: var(--muted-foreground);
 }
 
-/* What the turn kept in Memory: a quiet line each, under its words; a click opens the note there. */
+/* What the turn kept: a note, a tool, a skill. A quiet line each, under its words; a click opens it. */
 .room-noted {
   display: grid;
   justify-items: start;
@@ -268,7 +268,12 @@
 .room-reply .room-noted {
   padding: 2px 0 0;
 }
-.room-noted button {
+.room-kept {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-kept-line {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -278,13 +283,13 @@
   font-size: 12.5px;
   text-align: left;
 }
-.room-noted svg {
+.room-kept-line svg {
   flex: none;
   width: 14px;
   height: 14px;
   stroke-width: 1.5;
 }
-.room-noted b {
+.room-kept-line b {
   color: var(--foreground);
   font-weight: 500;
 }

@@ -31,6 +31,7 @@ pub fn service(state: Arc<State>) -> StreamableHttpService<Tools, LocalSessionMa
     let tools = move || {
         Ok(Tools {
             chats: state.chats.clone(),
+            state: state.clone(),
             tool_router: Tools::every_router(),
         })
     };
@@ -46,6 +47,8 @@ pub fn names() -> Vec<String> {
 #[derive(Clone)]
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
+    /// The service's: adding a tool goes the way the person's Add does.
+    pub(super) state: Arc<State>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -67,6 +70,7 @@ impl Tools {
             + Tools::board_router()
             + Tools::note_router()
             + Tools::github_router()
+            + Tools::add_router()
     }
 }
 

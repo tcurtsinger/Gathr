@@ -5,6 +5,7 @@ import { api, type Failure, type PcRuns, type ToolAction, type WebTool } from '.
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
 import { ChangeClientId, given } from './ClientId';
+import type { ToolNext } from './Plugins';
 import { Runs } from './Runs';
 import { ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { stateOf } from './tool';
@@ -12,6 +13,8 @@ import { stateOf } from './tool';
 interface Props {
   /** As the list has it now. */
   tool: WebTool;
+  /** Where the page goes on to once it's asked of the tool: a chat's line for it opened it so. */
+  next?: ToolNext;
   onBack: () => void;
   onFailure: (failure: Failure) => void;
   onEnable: (tool: WebTool, on: boolean) => void;
@@ -39,7 +42,16 @@ function asJson(name: string, runs: PcRuns): string {
  * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now. A tool on this
  * PC has what Gathr runs with Change, Try again when it didn't start, and then what it printed.
  */
-export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove, onChangeRuns }: Props) {
+export function ToolPage({
+  tool,
+  next,
+  onBack,
+  onFailure,
+  onEnable,
+  onChangeKey,
+  onRemove,
+  onChangeRuns,
+}: Props) {
   const [asked, setAsked] = useState<Asked | null>(null);
   const [trying, setTrying] = useState(false);
   const pc = tool.kind === 'pc';
@@ -62,6 +74,17 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
   const state = stateOf({ ...shown, enabled: true });
   const actions = asked?.state === 'connected' ? asked.actions : null;
   const runs: PcRuns | null = pc && asked?.typed !== undefined ? (asked as PcRuns) : null;
+  // A tool an agent saved without its key or sign-in, or with a value left empty: the person gives it here.
+  const signsIn = tool.signed_in || asked?.state === 'sign_in';
+  const keyed = asked?.state === 'needs_key' ? 'Add key' : 'Change key';
+  const went = useRef(false);
+  useEffect(() => {
+    if (!next || !asked || went.current) return;
+    went.current = true;
+    if (next === 'key') onChangeKey(tool, changeKey.current);
+    if (next === 'sign-in') signIn.start({ tool: tool.id });
+    if (next === 'change' && runs) onChangeRuns(tool, asJson(tool.name, runs));
+  }, [next, asked, tool, runs, onChangeKey, onChangeRuns, signIn]);
   const tryAgain = () => {
     setTrying(true);
     api
@@ -98,7 +121,7 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
                 Try again
               </Button>
             )
-          ) : tool.signed_in ? (
+          ) : signsIn ? (
             <Button
               type="button"
               size="sm"
@@ -106,7 +129,7 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
               disabled={!!signIn.waiting}
               onClick={() => signIn.start({ tool: tool.id })}
             >
-              Sign in again
+              {tool.signed_in ? 'Sign in again' : 'Sign in'}
             </Button>
           ) : (
             <Button
@@ -116,7 +139,7 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
               variant="outline"
               onClick={() => onChangeKey(tool, changeKey.current)}
             >
-              Change key
+              {keyed}
             </Button>
           )}
           <Button

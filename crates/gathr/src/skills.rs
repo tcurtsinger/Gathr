@@ -399,6 +399,93 @@ fn unreadable(e: ZipError) -> Error {
     Error::Refused(format!("This zip can't be read: {e}"))
 }
 
+/// A folder an agent wrote, copied in as the skill its name names: checked as a folder the window
+/// adds is (its name, each part of each path, each file's size; hidden files left out), with a
+/// SKILL.md that has a description, no link inside, and a zip's caps. A taken name is refused unless
+/// `replace`, which replaces that skill whole. Nothing is left of a copy that failed. The name, and
+/// whether a skill was replaced.
+pub fn add_folder(dir: &Path, from: &Path, replace: bool) -> Result<(String, bool), Error> {
+    let name = from.file_name().unwrap_or_default().to_string_lossy();
+    let name = name.into_owned();
+    new_name(&name)?;
+    let mut files = Vec::new();
+    gather(from, &mut Vec::new(), &mut files)?;
+    described(from).map_err(Error::Refused)?;
+    let total: u64 = files.iter().map(|(_, size)| size).sum();
+    if files.len() > MOST_FILES {
+        return Err(Error::Refused(format!(
+            "This folder has more than {MOST_FILES} files"
+        )));
+    }
+    if total > MOST_UNPACKED {
+        let most = MOST_UNPACKED >> 20;
+        return Err(Error::Refused(format!("This folder is over {most} MB")));
+    }
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(&name);
+    let had = path.exists();
+    if had && !replace {
+        return Err(Error::Refused(format!(
+            "There's already a skill named {name}"
+        )));
+    }
+    // Hidden, so the list never shows it half copied.
+    let new = dir.join(format!(".{name}.new"));
+    let _ = std::fs::remove_dir_all(&new);
+    let copied = files.iter().try_for_each(|(parts, _)| {
+        let to = parts.iter().fold(new.clone(), |p, part| p.join(part));
+        std::fs::create_dir_all(to.parent().unwrap_or(&new))?;
+        let at = parts
+            .iter()
+            .fold(from.to_path_buf(), |p, part| p.join(part));
+        std::fs::copy(at, to).map(|_| ())
+    });
+    if let Err(e) = copied {
+        let _ = std::fs::remove_dir_all(&new);
+        return Err(e.into());
+    }
+    if had {
+        std::fs::remove_dir_all(&path)?;
+    }
+    std::fs::rename(&new, &path)?;
+    Ok((name, had))
+}
+
+/// Each file below `folder` (at `inner` inside the skill) by its path's parts, with its size.
+fn gather(
+    folder: &Path,
+    inner: &mut Vec<String>,
+    files: &mut Vec<(Vec<String>, u64)>,
+) -> Result<(), Error> {
+    for entry in std::fs::read_dir(folder)? {
+        let entry = entry?;
+        let part = entry.file_name().to_string_lossy().into_owned();
+        if part.starts_with('.') {
+            continue;
+        }
+        inner.push(part.clone());
+        let shown = inner.join("/");
+        let kind = entry.file_type()?;
+        if kind.is_symlink() || plain(&part).is_err() {
+            return Err(Error::Refused(format!(
+                "{shown} can't be in a skill: it's a link or an odd name"
+            )));
+        }
+        if kind.is_dir() {
+            gather(&entry.path(), inner, files)?;
+        } else {
+            let size = entry.metadata()?.len();
+            if size > crate::files::MOST as u64 {
+                let most = crate::files::MOST >> 20;
+                return Err(Error::Refused(format!("{shown} is over {most} MB")));
+            }
+            files.push((inner.clone(), size));
+        }
+        inner.pop();
+    }
+    Ok(())
+}
+
 /// Deletes the skill's folder and all it holds.
 pub fn remove(dir: &Path, name: &str) -> Result<(), Error> {
     std::fs::remove_dir_all(path(dir, name)?)?;
