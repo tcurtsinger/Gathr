@@ -258,6 +258,9 @@ function Picked({ message, words: text }: { message: Message; words: string }) {
 function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) {
   // A turn sent to no agent has none: it is drawn as "An agent".
   const agent = card.turn.agent ?? '';
+  const running = working(card);
+  // Once the turn ends, the files card is the record of the steps that changed a file: the line holds the rest.
+  const rest = running ? card.steps : card.steps.filter((s) => 'note' in s || !s.changed?.length);
   return (
     <div className="room-item room-turn">
       <span className="room-who">
@@ -266,7 +269,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
       {joined && <span className="room-rule" aria-hidden="true" />}
       <article
         className="room-card"
-        data-live={working(card) || undefined}
+        data-live={running || undefined}
         data-found={holds(card, ctx.found)}
         aria-label={ctx.people.name(agent)}
       >
@@ -287,12 +290,12 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         <Shown chat={ctx.chat} blocks={card.blocks} />
-        <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />
+        {!running && <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />}
         <Kept card={card} ctx={ctx} />
-        {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
+        {rest.length > 0 && <Steps steps={rest} running={running} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
-      {!working(card) && (
+      {!running && (
         <Bar
           time={card.turn.ended ?? card.turn.created}
           text={card.text ?? ''}
@@ -651,7 +654,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           />
         )}
         <Shown chat={ctx.chat} blocks={item.blocks} />
-        <FilesCard steps={item.steps} agent={agent} onView={ctx.acts.changes} />
+        {!running && <FilesCard steps={item.steps} agent={agent} onView={ctx.acts.changes} />}
         <Kept card={item} ctx={ctx} />
         {!running && <Bar text={item.text ?? ''} said={item.said} last={item.last} ctx={ctx} />}
         <Asks turn={item.id} agent={agent} ctx={ctx} />

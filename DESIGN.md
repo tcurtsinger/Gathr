@@ -199,7 +199,8 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   Memory or the tool's or skill's page in Plugins.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
   ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed
-  one in the danger colour.
+  one in the danger colour. The card of the files a turn changed shows once the turn ends, under its words,
+  and the steps it shows leave this line.
 - **The approval card** is the registry's, at the foot of the card that waits on it: "Allow Bash?" (or
   "Allow adding a tool?"), the agent's name under it, the command or the file it would write, Gathr's own
   reason when Gathr asks ("Writes outside the agent's folders. Allow covers files in … in this chat."),
