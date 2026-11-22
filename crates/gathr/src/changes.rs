@@ -1,15 +1,20 @@
-//! What each agent changed in a project's chat, for the window's Changes tab: everything in the
-//! agent's own worktree that isn't on the project's main line yet, committed or not. That is its
-//! working tree against the merge-base of its HEAD with the base `worktree::ensure` starts from,
-//! and its new files git doesn't ignore.
+//! What each agent changed in a chat, for the window's Changes tab: everything in the agent's own
+//! worktree that isn't on the project's main line yet, committed or not (its working tree against
+//! the merge-base of its HEAD with the base `worktree::ensure` starts from, and its new files git
+//! doesn't ignore); and, in any other git checkout, what is not committed of the files the agent
+//! wrote there with its file tools.
 //!
 //! Read-only: `git diff` refreshes the index as it reads (an index lock an agent's own git can trip
-//! on), so the plumbing `diff-index` and `ls-files` are used, which never write.
+//! on), so the plumbing `diff-index` and `ls-files` are used, which never write. Each git call costs
+//! tens of milliseconds to start on Windows, so a worktree's change is two rounds of calls run
+//! together, and every worktree and checkout is read at once.
 
+use std::collections::BTreeMap;
 use std::io::Read;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
+use rusqlite::Connection;
 use serde::Serialize;
 
 use crate::Error;
@@ -22,8 +27,25 @@ pub const MOST_LINES: usize = 2000;
 const LIMIT: Duration = Duration::from_secs(30);
 /// How far git looks for a NUL byte to call a file binary.
 const SNIFF: usize = 8000;
-/// git's own options that must hold whatever the person's config says.
-const DIFF: [&str; 4] = ["diff-index", "--no-ext-diff", "--no-textconv", "-M"];
+/// git's own options that must hold whatever the person's config says. A path is never a pattern.
+const DIFF: [&str; 6] = [
+    "--literal-pathspecs",
+    "--no-optional-locks",
+    "diff-index",
+    "--no-ext-diff",
+    "--no-textconv",
+    "-M",
+];
+const OTHERS: [&str; 6] = [
+    "--literal-pathspecs",
+    "--no-optional-locks",
+    "ls-files",
+    "-z",
+    "--others",
+    "--exclude-standard",
+];
+/// The most characters of paths one git call is given: Windows takes a command line of 32,767.
+const MOST_NAMED: usize = 20_000;
 
 /// One changed file: its path in the worktree with `/` between steps, and what it was before a rename.
 #[derive(Debug, Serialize)]
@@ -90,29 +112,15 @@ pub enum LineKind {
 }
 
 /// The commit the worktree's change is counted from: the merge-base of its HEAD with the project's
-/// `origin/HEAD` when it has an origin, else with the project's own HEAD.
+/// `origin/HEAD` when it has one, else with the project's own HEAD.
 async fn base(project: &Path, worktree: &Path) -> Result<String, String> {
     let env = crate::files::git_env();
-    let remotes = git(&env, worktree, &["remote"], LIMIT).await?;
-    let remote = match remotes.lines().any(|r| r == "origin") {
-        true => {
-            let head = ["rev-parse", "--verify", "--quiet", "origin/HEAD^{commit}"];
-            git(&env, worktree, &head, LIMIT).await.ok()
-        }
-        false => None,
-    };
-    let start = match remote {
-        Some(start) => start,
-        None => {
-            git(
-                &env,
-                project,
-                &["rev-parse", "--verify", "HEAD^{commit}"],
-                LIMIT,
-            )
-            .await?
-        }
-    };
+    let remote = ["merge-base", "HEAD", "refs/remotes/origin/HEAD"];
+    if let Ok(base) = git(&env, worktree, &remote, LIMIT).await {
+        return Ok(base);
+    }
+    let head = ["rev-parse", "--verify", "HEAD^{commit}"];
+    let start = git(&env, project, &head, LIMIT).await?;
     git(&env, worktree, &["merge-base", "HEAD", &start], LIMIT).await
 }
 
@@ -120,35 +128,149 @@ async fn base(project: &Path, worktree: &Path) -> Result<String, String> {
 /// new files.
 pub async fn list(project: &Path, worktree: &Path, room: usize) -> Result<Change, Error> {
     let env = crate::files::git_env();
-    let base = base(project, worktree).await.map_err(Error::Other)?;
-    let branch = git(
-        &env,
-        worktree,
-        &["rev-parse", "--abbrev-ref", "HEAD"],
-        LIMIT,
-    )
-    .await;
-    let run = |extra: &'static str| {
-        let args: Vec<&str> = DIFF.iter().copied().chain([extra, "-z", &base]).collect();
-        let env = env.clone();
-        async move { git(&env, worktree, &args, LIMIT).await }
+    let branch = ["rev-parse", "--abbrev-ref", "HEAD"];
+    let (base, branch) = tokio::join!(base(project, worktree), git(&env, worktree, &branch, LIMIT));
+    let base = base.map_err(Error::Other)?;
+    let (files, more) = listed(worktree, &base, &[], room).await?;
+    Ok(Change {
+        branch: branch.unwrap_or_default(),
+        files,
+        more,
+    })
+}
+
+/// What isn't committed in the checkout at `top` of the files at `paths` there: at most `room`.
+/// Blocks on the disk for new files.
+pub async fn uncommitted(top: &Path, paths: &[String], room: usize) -> Result<Change, Error> {
+    let (files, more) = listed(top, "HEAD", paths, room).await?;
+    Ok(Change {
+        branch: String::new(),
+        files,
+        more,
+    })
+}
+
+/// The files a chat's agents wrote with their file tools (Claude Code's Write and Edit, Codex's file
+/// change), as their steps keep them: by agent, each path as the step names it, oldest first.
+/// Codex's step names only the first file of a change.
+pub fn written(conn: &Connection, chat: &str) -> Result<Vec<(String, String)>, Error> {
+    let mut statement = conn.prepare(
+        "SELECT t.agent_id, m.body FROM messages m JOIN turns t ON t.id = m.turn_id
+         WHERE m.chat_id = ?1 AND m.kind = 'tool' AND t.agent_id IS NOT NULL
+           AND CASE WHEN json_valid(m.body) THEN json_extract(m.body, '$.tool') END IN ('Write', 'Edit')
+         ORDER BY m.ts, m.rowid",
+    )?;
+    let rows = statement.query_map([chat], |r| Ok((r.get(0)?, r.get::<_, String>(1)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (agent, body) = row?;
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+        let input = &body["input"];
+        // `path` when the step's text isn't the whole path; else the text, less Codex's "+1 more".
+        let path = input["path"].as_str().or_else(|| {
+            let text = input["text"].as_str()?;
+            let more = |n: &str| {
+                n.strip_suffix(" more")
+                    .is_some_and(|n| n.parse::<u32>().is_ok())
+            };
+            Some(match text.rsplit_once(" +") {
+                Some((first, n)) if more(n) => first,
+                _ => text,
+            })
+        });
+        out.extend(path.map(|path| (agent, path.to_string())));
+    }
+    Ok(out)
+}
+
+/// The checkouts `written` (by agent, a full path each) wrote in, other than the chat's worktrees
+/// `own` and never inside the data folder `data`: by agent and checkout top, the paths in it from
+/// its top with `/` between steps. A path in no git checkout, or not a full path, is left out.
+/// Blocks on the disk.
+pub fn outside(
+    written: &[(String, String)],
+    own: &[PathBuf],
+    data: &Path,
+) -> BTreeMap<(String, PathBuf), Vec<String>> {
+    let data = crate::folders::real(data);
+    let mut out: BTreeMap<(String, PathBuf), Vec<String>> = BTreeMap::new();
+    for (agent, path) in written {
+        let path = Path::new(path);
+        if !path.is_absolute() {
+            continue;
+        }
+        let Some(crate::approvals::Cover::Checkout(top)) = crate::approvals::cover(path) else {
+            continue;
+        };
+        let file = crate::folders::real(path);
+        if file.starts_with(&data) || own.contains(&top) {
+            continue;
+        }
+        let Ok(rest) = file.strip_prefix(&top) else {
+            continue;
+        };
+        let steps: Vec<_> = rest
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect();
+        let rest = steps.join("/");
+        if plain(&rest).is_err() {
+            continue;
+        }
+        let paths = out.entry((agent.clone(), top)).or_default();
+        if !paths.contains(&rest) {
+            paths.push(rest);
+        }
+    }
+    out
+}
+
+/// The files of `dir` changed since `base`, and its new files git doesn't ignore, all or only those
+/// at `paths`: at most `room`, and whether there were more. The three git calls run together.
+async fn listed(
+    dir: &Path,
+    base: &str,
+    paths: &[String],
+    room: usize,
+) -> Result<(Vec<File>, bool), Error> {
+    let env = crate::files::git_env();
+    let mut named: Vec<&str> = Vec::new();
+    let mut length = 0;
+    for path in paths {
+        length += path.len() + 3;
+        if length > MOST_NAMED {
+            break;
+        }
+        named.push(path);
+    }
+    let cut = named.len() < paths.len();
+    let tail: Vec<&str> = match named.is_empty() {
+        true => Vec::new(),
+        false => std::iter::once("--").chain(named).collect(),
     };
-    let (counts, kinds) = tokio::join!(run("--numstat"), run("--name-status"));
+    let diff = |format| {
+        let head = DIFF.iter().copied().chain([format, "-z", base]);
+        head.chain(tail.iter().copied()).collect::<Vec<&str>>()
+    };
+    let (counts, kinds) = (diff("--numstat"), diff("--name-status"));
+    let others: Vec<&str> = OTHERS.iter().copied().chain(tail.iter().copied()).collect();
+    let (counts, kinds, others) = tokio::join!(
+        git(&env, dir, &counts, LIMIT),
+        git(&env, dir, &kinds, LIMIT),
+        git(&env, dir, &others, LIMIT)
+    );
     let (counts, kinds) = (counts.map_err(Error::Other)?, kinds.map_err(Error::Other)?);
     let mut files = tracked(&counts, &kinds);
-    let others = ["ls-files", "-z", "--others", "--exclude-standard"];
-    let others = git(&env, worktree, &others, LIMIT)
-        .await
-        .map_err(Error::Other)?;
     let others: Vec<String> = others
+        .map_err(Error::Other)?
         .split('\0')
         .filter(|p| !p.is_empty())
         .map(String::from)
         .collect();
-    let more = files.len() + others.len() > room;
+    let more = cut || files.len() + others.len() > room;
     files.truncate(room);
     let left = room - files.len();
-    let dir = worktree.to_path_buf();
+    let dir = dir.to_path_buf();
     let new = tokio::task::spawn_blocking(move || {
         let counted = |path: String| {
             let (added, binary) = counted(&dir.join(&path));
@@ -171,12 +293,7 @@ pub async fn list(project: &Path, worktree: &Path, room: usize) -> Result<Change
     .map_err(|e| Error::Other(e.to_string()))?;
     files.extend(new);
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    let branch = branch.unwrap_or_default();
-    Ok(Change {
-        branch,
-        files,
-        more,
-    })
+    Ok((files, more))
 }
 
 /// The tracked files from `diff-index -z`'s `--numstat` and `--name-status`.
@@ -274,36 +391,36 @@ pub async fn file(
     path: &str,
     from: Option<&str>,
 ) -> Result<Lines, Error> {
-    let path = plain(path)?;
-    let from = from.map(plain).transpose()?;
-    let env = crate::files::git_env();
+    let (path, from) = (plain(path)?, from.map(plain).transpose()?);
     let base = base(project, worktree).await.map_err(Error::Other)?;
+    lines(worktree, &base, path, from).await
+}
+
+/// The change of the file at `path` in the checkout at `top` since its last commit.
+pub async fn uncommitted_file(top: &Path, path: &str) -> Result<Lines, Error> {
+    lines(top, "HEAD", plain(path)?, None).await
+}
+
+/// The change of the file at the plain `path` in `dir` since `base`.
+async fn lines(dir: &Path, base: &str, path: &str, from: Option<&str>) -> Result<Lines, Error> {
+    let env = crate::files::git_env();
     let mut args: Vec<&str> = DIFF.to_vec();
-    args.extend(["-p", "--no-color", "-U3", &base, "--", path]);
+    args.extend(["-p", "--no-color", "-U3", base, "--", path]);
     args.extend(from);
     // As git printed it: trimmed, a last line that is a blank context line would be lost.
-    let diff = git_printed(&env, worktree, &args, LIMIT)
+    let diff = git_printed(&env, dir, &args, LIMIT)
         .await
         .map_err(Error::Other)?;
     if !diff.is_empty() {
         return Ok(parse(&diff));
     }
-    let others = [
-        "ls-files",
-        "-z",
-        "--others",
-        "--exclude-standard",
-        "--",
-        path,
-    ];
-    let others = git(&env, worktree, &others, LIMIT)
-        .await
-        .map_err(Error::Other)?;
+    let others: Vec<&str> = OTHERS.iter().copied().chain(["--", path]).collect();
+    let others = git(&env, dir, &others, LIMIT).await.map_err(Error::Other)?;
     if !others.split('\0').any(|p| p == path) {
         return Ok(Lines::default());
     }
-    let roots = [crate::folders::real(worktree)];
-    let at = worktree.join(path).to_string_lossy().into_owned();
+    let roots = [crate::folders::real(dir)];
+    let at = dir.join(path).to_string_lossy().into_owned();
     tokio::task::spawn_blocking(move || {
         let found = crate::files::inside(&roots, &at).filter(|f| f.is_file());
         let found = found.ok_or_else(|| Error::Refused(format!("{at} isn't in the worktree")))?;
