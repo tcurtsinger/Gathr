@@ -24,23 +24,37 @@ pub fn default_data_dir() -> PathBuf {
 /// A program on the PATH: `name.exe` on Windows. On macOS, an app started from the Dock gets a
 /// short PATH, so the login shell's PATH is asked too (0016).
 pub fn find_on_path(name: &str) -> Option<PathBuf> {
-    let file = if cfg!(windows) {
+    let files = [if cfg!(windows) {
         format!("{name}.exe")
     } else {
         name.to_string()
-    };
-    let in_path = |path: &std::ffi::OsStr| {
-        std::env::split_paths(path)
-            .map(|dir| dir.join(&file))
-            .find(|p| p.is_file())
-    };
-    if let Some(found) = std::env::var_os("PATH").and_then(|p| in_path(&p)) {
+    }];
+    if let Some(found) = std::env::var_os("PATH").and_then(|p| in_path(&p, &files)) {
         return Some(found);
     }
     #[cfg(target_os = "macos")]
-    return in_path(std::ffi::OsStr::new(&env::login_path().ok()?));
+    return in_path(std::ffi::OsStr::new(&env::login_path().ok()?), &files);
     #[cfg(not(target_os = "macos"))]
     None
+}
+
+/// A program as a person types it in a tool's command, found in the folders of `path`: on Windows
+/// with the extensions a command line tries (`npx` is `npx.cmd`), unless it has one of them.
+pub fn find_program(name: &str, path: &std::ffi::OsStr) -> Option<PathBuf> {
+    const EXTENSIONS: [&str; 4] = [".exe", ".cmd", ".bat", ".com"];
+    let lower = name.to_ascii_lowercase();
+    let files: Vec<String> = match cfg!(windows) && !EXTENSIONS.iter().any(|e| lower.ends_with(e)) {
+        true => EXTENSIONS.iter().map(|e| format!("{name}{e}")).collect(),
+        false => vec![name.to_string()],
+    };
+    in_path(path, &files)
+}
+
+/// The first of `files` in the folders of `path`, folder by folder.
+fn in_path(path: &std::ffi::OsStr, files: &[String]) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .flat_map(|dir| files.iter().map(move |f| dir.join(f)))
+        .find(|p| p.is_file())
 }
 
 /// The shell a check runs in, with its environment: `sh`, or on Windows the Git Bash that Claude

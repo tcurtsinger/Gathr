@@ -36,6 +36,7 @@ pub mod likes;
 pub mod notice;
 pub mod open_check;
 pub mod pauses;
+pub mod pc_tools;
 pub mod picks;
 pub mod platform;
 pub mod projects;

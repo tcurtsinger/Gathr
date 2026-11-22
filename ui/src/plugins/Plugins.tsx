@@ -15,6 +15,7 @@ import { useCard } from '../components/Corner';
 import { IconButton } from '../components/IconButton';
 import { listen } from '../live';
 import { Screen } from '../Screen';
+import { AddPcTool } from './AddPcTool';
 import { AddTool } from './AddTool';
 import { ChangeKey } from './ChangeKey';
 import { NewSkill } from './NewSkill';
@@ -22,16 +23,18 @@ import { SkillMenu } from './SkillMenu';
 import { SkillPage } from './SkillPage';
 import { ToolMenu } from './ToolMenu';
 import { ToolPage } from './ToolPage';
-import { host, stateOf } from './tool';
+import { host, stateOf, where } from './tool';
 import './plugins.css';
 
-/** The list, a skill's or a tool's page, New skill, or Add a tool. */
+/** The list, a skill's or a tool's page, New skill, Add a tool on the web or on this PC, or Change one on this PC. */
 type View =
   | { page: 'list' }
   | { page: 'skill'; name: string }
   | { page: 'tool'; id: string }
   | { page: 'new' }
-  | { page: 'add-tool' };
+  | { page: 'add-tool' }
+  | { page: 'add-pc' }
+  | { page: 'change-pc'; id: string; name: string; text: string };
 /** The list's choice: both kinds, or one; the sidebar's Tools and Skills set it too. */
 type Kind = 'all' | 'tools' | 'skills';
 
@@ -124,7 +127,7 @@ export function Plugins() {
           <span className="screen-words">
             <strong>{t.name}</strong>
             <span>
-              {host(t.link)} · <span data-tone={state.tone}>{state.words}</span>
+              {where(t)} · <span data-tone={state.tone}>{state.words}</span>
             </span>
           </span>
         </button>
@@ -222,6 +225,7 @@ export function Plugins() {
                       {t.enabled && t.state === 'key_refused' && dot('attention', 'Key refused')}
                       {t.enabled && t.state === 'sign_in' && dot('attention', 'Sign in again')}
                       {t.enabled && t.state === 'not_reachable' && dot('danger', 'Not reachable')}
+                      {t.enabled && t.state === 'not_started' && dot('attention', 'Didn’t start')}
                     </button>
                   </div>
                 ))}
@@ -268,6 +272,7 @@ export function Plugins() {
             onEnable={enableTool}
             onChangeKey={changeKey}
             onRemove={(tool, opener) => setRemoving({ tool, opener })}
+            onChangeRuns={(tool, text) => setView({ page: 'change-pc', id: tool.id, name: tool.name, text })}
           />
         )}
         {view.page === 'new' && (
@@ -280,6 +285,20 @@ export function Plugins() {
           <AddTool
             onBack={() => setView({ page: 'list' })}
             onAdded={(id) => loadTools().then(() => openTool(id))}
+          />
+        )}
+        {view.page === 'add-pc' && (
+          <AddPcTool
+            onBack={() => setView({ page: 'list' })}
+            onDone={(id) => loadTools().then(() => openTool(id))}
+          />
+        )}
+        {view.page === 'change-pc' && (
+          <AddPcTool
+            key={view.id}
+            changing={view}
+            onBack={() => openTool(view.id)}
+            onDone={(id) => loadTools().then(() => openTool(id))}
           />
         )}
         {view.page === 'list' && (
@@ -310,6 +329,7 @@ export function Plugins() {
               )}
               <AddMenu
                 onTool={() => setView({ page: 'add-tool' })}
+                onPc={() => setView({ page: 'add-pc' })}
                 onFolder={(files) => added(api.addSkillFolder(files))}
                 onZip={(file) => added(api.addSkillZip(file))}
                 onFile={(file) => added(api.addSkillFile(file))}
@@ -345,9 +365,11 @@ export function Plugins() {
           body={
             'skill' in removing
               ? `Its folder is deleted, with all its files: ${removing.skill.path}`
-              : removing.tool.signed_in
-                ? 'Its sign-in is deleted too.'
-                : 'Its key is deleted too.'
+              : removing.tool.kind === 'pc'
+                ? 'Gathr stops it and forgets it. The program stays on this PC.'
+                : removing.tool.signed_in
+                  ? 'Its sign-in is deleted too.'
+                  : 'Its key is deleted too.'
           }
           verb="Remove"
           danger
@@ -373,14 +395,15 @@ export function Plugins() {
 
 interface AddProps {
   onTool: () => void;
+  onPc: () => void;
   onFolder: (files: File[]) => void;
   onZip: (file: File) => void;
   onFile: (file: File) => void;
   onNew: () => void;
 }
 
-/** Add: a tool on the web; a skill from a folder, from a zip, from one Markdown file, or written here. */
-function AddMenu({ onTool, onFolder, onZip, onFile, onNew }: AddProps) {
+/** Add: a tool on the web or on this PC; a skill from a folder, from a zip, from one Markdown file, or written here. */
+function AddMenu({ onTool, onPc, onFolder, onZip, onFile, onNew }: AddProps) {
   const folder = useRef<HTMLInputElement>(null);
   const zip = useRef<HTMLInputElement>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -401,6 +424,7 @@ function AddMenu({ onTool, onFolder, onZip, onFile, onNew }: AddProps) {
         <DropdownMenuContent align="end" sideOffset={6} className="plugins-add-menu">
           <DropdownMenuLabel>Tool</DropdownMenuLabel>
           <DropdownMenuItem onSelect={onTool}>On the web</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onPc}>On this PC</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Skill</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => folder.current?.click()}>From a folder</DropdownMenuItem>

@@ -18,7 +18,10 @@ interface Props {
   onRemove: (opener: HTMLElement | null) => void;
 }
 
-/** A tool row's More: Change key (not for a tool signed in through the browser), Disable or Enable, then Remove. */
+/**
+ * A tool row's More: Change key (not for a tool signed in through the browser, or on this PC), Disable or Enable, then
+ * Remove.
+ */
 export function ToolMenu({ tool, onChangeKey, onEnable, onRemove }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
   return (
@@ -29,7 +32,7 @@ export function ToolMenu({ tool, onChangeKey, onEnable, onRemove }: Props) {
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8}>
-        {!tool.signed_in && (
+        {!tool.signed_in && tool.kind !== 'pc' && (
           <DropdownMenuItem onSelect={() => onChangeKey(trigger.current)}>
             <KeyRound />
             Change key

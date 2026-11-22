@@ -433,19 +433,37 @@ export interface Skill {
   problem: string | null;
 }
 
-/** A tool on the web: never its key, only whether it has one. */
+/** A tool on the web, or on this PC (`kind: 'pc'`, no link): never its key or a variable's value. */
 export interface WebTool {
   id: string;
   name: string;
   link: string;
+  kind: 'web' | 'pc';
   enabled: boolean;
   has_key: boolean;
   /** Whether it signed in through the browser: never the sign-in. */
   signed_in: boolean;
   /** The Client ID it signs in with, where its sign-in service takes no app it doesn't know: never the secret. */
   client_id: string | null;
-  /** Asked of it when listed; none while it's disabled. */
-  state: 'connected' | 'not_reachable' | 'key_refused' | 'sign_in' | null;
+  /** Asked of it when listed; none while it's disabled. A tool on this PC is connected while it runs. */
+  state: 'connected' | 'not_reachable' | 'key_refused' | 'sign_in' | 'starting' | 'not_started' | null;
+}
+
+/** What a tool on this PC runs: the program found (none when it isn't), as typed, and its variables' names. */
+export interface PcRuns {
+  program: string | null;
+  typed: string;
+  args: string[];
+  folder: string | null;
+  variables: string[];
+  /** Why the program can't run, when it isn't found. */
+  missing: string | null;
+}
+
+/** Pasted text read back before anything runs: its name, and where the program comes from when that's known. */
+export interface PcRead extends PcRuns {
+  name: string;
+  from: string | null;
 }
 
 /** A tool whose sign-in service takes no app it doesn't know: the address its admin gives the app they make. */
@@ -731,7 +749,20 @@ export const api = {
   tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */
   tool: (id: string) =>
-    call<WebTool & { actions: ToolAction[] | null; redirect?: string }>('GET', `/api/tools/${id}`),
+    call<
+      WebTool & { actions: ToolAction[] | null; redirect?: string } & Partial<PcRuns> & {
+          printed?: string | null;
+        }
+    >('GET', `/api/tools/${id}`),
+  /** What Gathr would run for text pasted from a tool's instructions. Nothing runs. */
+  readTool: (text: string) => call<PcRead>('POST', '/api/tools/read', { text }),
+  /** Saves a tool on this PC and starts it: saved even when it doesn't start. */
+  addPcTool: (tool: { text: string; name?: string }) => call<{ tool: WebTool }>('POST', '/api/tools', tool),
+  /** What a tool on this PC runs, pasted again, and its name: it starts again. */
+  changePcTool: (id: string, change: { text: string; name?: string }) =>
+    call<WebTool>('PATCH', `/api/tools/${id}`, change),
+  /** Starts again a tool on this PC that didn't start. */
+  startTool: (id: string) => call<{ state: WebTool['state'] }>('POST', `/api/tools/${id}/start`),
   /**
    * Gathr connects to the link: the tool saved, or what it needs first. One that signs in where Gathr can't register
    * itself says so, with the address its admin gives the app they make for Gathr.

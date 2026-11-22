@@ -84,6 +84,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0074_tool_client_id.sql"),
     include_str!("../migrations/0075_no_reviewer.sql"),
     include_str!("../migrations/0076_closed_questions.sql"),
+    include_str!("../migrations/0077_pc_tools.sql"),
 ];
 
 /// The schema version this build writes.
