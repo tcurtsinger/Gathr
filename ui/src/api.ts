@@ -73,6 +73,21 @@ export interface Block {
   diagram?: { mermaid?: string; file?: string };
   /** An HTML page's full path, shown sealed at `height` (360 unless set). */
   page?: { file: string; height?: number };
+  /** A project the assistant proposed with `propose_project`; once made, what was made. */
+  project?: ProposedProject;
+  /** The message that holds it: not kept in the body, set as the chat reads. */
+  message?: string;
+}
+
+export interface ProposedProject {
+  name: string;
+  folder: string;
+  /** The lead first. */
+  team: { agent: string; lead?: boolean }[];
+  /** The first chat's name. */
+  chat: string;
+  brief: string;
+  made?: { project: string; chat: string; message: string };
 }
 
 export interface Message {
@@ -100,6 +115,8 @@ export interface Message {
   compacted?: boolean;
   /** A scheduled run's words, drawn as the person's: when they were due. */
   scheduled?: string;
+  /** A project's brief, drawn as the person's: the assistant that wrote it. */
+  from?: string;
 }
 
 /** A command an agent's engine still runs in the background: who started it, what it is, since when. */
@@ -702,6 +719,13 @@ export const api = {
   projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
+  /** Make project, from the card of a project the assistant proposed: as proposed, or as the New project form says. */
+  makeProject: (message: string, change?: ProjectChange) =>
+    call<{ project: string; chat: string; turn: string; message: Message }>(
+      'POST',
+      `/api/proposals/${message}/make`,
+      change ?? {},
+    ),
   saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   board: (chat: string) => call<{ lines: BoardLine[]; agents: number }>('GET', `/api/chats/${chat}/board`),

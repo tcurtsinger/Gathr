@@ -61,11 +61,14 @@ Agents use Gathr's MCP server at `/mcp`, each engine with a token of its own, to
 set a board line, ask the person, keep a note in Memory (`note`), put a table or a chart in the chat (`show`), add a
 tool or a skill when the person asks (`add_tool`, `add_skill`), schedule work in the chat (`schedule`,
 `unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`) and, the assistant in its own chat,
-send an agent it brought in back out (`send_out`).
+send an agent it brought in back out (`send_out`) or propose a project (`propose_project`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 The assistant's chat (`assistant.rs`): one chat that never ends, its id the `assistant_chat` setting until it is archived or
 deleted. The assistant leads it; an agent its words or the person's name joins as a guest and leaves by `send_out`,
 each with a quiet line kept in `stays` (0081); a new assistant takes it over at once, the one before leaving.
+A project the assistant proposes (`proposals.rs`, `gathrd/tools/propose.rs`) is a block of kind `project` in its turn,
+drawn as a card; the person's Make project makes, in one transaction and once only, the project, its first chat and the
+brief there as their message, whose turn (`opened` `brief`) starts the lead as their message would.
 Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`): what an agent scheduled comes into its chat at its time, on this
 PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
 transaction. A missed run runs late when it was due today or less than two hours ago, else one skipped run is kept. A pause holds a run as it holds any turn Gathr starts.

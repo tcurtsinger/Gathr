@@ -108,8 +108,8 @@ pub fn name(conn: &Connection, chat: &str, was: &str, name: &str) -> Result<bool
     Ok(conn.execute(sql, params![chat, was, name])? == 1)
 }
 
-/// The person's rename: one line of 1 to 60 characters, trimmed.
-pub fn rename(conn: &Connection, chat: &str, title: &str) -> Result<String, Error> {
+/// A title the person or their assistant gives, trimmed: one line of 1 to 60 characters.
+pub fn checked(title: &str) -> Result<&str, Error> {
     let title = title.trim();
     let count = title.chars().count();
     if count == 0 || count > LONGEST || title.contains(['\n', '\r']) {
@@ -117,6 +117,12 @@ pub fn rename(conn: &Connection, chat: &str, title: &str) -> Result<String, Erro
             "One line, {LONGEST} characters at most"
         )));
     }
+    Ok(title)
+}
+
+/// The person's rename: one line of 1 to 60 characters, trimmed.
+pub fn rename(conn: &Connection, chat: &str, title: &str) -> Result<String, Error> {
+    let title = checked(title)?;
     let done = conn.execute(
         "UPDATE chats SET title = ?2 WHERE id = ?1",
         params![chat, title],

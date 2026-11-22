@@ -26,6 +26,7 @@ import { usePauses } from './pauses';
 import { OpenPlugin, type PluginAt, Plugins } from './plugins/Plugins';
 import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
+import { ProposalActs, type Proposing } from './room/Proposal';
 import { waits } from './room/Question';
 import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
@@ -73,6 +74,8 @@ export function App() {
   const faces = useMemo(() => new Map([...agents, ...removed].map((a) => [a.id, a])), [agents, removed]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
+  // Change, on a project the assistant proposed: New project's form, filled in with it.
+  const [proposing, setProposing] = useState<Proposing | null>(null);
   const [fresh, setFresh] = useState<{ project?: string; assistant?: boolean } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   // What a project's Delete couldn't remove yet.
@@ -477,13 +480,15 @@ export function App() {
         <OpenMemory.Provider value={openMemory}>
           <OpenPlugin.Provider value={openPlugin}>
             <OpenScheduled.Provider value={openScheduled}>
-              <RoomView
-                key={screen.chat.id || 'new'}
-                {...screen}
-                found={found?.chat === screen.chat.id ? found : undefined}
-                sidebar={sidebars[screen.chat.id]}
-                onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
-              />
+              <ProposalActs.Provider value={{ agents, change: setProposing, open: openChat }}>
+                <RoomView
+                  key={screen.chat.id || 'new'}
+                  {...screen}
+                  found={found?.chat === screen.chat.id ? found : undefined}
+                  sidebar={sidebars[screen.chat.id]}
+                  onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
+                />
+              </ProposalActs.Provider>
             </OpenScheduled.Provider>
           </OpenPlugin.Provider>
         </OpenMemory.Provider>
@@ -494,10 +499,14 @@ export function App() {
         </>
       )}
       <NewProject
-        open={newProject}
+        open={newProject || !!proposing}
         agents={agents}
         projects={projects}
-        onClose={() => setNewProject(false)}
+        proposal={proposing}
+        onClose={() => {
+          setNewProject(false);
+          setProposing(null);
+        }}
         onCreated={(project) => {
           setProjects((list) => [...list.filter((p) => p.id !== project.id), project]);
           setNewProject(false);

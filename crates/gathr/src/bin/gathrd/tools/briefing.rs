@@ -289,7 +289,9 @@ pub fn text(facts: &Facts) -> String {
         Some(Standing::Assistant) => lines.push(
             "This is your own standing chat with the person, and it does not end. When a subject \
              is another agent's, bring them in with @Name; when that subject is done, send them out \
-             with send_out."
+             with send_out. When the person wants a project started, propose one with \
+             propose_project, choosing its team from the person's agents by what each is for: the \
+             person makes it from the card."
                 .to_string(),
         ),
         Some(Standing::Guest(assistant)) => lines.push(format!(

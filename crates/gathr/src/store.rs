@@ -226,15 +226,25 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
 
 /// A chat's messages in the order history reads them.
 fn history_order() -> String {
-    format!("{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.ts, m.id")
+    format!(
+        "{} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.ts, m.id",
+        *MESSAGE
+    )
 }
 
-/// A message's columns, with the agent of its turn: who it was for, or who wrote it.
-const MESSAGE: &str =
-    "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
-     m.copy_of, m.picks, m.reply_to,
-     CASE WHEN m.role = 'user' THEN (SELECT r.due_ts FROM schedule_runs r WHERE r.message_id = m.id) END
-     FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+/// A message's columns, with the agent of its turn: who it was for, or who wrote it. A project's brief is the person's
+/// message whose turn it opened, and the assistant that proposed the project wrote it (`proposals`).
+static MESSAGE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    format!(
+        "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
+         m.copy_of, m.picks, m.reply_to,
+         CASE WHEN m.role = 'user' THEN (SELECT r.due_ts FROM schedule_runs r WHERE r.message_id = m.id) END,
+         CASE WHEN m.role = 'user' AND t.opened_by = 'brief' THEN
+           (SELECT bt.agent_id FROM messages b JOIN turns bt ON bt.id = b.turn_id WHERE {}) END
+         FROM messages m LEFT JOIN turns t ON t.id = m.turn_id",
+        crate::proposals::BRIEF_OF
+    )
+});
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
 /// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
@@ -279,12 +289,16 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     if let Some(due) = r.get::<_, Option<i64>>(11)? {
         row["scheduled"] = json!(crate::ids::utc(due));
     }
+    // A project's brief: the assistant that wrote it, which the window shows under it.
+    if let Some(from) = r.get::<_, Option<String>>(12)? {
+        row["from"] = json!(from);
+    }
     Ok(row)
 }
 
 /// A saved message, as the API shows it.
 pub fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
-    let sql = format!("{MESSAGE} WHERE m.id = ?1");
+    let sql = format!("{} WHERE m.id = ?1", *MESSAGE);
     Ok(conn.prepare_cached(&sql)?.query_row([id], message_row)?)
 }
 

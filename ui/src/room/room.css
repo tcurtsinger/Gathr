@@ -424,6 +424,12 @@
   align-items: center;
   gap: 5px;
 }
+/* A project's brief: the assistant's face and "From Mira", where the time is. */
+.room-bar .room-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .room-bar .room-scheduled svg {
   width: 13px;
   height: 13px;

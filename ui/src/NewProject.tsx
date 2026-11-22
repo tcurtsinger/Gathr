@@ -5,6 +5,7 @@ import { useCard } from './components/Corner';
 import { Dialog } from './components/Dialog';
 import { Dropdown } from './components/Dropdown';
 import { Switch } from './components/Switch';
+import type { Proposing } from './room/Proposal';
 import './new-project.css';
 
 const MOST = 5;
@@ -13,17 +14,30 @@ interface Props {
   open: boolean;
   agents: Agent[];
   projects: Project[];
+  /** Change, on a project the assistant proposed: the form opens filled in with it, and Create makes it from there. */
+  proposal?: Proposing | null;
   onClose: () => void;
   onCreated: (project: Project) => void;
 }
 
 /** A project: its name, its folder and its team of up to five, one of them the lead (0028). */
-export function NewProject({ open, agents, projects, onClose, onCreated }: Props) {
+export function NewProject({ open, agents, projects, proposal, onClose, onCreated }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState('');
   const [team, setTeam] = useState<string[]>([]);
   const [lead, setLead] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
+  // What a proposal filled in, and cleared again once its form closes.
+  const [filled, setFilled] = useState<Proposing | null>(null);
+  if ((proposal ?? null) !== filled) {
+    const p = proposal?.project;
+    setFilled(proposal ?? null);
+    setName(p?.name ?? '');
+    setFolder(p?.folder ?? '');
+    setTeam(p?.team.map((s) => s.agent) ?? []);
+    setLead(p?.team.find((s) => s.lead)?.agent ?? '');
+    setFailure(null);
+  }
   useCard(open ? failure : null);
   const supervisor = team.includes(lead) ? lead : team[0];
   const taken = projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
@@ -37,7 +51,12 @@ export function NewProject({ open, agents, projects, onClose, onCreated }: Props
       agent,
       role: agent === supervisor ? ('supervisor' as const) : ('member' as const),
     }));
-    api.addProject({ name: name.trim(), folder: folder.trim(), members: roles }).then((project) => {
+    const asked = { name: name.trim(), folder: folder.trim(), members: roles };
+    if (proposal) {
+      api.makeProject(proposal.message, asked).then(onClose, setFailure);
+      return;
+    }
+    api.addProject(asked).then((project) => {
       setName('');
       setFolder('');
       setTeam([]);

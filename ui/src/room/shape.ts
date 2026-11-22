@@ -98,7 +98,7 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
     const last = !streaming && newest && !(open(turn) && moved) ? newest : undefined;
     const text = streaming || ((last?.body as string | undefined) ?? '');
     const blocks = mine.flatMap((m) =>
-      m.kind === 'block' && typeof m.body === 'object' ? [m.body as Block] : [],
+      m.kind === 'block' && typeof m.body === 'object' ? [{ ...(m.body as Block), message: m.id }] : [],
     );
     if (!text && !blocks.length && turn.status === 'done') continue;
     const steps = mine.flatMap((m): Step[] => {
