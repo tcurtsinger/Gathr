@@ -11,6 +11,10 @@ WebKit on macOS).
 Settings retains the centred Gathr layout. The pages of the old chat screen and the team screens are
 gone. All fixtures are invented. Actions are local simulations.
 
+No page here shows the chat as it is now (the room, rebuilt 2026-11-20): system.html's Conversation and Recovery,
+`chat-states/` and the chats drawn behind Settings are the chat that was replaced. The room's own preview is
+`ui/room.html`, a made-up chat with its sidebar: `npm run dev` in `ui/`, then `/room.html` (`#light` for light).
+
 `components.css` retains the four historical imports the older pages below use, then imports `system-reference.css` for the current portable reference.
 That page demonstrates static anatomy, not substitute React implementations.
 
@@ -28,7 +32,7 @@ using `settings-overlay.css` and `settings-overlay.js`. Earlier options stay int
 - `chat-states/v3.html`: full-width reply notices, contextual Settings links.
 
 These supersede the unselected Phase 1 proposals above. All three share the same
-Settings shell and retain the current chat underneath. No service is connected.
+Settings shell and draw the old chat underneath. No service is connected.
 
 Settings regression check (requires an already installed `playwright-core` and browser):
 set `NODE_PATH` to the installed module directory if needed and `BROWSER_PATH` to the
@@ -37,8 +41,8 @@ references after a Stopped filter, clearing Find, and focus return after categor
 changes with Close and Escape at 1440 and 1024 px in both themes. No downloads.
 
 
-Selected agent editor: `agents/v1.html`, Settings > Agents, also opened by Edit
-agent in the chat picker. Save applies everywhere. Not chosen: `agents/v2.html`
+Selected agent editor: `agents/v1.html`, then Settings > Agents; agents are now a screen of their own on the
+rail. Save applies everywhere. Not chosen: `agents/v2.html`
 Team panel and `agents/v3.html` separate chat menu editor. Shared form: agent-editor.css and
 agent-editor.js. Five invented agents, two engines, two accounts and 24 sample
 models per engine. Model names and effort values are layout fixtures, not a
@@ -51,8 +55,8 @@ for account/source controls; v5 shows the account-only assignment form.
 Selected setting help: `approvals/v1.html`, a pop-up from the ? beside a label.
 `approvals/now.html` captures the earlier form; `approvals/v2.html` is the
 unselected expanding option. See `approvals/README.md` for copy and checks.
-The shared runtime component is `ui/src/components/Help.tsx`, demonstrated in
-`system.html` with its runtime stylesheet.
+The window no longer has Help: what it said is the line under each setting. `system.html` still has Help's
+markup, but the stylesheet it links, `ui/src/components/help.css`, is gone.
 
 ## Selected archive pattern
 
