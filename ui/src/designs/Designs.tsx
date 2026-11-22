@@ -1,10 +1,10 @@
 import { ChevronLeft, Search } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Design, type DesignPart, type Failure } from '../api';
 import { useCard } from '../components/Corner';
 import { DesignsMark } from '../components/DesignsMark';
-import { PageFrame } from '../room/PageFrame';
+import { PageFrame, PagePreview } from '../room/PageFrame';
 import { Screen } from '../Screen';
 import './designs.css';
 
@@ -147,28 +147,11 @@ export function Designs({ onChat }: { onChat: (chat: string, design: Design, pag
   );
 }
 
-/**
- * A design's card: its first page as it looks, small, drawn only while the card is on or near the screen and let go
- * when it leaves, so a long list holds about a screenful of live pages. The page takes no clicks: the card does.
- */
+/** A design's card: its first page as it looks, small. The page takes no clicks: the card does. */
 function Card({ design, onOpen }: { design: Design; onOpen: () => void }) {
-  const ref = useRef<HTMLLIElement>(null);
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    const card = ref.current;
-    if (!card) return;
-    const seen = new IntersectionObserver(([e]) => setNear(e.isIntersecting), {
-      root: card.closest('main'),
-      rootMargin: '50% 0px',
-    });
-    seen.observe(card);
-    return () => seen.disconnect();
-  }, []);
   return (
-    <li ref={ref} className="designs-card">
-      <div className="designs-preview" inert>
-        {near && <PageFrame path={design.pages[0]} name={design.name} />}
-      </div>
+    <li className="designs-card">
+      <PagePreview className="designs-preview" path={design.pages[0]} name={design.name} />
       <button type="button" onClick={onOpen}>
         {design.name}
       </button>

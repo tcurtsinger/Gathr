@@ -55,7 +55,8 @@ function clicked(data: unknown): { part: Part; rect: number[] } | undefined {
  * window, Gathr's API or anything of this PC's but its own folder, which the service's view of it serves. Each new
  * `redraw` loads it again in place. Without a chat, the page is one in Designs, for the Designs screen. With `notes`
  * (a design's tab in a chat), the service serves the page with its notes script, which can only post to this window:
- * the window hears only this frame, and only a part clicked while Comment is on.
+ * the window hears only this frame, and only a part clicked while Comment is on. With `onFail`, a page that can't be
+ * shown is told there and shows no card.
  */
 export function PageFrame({
   chat,
@@ -63,12 +64,14 @@ export function PageFrame({
   name,
   redraw = 0,
   notes,
+  onFail,
 }: {
   chat?: string;
   path: string;
   name: string;
   redraw?: number;
   notes?: Notes;
+  onFail?: () => void;
 }) {
   const [address, setAddress] = useState<string>();
   const [failure, setFailure] = useState<Failure>();
@@ -76,12 +79,14 @@ export function PageFrame({
   const frame = useRef<HTMLIFrameElement>(null);
   const drawn = useRef(redraw);
   const noted = !!notes;
+  const failed = useRef(onFail);
+  failed.current = onFail;
   useEffect(() => {
     let live = true;
     setAddress(undefined);
     (chat ? api.view(chat, path, noted) : api.designView(path)).then(
       (a) => live && setAddress(a),
-      (f: Failure) => live && setFailure(f),
+      (f: Failure) => live && (failed.current ? failed.current() : setFailure(f)),
     );
     return () => {
       live = false;
@@ -133,4 +138,38 @@ export function PageFrame({
       onPointerLeave={notes ? tell : undefined}
     />
   ) : null;
+}
+
+/**
+ * A page in Designs as it looks, small: drawn only while it is on or near the screen and let go when it leaves, so a
+ * long list holds about a screenful of live pages. It takes no clicks: what it sits in does.
+ */
+export function PagePreview({
+  path,
+  name,
+  className = '',
+  onFail,
+}: {
+  path: string;
+  name: string;
+  className?: string;
+  onFail?: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const seen = new IntersectionObserver(([e]) => setNear(e.isIntersecting), {
+      root: box.closest('main'),
+      rootMargin: '50% 0px',
+    });
+    seen.observe(box);
+    return () => seen.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`page-preview ${className}`} inert>
+      {near && <PageFrame path={path} name={name} onFail={onFail} />}
+    </div>
+  );
 }
