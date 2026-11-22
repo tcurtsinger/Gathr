@@ -178,20 +178,32 @@ async fn on_pc(
         .filter(|(_, value)| value.is_empty())
         .map(|(name, _)| name.clone())
         .collect();
-    let same = (runs.program.clone(), runs.args.clone(), runs.folder.clone());
+    // The same command with other variables is another tool: one server run once per league, say. A variable given
+    // empty is the person's to fill in, so it matches whatever the saved one holds.
+    let asked = runs.clone();
     let taken = db(s, move |c| {
         for tool in web_tools::list(c)?.into_iter().filter(|t| t.kind == "pc") {
             let Ok(was) = pc_tools::saved(c, &tool.id) else {
                 continue;
             };
-            if (was.program, was.args, was.folder) == same {
+            let command = (&was.program, &was.args, &was.folder)
+                == (&asked.program, &asked.args, &asked.folder);
+            let variables = was.variables.len() == asked.variables.len()
+                && (asked.variables.iter()).all(|(name, value)| {
+                    was.variables
+                        .get(name)
+                        .is_some_and(|w| value.is_empty() || value == w)
+                });
+            if command && variables {
                 return Ok(Some(tool.name));
             }
         }
         Ok(None)
     });
     if let Some(name) = taken.await? {
-        return Err(format!("{name} already runs this command."));
+        return Err(format!(
+            "{name} already runs this command with the same variables."
+        ));
     }
     let trace = Trace(caller.trace().unwrap_or_else(gathr::ids::trace_id));
     let saved = crate::pc_tools::add(s, &trace, &command, name).await;
