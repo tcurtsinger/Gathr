@@ -137,7 +137,10 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
     case 'background':
       return { ...s, background: e.background };
     case 'stay':
-      return { ...s, stays: [...s.stays, e.stay] };
+      // One that came while the history loaded is in the history too.
+      return s.stays.some((st) => st.agent === e.stay.agent && st.time === e.stay.time)
+        ? s
+        : { ...s, stays: [...s.stays, e.stay] };
     default:
       return s;
   }
