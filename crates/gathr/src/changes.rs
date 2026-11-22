@@ -228,12 +228,14 @@ fn tracked(counts: &str, kinds: &str) -> Vec<File> {
 }
 
 /// How many lines the new file at `path` has, and whether it is binary: a NUL in its first
-/// `SNIFF` bytes, as git tells, or not a plain file.
+/// `SNIFF` bytes, as git tells, or not a plain file. Only as much of it is read as its lines are
+/// shown from, so a huge file is never read whole each time the list is.
 fn counted(path: &Path) -> (u64, bool) {
     let plain = std::fs::symlink_metadata(path).is_ok_and(|m| m.is_file());
-    let Some(mut file) = plain.then(|| std::fs::File::open(path).ok()).flatten() else {
+    let Some(file) = plain.then(|| std::fs::File::open(path).ok()).flatten() else {
         return (0, true);
     };
+    let mut file = file.take(crate::files::SHOWN);
     let (mut lines, mut last, mut read) = (0u64, b'\n', 0usize);
     let mut buffer = vec![0u8; 64 * 1024];
     while let Ok(n) = file.read(&mut buffer) {
