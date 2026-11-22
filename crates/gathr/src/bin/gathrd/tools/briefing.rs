@@ -16,6 +16,8 @@ mod memory;
 pub struct Facts {
     title: String,
     name: Option<String>,
+    /// The description the person wrote for the agent.
+    job: Option<String>,
     /// Named in a chat of two or more only.
     role: Option<Role>,
     others: Vec<String>,
@@ -63,11 +65,16 @@ pub fn facts(
         })
         .optional()?
         .unwrap_or_default();
-    let name = match agent {
+    let (name, job) = match agent {
         Some(id) => conn
-            .query_row("SELECT name FROM agents WHERE id = ?1", [id], |r| r.get(0))
-            .optional()?,
-        None => None,
+            .query_row(
+                "SELECT name, description FROM agents WHERE id = ?1",
+                [id],
+                |r| Ok((Some(r.get(0)?), r.get(1)?)),
+            )
+            .optional()?
+            .unwrap_or_default(),
+        None => (None, None),
     };
     // A chat of one with no project is briefed as it was before it kept a list (0028).
     let members = match team::alone(conn, chat)? {
@@ -124,6 +131,7 @@ pub fn facts(
     Ok(Facts {
         title,
         name,
+        job,
         role: role.filter(|_| members.len() > 1),
         others,
         team: !members.is_empty(),
@@ -236,6 +244,9 @@ pub fn text(facts: &Facts) -> String {
         "{who} in Gathr, in the chat \"{}\"{role}.",
         facts.title
     )];
+    if let Some(job) = &facts.job {
+        lines.push(format!("Your job here: {}.", job.trim_end_matches('.')));
+    }
     if let Some(person) = &facts.person {
         lines.push(format!(
             "The person's name is {person}: call them {person}."

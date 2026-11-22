@@ -13,7 +13,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::Error;
-use crate::worktree::git;
+use crate::worktree::{git, git_printed};
 
 /// The most files a chat's change lists.
 pub const MOST_FILES: usize = 300;
@@ -281,7 +281,8 @@ pub async fn file(
     let mut args: Vec<&str> = DIFF.to_vec();
     args.extend(["-p", "--no-color", "-U3", &base, "--", path]);
     args.extend(from);
-    let diff = git(&env, worktree, &args, LIMIT)
+    // As git printed it: trimmed, a last line that is a blank context line would be lost.
+    let diff = git_printed(&env, worktree, &args, LIMIT)
         .await
         .map_err(Error::Other)?;
     if !diff.is_empty() {

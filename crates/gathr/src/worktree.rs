@@ -184,7 +184,13 @@ fn remove_dir(folder: &Path) -> Result<(), String> {
 
 /// Whether the worktree at `folder` has changes not committed: an archive keeps those (0034).
 pub async fn changed(folder: &Path, env: &Vars) -> Result<bool, String> {
-    let status = ["status", "--porcelain", "--untracked-files=normal"];
+    // Only reads: without `--no-optional-locks` status refreshes the agent's index, taking its lock.
+    let status = [
+        "--no-optional-locks",
+        "status",
+        "--porcelain",
+        "--untracked-files=normal",
+    ];
     Ok(!git(env, folder, &status, LOCAL_LIMIT)
         .await?
         .trim()
@@ -283,7 +289,17 @@ pub(crate) async fn git(
     args: &[&str],
     limit: Duration,
 ) -> Result<String, String> {
-    let ran = crate::run::run(Path::new("git"), args, dir, env, limit).await?;
+    Ok(git_printed(env, dir, args, limit).await?.trim().to_string())
+}
+
+/// `git`, with its output kept as git printed it.
+pub(crate) async fn git_printed(
+    env: &Vars,
+    dir: &Path,
+    args: &[&str],
+    limit: Duration,
+) -> Result<String, String> {
+    let ran = crate::run::printed(Path::new("git"), args, dir, env, limit).await?;
     match ran.code {
         Some(0) => Ok(ran.out),
         code => {
