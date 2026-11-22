@@ -107,6 +107,61 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     assert_eq!(row.unwrap()["needs"], false, "{listed}");
 }
 
+/// Archiving closes an open question unanswered: it's refused an answer, and Restore brings the
+/// chat back without needing the person.
+#[test]
+fn archiving_closes_an_open_question_and_restore_leaves_it_closed() {
+    let data = TempDir::new();
+    let _go = LetGo(data.0.join("go"));
+    let (service, chat, lead) = team(&data.0, &turns(&data.0, &[0], 1), &[]);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Name the walk", "agent": lead }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let ask = json!({ "what": "Which name?", "choices": [{ "label": "Ridge" }] });
+    let asked = call_tool(service.info.port, &first_token(&data.0), "ask_person", ask);
+    assert_eq!(asked["isError"], false, "{asked}");
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&chat, 30, "the turn to end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+
+    let archived = service.call("POST", &format!("/api/chats/{chat}/archive"));
+    assert_eq!(archived.status, 200, "{}", archived.body);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let question = &history["questions"][0];
+    assert!(question["closed"].is_string(), "{history}");
+    assert_eq!(question["answered"], Value::Null, "{history}");
+    let path = format!("/api/questions/{}/answer", question["id"]);
+    let refused = service.send("POST", &path, json!({ "pick": "Ridge" }));
+    assert_eq!(refused.status, 409, "{}", refused.body);
+    let turns = service.call("GET", &format!("/api/chats/{chat}")).json()["turns"].clone();
+    assert_eq!(
+        turns.as_array().unwrap().len(),
+        1,
+        "no turn for the refused answer: {turns}"
+    );
+
+    let restored = service.call("POST", &format!("/api/chats/{chat}/unarchive"));
+    assert_eq!(restored.status, 200, "{}", restored.body);
+    let listed = service.call("GET", "/api/chats").json();
+    let row = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == chat.as_str());
+    let row = row.unwrap();
+    assert_eq!(
+        (&row["needs"], &row["mark"]),
+        (&json!(false), &Value::Null),
+        "{listed}"
+    );
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert!(history["questions"][0]["closed"].is_string(), "{history}");
+}
+
 /// A question's files are stored as the lines a person's message names its files with; a file
 /// outside the chat's folders is refused, and nothing is asked.
 #[test]

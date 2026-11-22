@@ -60,11 +60,10 @@ const QUEUED: &str = "EXISTS (SELECT 1 FROM turns s
 /// or a question to them is open. An approval waiting is the service's to add (it's in no table).
 const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
         AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
-    OR EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL))";
+    OR EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL AND n.closed_ts IS NULL))";
 
 /// Whether chat `c` waits on the person for an answer of theirs: `NEEDS` but a sign-in.
-const ASKS: &str =
-    "EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)";
+const ASKS: &str = "EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL AND n.closed_ts IS NULL)";
 
 /// Whether an agent of chat `c` can't run (0071): it waits for a sign-in, or its last turn there
 /// failed and wasn't retried.

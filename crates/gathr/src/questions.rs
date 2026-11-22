@@ -1,5 +1,6 @@
 //! Questions an agent asks the person (`ask_person`): open until the person answers with one of its
-//! choices, their own words or both, and the answer starts the asking agent's turn.
+//! choices, their own words or both, and the answer starts the asking agent's turn. Archiving the
+//! chat closes them unanswered (`archive`).
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,11 @@ pub fn answer(
     if !q["answered"].is_null() {
         return Err(Error::Refused("it's answered already.".into()));
     }
+    if !q["closed"].is_null() {
+        return Err(Error::Refused(
+            "it was closed when its chat was archived.".into(),
+        ));
+    }
     let pick = pick.map(str::trim).filter(|p| !p.is_empty());
     let words = words.map(str::trim).filter(|w| !w.is_empty());
     let labels = q["choices"].as_array().into_iter().flatten();
@@ -95,7 +101,7 @@ pub fn answer(
 }
 
 const SELECT: &str = "SELECT q.id, q.chat_id, q.agent, COALESCE(a.name, 'An agent'), q.question,
-    q.choices, q.pick, q.words, q.asked_ts, q.answered_ts FROM questions q LEFT JOIN agents a ON a.id = q.agent";
+    q.choices, q.pick, q.words, q.asked_ts, q.answered_ts, q.closed_ts FROM questions q LEFT JOIN agents a ON a.id = q.agent";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let choices: Option<String> = r.get(5)?;
@@ -111,6 +117,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "words": r.get::<_, Option<String>>(7)?,
         "asked": utc(r.get(8)?),
         "answered": r.get::<_, Option<i64>>(9)?.map(utc),
+        "closed": r.get::<_, Option<i64>>(10)?.map(utc),
     }))
 }
 

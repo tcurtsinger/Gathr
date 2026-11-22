@@ -11,7 +11,7 @@ import { StateMark } from '../components/StateMark';
 import type { Opened } from './Files';
 import { notesOf, noteText, type Part } from './note';
 import { isPage, PageFrame } from './PageFrame';
-import type { OnAnswer } from './Question';
+import { type OnAnswer, waits } from './Question';
 import type { RoomState } from './useRoom';
 import './design.css';
 
@@ -84,7 +84,7 @@ function asked(q: Question, folder: string) {
 /** The question a design follows: the newest open one asking for a pick in it, else the newest answered. */
 function following(room: RoomState, folder: string) {
   const asking = room.questions.filter((q) => asked(q, folder));
-  return asking.findLast((q) => !q.answered) ?? asking.at(-1);
+  return asking.findLast(waits) ?? asking.at(-1);
 }
 
 /** Which of its choices an answered question picked: -1 for none. */
@@ -175,7 +175,7 @@ export function Designs({
             </span>
             {w?.writing ? (
               <Writing />
-            ) : q && !q.answered ? (
+            ) : q && waits(q) ? (
               <span className="room-state live design-mark">
                 <StateMark state="needs" size={12} />
                 Pick
@@ -327,7 +327,7 @@ export function DesignTab({ chat, design, room, onShow, onAnswer, onNote }: Prop
   };
   // Pick while the question is open; Picked on the option it picked.
   const verdict = (i: number) =>
-    q && !q.answered ? (
+    q && waits(q) ? (
       <Button type="button" size="xs" disabled={sending} onClick={() => pick(i)}>
         Pick
       </Button>

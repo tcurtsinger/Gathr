@@ -1,5 +1,5 @@
 //! Archiving and deleting a chat (F11, 0010). Archiving ends the chat's work in one transaction and
-//! one event: its queued turns stop and its pause goes. The service interrupts a turn still running.
+//! one event: its queued turns stop, its pause goes and its open questions close unanswered. The service interrupts a turn still running.
 //! Deleting takes an archived chat and removes its rows; its files are the service's to remove.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -57,7 +57,7 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
     Ok(ended)
 }
 
-/// Queued turns stopped; its pause gone.
+/// Queued turns stopped; its pause gone; its open questions closed, so Restore brings none back.
 fn end_work(conn: &Transaction, chat: &str, now: i64) -> Result<Ended, Error> {
     const WHY: &str = "its chat was archived";
     let turns: Vec<String> = {
@@ -71,6 +71,10 @@ fn end_work(conn: &Transaction, chat: &str, now: i64) -> Result<Ended, Error> {
     conn.execute(
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1",
         [chat],
+    )?;
+    conn.execute(
+        "UPDATE questions SET closed_ts = ?2 WHERE chat_id = ?1 AND answered_ts IS NULL AND closed_ts IS NULL",
+        params![chat, now],
     )?;
     Ok(Ended { turns })
 }

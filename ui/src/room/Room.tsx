@@ -11,7 +11,7 @@ import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
 import { type Made, notesOf, readNote } from './note';
-import { QuestionCard } from './Question';
+import { QuestionCard, waits } from './Question';
 import { type Card, type Item, type Said, type Step, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
@@ -493,7 +493,7 @@ function useNow(running: boolean) {
 function useStuck(state: RoomState, found?: Found) {
   const box = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
-  const open = state.questions.filter((q) => !q.answered).length;
+  const open = state.questions.filter(waits).length;
   const asked = useRef(open);
   useEffect(() => {
     const el = box.current;

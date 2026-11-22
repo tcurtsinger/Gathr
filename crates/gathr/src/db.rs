@@ -83,6 +83,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0073_tool_sign_in.sql"),
     include_str!("../migrations/0074_tool_client_id.sql"),
     include_str!("../migrations/0075_no_reviewer.sql"),
+    include_str!("../migrations/0076_closed_questions.sql"),
 ];
 
 /// The schema version this build writes.
@@ -834,5 +835,39 @@ mod drop_old_tables_test {
             roles,
             "mira supervisor, rev member; mira supervisor, rev member"
         );
+    }
+
+    /// 0076 closes the open questions of a chat archived before, from when it was archived; a listed
+    /// chat's open question and an answered one stay as they were.
+    #[test]
+    fn an_archived_chats_open_question_is_closed() {
+        let path = std::env::temp_dir()
+            .join(format!(
+                "gathr-db-closed-questions-{}",
+                crate::ids::span_id()
+            ))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..75] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 75;
+             INSERT INTO chats (id, title, created_ts, archived_ts) VALUES ('old', 'Old', 1, 50), ('on', 'On', 1, NULL);
+             INSERT INTO questions (chat_id, agent, question, asked_ts, answered_ts) VALUES
+                 ('old', 'mira', 'Open?', 2, NULL), ('old', 'mira', 'Answered?', 3, 4), ('on', 'mira', 'Open?', 5, NULL);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let closed: String = conn
+            .query_row(
+                "SELECT group_concat(id || ' ' || coalesce(closed_ts, '-'), ', ') FROM questions",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(closed, "1 50, 2 -, 3 -");
     }
 }
