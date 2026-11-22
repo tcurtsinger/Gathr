@@ -2,7 +2,8 @@
 //! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
 //! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
 //! a REPLY sits under the message it answers; NO_REPLY posts nothing, and a check that reacts and
-//! writes it closes; the check takes the lead's main message, never its reply; only a turn's last
+//! writes it closes; the check takes the lead's main message, never its reply, and the person's
+//! answer to the lead's question gets its round as their message does; only a turn's last
 //! words are its message, heard, waking and placed, its earlier words kept as notes. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
 //! given.
@@ -480,6 +481,90 @@ fn a_check_that_reacts_and_writes_no_reply_closes_and_posts_nothing() {
         (json!(lead), json!("The map is ready."), Value::Null),
     ];
     assert_eq!(said, want, "{history}");
+}
+
+#[test]
+fn the_persons_answer_to_the_leads_question_gets_a_round_as_a_message_does() {
+    let data = TempDir::new();
+    // An agent's turns say these in order: the lead answers, has its last word, answers the pick; a
+    // member questions the answer, then checks the next in silence, then answers its own pick.
+    let said = [
+        "The map is ready.",
+        "NO_REPLY",
+        "Ridge it is: the map is drawn.",
+    ];
+    let (replay, tokens) = (saying(&data.0, &said), data.0.join("env.jsonl"));
+    let on = Path::new("on");
+    let env = [
+        ("GATHR_REPLAY", replay.as_path()),
+        ("GATHR_REPLAY_ENV", &tokens),
+        ("GATHR_OPEN_CHECK", on),
+    ];
+    let room = room_with(&data.0, &env);
+    let rounds = || {
+        let sql = "SELECT asked, answer_turn, ended_ts FROM open_checks ORDER BY id";
+        rows(&room.data, sql)
+    };
+    let ended = |n: usize| {
+        common::until(10, &format!("round {n} to end"), || {
+            let all = rounds();
+            (all.len() == n && all[n - 1]["ended_ts"].is_i64()).then_some(all)
+        })
+    };
+    // The engine whose start is the `n`th asks; the person picks Ridge: who asked, and the turn.
+    let ask_and_pick = |n: usize| {
+        let token = common::nth(&tokens, n)["GATHR_AGENT_TOKEN"].clone();
+        let ask = json!({ "what": "Which route?", "choices": [{ "label": "Ridge" }, { "label": "Brook" }] });
+        let port = room.service.info.port;
+        let asked = common::call_tool(port, token.as_str().unwrap(), "ask_person", ask);
+        assert_eq!(asked["isError"], false, "{asked}");
+        let path = format!("/api/chats/{}", room.chat);
+        let history = room.service.call("GET", &path).json();
+        let questions = history["questions"].as_array().unwrap().iter();
+        let open = questions.into_iter().find(|q| q["answered"].is_null());
+        let open = open.unwrap();
+        let path = format!("/api/questions/{}/answer", open["id"]);
+        let answered = room.service.send("POST", &path, json!({ "pick": "Ridge" }));
+        assert_eq!(answered.status, 200, "{}", answered.body);
+        (open["agent"].clone(), answered.json()["turn"].clone())
+    };
+
+    // The person's message: the lead answers, both members question it, the lead has its last word.
+    room.say("Plan the walk", None);
+    room.quiet(4);
+    ended(1);
+
+    // The lead's question, answered: its answer to the pick gets a round of its own, once, with
+    // both members as checkers.
+    let (asker, turn) = ask_and_pick(0);
+    assert_eq!(asker, json!(room.lead));
+    let id = turn.as_str().unwrap();
+    room.quiet(7);
+    let all = ended(2);
+    let answer = rows(
+        &room.data,
+        &format!("SELECT id FROM messages WHERE turn_id = '{id}' AND role = 'gathr'"),
+    );
+    assert_eq!(all[1]["asked"], answer[0]["id"], "{all:?}");
+    assert_eq!(all[1]["answer_turn"], turn, "{all:?}");
+    let sql = format!(
+        "SELECT agent_id FROM turns WHERE opened_by = 'check' AND answers = '{id}' ORDER BY agent_id"
+    );
+    let mut want = [json!(room.ann), json!(room.bo)];
+    want.sort_by_key(|a| a.as_str().unwrap().to_string());
+    let checkers: Vec<Value> = rows(&room.data, &sql)
+        .iter()
+        .map(|r| r["agent_id"].clone())
+        .collect();
+    assert_eq!(checkers, want);
+
+    // A member's question, answered: its turn answers the pick, the lead has none since, so no round.
+    let (asker, _) = ask_and_pick(1);
+    assert_ne!(asker, json!(room.lead));
+    let history = room.quiet(8);
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    assert_eq!(rounds().len(), 2, "{history}");
+    assert_eq!(room.quiet(8)["turns"].as_array().unwrap().len(), 8);
 }
 
 #[test]

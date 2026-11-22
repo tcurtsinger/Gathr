@@ -18,8 +18,8 @@ fn verdict(author: &str) -> String {
     )
 }
 
-/// A member's check of `answer`, the lead's answer to the person's message `asked`, as SerenityOS
-/// checks one.
+/// A member's check of `answer`, the lead's answer to `asked`, the person's message or Gathr's line
+/// with their answer to a question, as SerenityOS checks one.
 pub(super) fn check(
     conn: &Connection,
     (asked, answer): (&str, &str),
@@ -33,13 +33,22 @@ pub(super) fn check(
             })?,
         )
     };
+    let by_person: bool = conn.query_row(
+        "SELECT role = 'user' FROM messages WHERE id = ?1",
+        [asked],
+        |r| r.get(0),
+    )?;
+    let asked = match by_person {
+        true => format!("The person asked: {}", body(asked)?),
+        false => body(asked)?,
+    };
     let lines = [
         format!(
             "Check {author}'s answer before the person relies on it, by reading: the answer, what was said in the \
              room, and the change itself. Don't run or rebuild the work. Run something yourself only when what \
              you read looks wrong, or a claim has nothing behind it."
         ),
-        format!("The person asked: {}", body(asked)?),
+        asked,
         format!("{author}'s answer:\n{}", body(answer)?),
         format!(
             "{} If there's nothing to check, such as small talk, write only NO_REPLY.",
