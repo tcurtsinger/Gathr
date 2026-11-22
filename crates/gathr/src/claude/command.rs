@@ -194,6 +194,39 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
     args
 }
 
+/// Claude Code's print mode for one answer to `ask`, with what it reads after it on its input, as
+/// `cat file | claude -p "query"` (CLI reference and "Run Claude Code programmatically", 2026-11-21):
+/// plain text out, no tools (`--tools ""`), no session kept on disk (`--no-session-persistence`),
+/// and none of the customizations `--safe-mode` turns off (CLAUDE.md, skills, plugins, hooks, MCP
+/// servers, auto memory). Each switch is in 2.1.318's `--help`. User settings stay out as for a
+/// chat's engine, and the folder it runs in is empty, so it has no project settings either.
+pub fn one_shot(model: Option<&str>, ask: &str) -> Vec<String> {
+    let settings = r#"{"autoMemoryEnabled":false,"disableClaudeAiConnectors":true}"#;
+    let mut args: Vec<String> = [
+        "-p",
+        "--output-format",
+        "text",
+        "--no-session-persistence",
+        "--safe-mode",
+        // A list: what follows it must be a switch, never the question.
+        "--tools",
+        "",
+        "--strict-mcp-config",
+        NO_SLASH,
+        "--setting-sources",
+        "project,local",
+        "--settings",
+        settings,
+    ]
+    .map(String::from)
+    .into();
+    if let Some(model) = model {
+        args.push(format!("--model={model}"));
+    }
+    args.push(ask.to_string());
+    args
+}
+
 /// Keeps slash commands off: Gathr leaves it out only to run `/compact` (compaction plan, K4).
 pub const NO_SLASH: &str = "--disable-slash-commands";
 

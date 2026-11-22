@@ -59,6 +59,7 @@ pub mod store;
 pub mod team;
 pub mod text;
 pub mod timeline;
+pub mod titles;
 pub mod tool_sign_in;
 pub mod view;
 pub mod web_tools;

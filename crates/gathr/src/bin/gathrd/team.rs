@@ -78,10 +78,12 @@ pub async fn create(
 pub struct Change {
     members: Option<Vec<Seat>>,
     project: Option<String>,
+    /// The person's rename, which is final: the background model never names the chat after it.
+    title: Option<String>,
 }
 
-/// Replaces the chat's agents, or puts a chat with no messages yet in a project, copying its
-/// folder and team. Once a chat has messages its folder stays as it was (0013).
+/// Replaces the chat's agents, puts a chat with no messages yet in a project, copying its folder
+/// and team, or renames it. Once a chat has messages its folder stays as it was (0013).
 pub async fn change(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -90,10 +92,11 @@ pub async fn change(
 ) -> Answer {
     const ERROR: &str = "Save failed";
     crate::routes::known(&s, &t, &chat).await?;
-    let members = match (body.members, body.project) {
-        (Some(members), None) => members,
-        (None, Some(project)) => return put_in(&s, &t, &chat, &project).await,
-        _ => return Err(bad(&t, ERROR, "send members or a project")),
+    let members = match (body.members, body.project, body.title) {
+        (Some(members), None, None) => members,
+        (None, Some(project), None) => return put_in(&s, &t, &chat, &project).await,
+        (None, None, Some(title)) => return rename(&s, &t, &chat, &title).await,
+        _ => return Err(bad(&t, ERROR, "send members, a project or a title")),
     };
     let seats = checked(&s, &t, members, ERROR).await?;
     let (id, saved) = (chat.clone(), seats.clone());
@@ -139,6 +142,25 @@ async fn put_in(s: &State, t: &Trace, chat: &str, project: &str) -> Answer {
     Ok(Json(
         json!({ "chat": chat, "project": p.id, "folder": p.folder, "members": members }),
     ))
+}
+
+/// An archived chat too. Every window reloads its lists, as after any change to a chat.
+async fn rename(s: &State, t: &Trace, chat: &str, title: &str) -> Answer {
+    const ERROR: &str = "Rename failed";
+    let (id, title) = (chat.to_string(), title.to_string());
+    let done = s
+        .writer
+        .call(move |conn| gathr::titles::rename(conn, &id, &title))
+        .await;
+    if let Some(Err(gathr::Error::Refused(why))) = &done {
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let title = written(t, done, ERROR)?;
+    let event = Event::point("gathr.chat.rename").trace(&t.0).chat(chat);
+    s.writer.record(event.ok());
+    s.chats
+        .publish(json!({ "type": "chat", "chat": chat, "change": "renamed" }));
+    Ok(Json(json!({ "chat": chat, "title": title })))
 }
 
 /// A send added an agent: the change is recorded and goes out live.

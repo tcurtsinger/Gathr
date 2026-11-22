@@ -298,6 +298,16 @@ export interface Settings {
   person_name?: string | null;
   /** The agent a new chat's message that names nobody goes to: the one picked, else the first; null with no agents. */
   assistant?: string | null;
+  /** The background model the person picked; null for Gathr's own pick. */
+  background_model?: { account: string; model: string } | null;
+}
+
+/** A model the background can run on: one of a signed-in account's. */
+export interface BackgroundChoice {
+  account: string;
+  account_name: string;
+  model: string;
+  name: string;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -657,6 +667,12 @@ export const api = {
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (change: Partial<Settings>) => call<Settings>('PATCH', '/api/settings', change),
+  /** Gathr's own pick for the background model (null when no account has a small one), and every choice. */
+  background: () =>
+    call<{ auto: BackgroundChoice | null; choices: BackgroundChoice[] }>('GET', '/api/settings/background'),
+  /** The person's name for a chat, which the background model never replaces. */
+  renameChat: (chat: string, title: string) =>
+    call<{ chat: string; title: string }>('PATCH', `/api/chats/${chat}`, { title }),
   /** Sends the message, with the files first saved in the chat's folder, a line each after its words. */
   send: async (
     chat: string,
