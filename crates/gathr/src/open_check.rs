@@ -1,7 +1,8 @@
-//! The open check (0080), ported from SerenityOS's room checks: once per message of the person's,
-//! when the chat's lead has answered it and no turn of the chat is still to end, every free member
-//! who took no part reads the answer in a turn of its own. A thumbs-up on the answer or silence
-//! wakes nobody; words wake the lead once, for its last word, with each member's words.
+//! The open check (0080), ported from SerenityOS's room checks: once per message of the person's or
+//! answer of theirs to a question, when the chat's lead has answered it and no turn of the chat is
+//! still to end, every free member who took no part reads the answer in a turn of its own. A
+//! thumbs-up on the answer or silence wakes nobody; words wake the lead once, for its last word,
+//! with each member's words.
 
 mod words;
 
@@ -30,7 +31,7 @@ struct Round {
     last_word: Option<String>,
 }
 
-/// The person's newest message, the lead's answer to it and who is to check it.
+/// The newest thing the person said, the lead's answer to it and who is to check it.
 struct Due {
     asked: String,
     answer: String,
@@ -39,7 +40,7 @@ struct Due {
     checkers: Vec<String>,
 }
 
-/// Moves the chat's rounds on and begins the one its newest message of the person's is owed, in one
+/// Moves the chat's rounds on and begins the one the newest thing the person said is owed, in one
 /// transaction: the turns to start. The service calls it after every write that may have moved the
 /// chat, so it does nothing more than once.
 pub fn settle(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Start>, Error> {
@@ -103,10 +104,15 @@ fn under_way(tx: &Transaction, chat: &str) -> Result<Vec<Round>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// The chat's newest message of the person's: its id and its turn.
+/// The newest thing the person said in the chat, its id and its turn: their message, or their answer
+/// to a question, which is Gathr's message that opens the asking agent's `picked` turn
+/// (`questions::answer`). Neither Gathr's copy of a message, which opens a turn of that kind too, nor
+/// a line of Gathr's that came into a running turn after its first message, is one.
 fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<(String, String)>, Error> {
-    let sql = "SELECT m.id, m.turn_id FROM messages m
-               WHERE m.chat_id = ?1 AND m.role = 'user' AND m.turn_id IS NOT NULL
+    let sql = "SELECT m.id, m.turn_id FROM messages m JOIN turns t ON t.id = m.turn_id
+               WHERE m.chat_id = ?1 AND (m.role = 'user' OR (m.role = 'gathr' AND t.opened_by = 'picked'
+                 AND m.copy_of IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM messages o WHERE o.turn_id = m.turn_id AND o.rowid < m.rowid)))
                ORDER BY m.ts DESC, m.rowid DESC LIMIT 1";
     let row = tx
         .prepare_cached(sql)?
@@ -115,7 +121,7 @@ fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<(String, String)>
     Ok(row)
 }
 
-/// The round owed the person's newest message: none while any turn of the chat is still to end,
+/// The round owed the newest thing the person said: none while any turn of the chat is still to end,
 /// while the lead's newest answer to it hasn't ended well, or once it had its round.
 fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
     let Some((asked, asked_turn)) = newest_asked(tx, chat)? else {
