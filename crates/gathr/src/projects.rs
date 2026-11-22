@@ -37,17 +37,34 @@ pub fn create(
     folder: &str,
     team: &[(String, Role)],
 ) -> Result<Project, Error> {
+    let tx = conn.transaction()?;
+    let id = add(&tx, name, folder, team)?;
+    tx.commit()?;
+    get(conn, &id)?.ok_or_else(|| Error::Other("the project wasn't saved".into()))
+}
+
+/// `create` within the caller's transaction: the new project's id.
+pub fn add(
+    conn: &Connection,
+    name: &str,
+    folder: &str,
+    team: &[(String, Role)],
+) -> Result<String, Error> {
     let ts = crate::ids::now_us();
     let id = crate::ids::ulid(ts);
-    let tx = conn.transaction()?;
-    let added = tx.execute(
+    let added = conn.execute(
         "INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![id, name, crate::accounts::key(name), folder, ts],
     );
     name_taken(added)?;
-    seat(&tx, &id, team)?;
-    tx.commit()?;
-    get(conn, &id)?.ok_or_else(|| Error::Other("the project wasn't saved".into()))
+    seat(conn, &id, team)?;
+    Ok(id)
+}
+
+/// Whether another project has the name, ignoring case, as `create` would refuse it.
+pub fn taken(conn: &Connection, name: &str) -> Result<bool, Error> {
+    let sql = "SELECT EXISTS (SELECT 1 FROM projects WHERE name_key = ?1)";
+    Ok(conn.query_row(sql, [crate::accounts::key(name)], |r| r.get(0))?)
 }
 
 /// Saves what `change` sets, in one step: `None` when there's no such project.

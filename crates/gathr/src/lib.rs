@@ -41,6 +41,7 @@ pub mod pc_tools;
 pub mod picks;
 pub mod platform;
 pub mod projects;
+pub mod proposals;
 pub mod pushes;
 pub mod questions;
 pub mod reactions;

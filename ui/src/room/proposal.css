@@ -1,0 +1,49 @@
+/* A project the assistant proposed: framed under its words, its team a row each, Make project and Change at its foot. */
+.proposal {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.proposal-head {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.proposal-head b {
+  font-size: 15px;
+  font-weight: 650;
+}
+.proposal-head span {
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font: 12.5px / 1.4 var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+}
+.proposal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+.proposal-row b {
+  font-weight: 600;
+}
+.proposal-about {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proposal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border);
+}
+.proposal-foot > .room-kept {
+  margin-left: -6px;
+}

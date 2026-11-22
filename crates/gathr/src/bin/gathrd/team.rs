@@ -17,8 +17,8 @@ use crate::routes::{Answer, Fail, fail};
 
 #[derive(Deserialize)]
 pub struct Seat {
-    agent: String,
-    role: String,
+    pub agent: String,
+    pub role: String,
 }
 
 #[derive(Deserialize)]
@@ -284,18 +284,21 @@ pub async fn project(
     dir: &std::path::Path,
     error: &'static str,
 ) -> Result<String, Fail> {
+    top_level(dir).await.map_err(|why| bad(t, error, &why))
+}
+
+/// The top folder of the git repository `dir` is in, or why it can't be a project's folder.
+pub async fn top_level(dir: &std::path::Path) -> Result<String, String> {
     if !dir.is_absolute() {
-        return Err(bad(t, error, "Use a full path"));
+        return Err("Use a full path".into());
     }
     let dir = dir.to_path_buf();
     let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect())).await;
     let vars = fresh
         .map(|f| f.vars)
         .unwrap_or_else(|_| std::env::vars_os().collect());
-    match worktree::top_level(&dir, &vars).await {
-        Ok(top) => Ok(top.display().to_string()),
-        Err(why) => Err(bad(t, error, &why)),
-    }
+    let top = worktree::top_level(&dir, &vars).await?;
+    Ok(top.display().to_string())
 }
 
 /// Records the chat's new team (0013: a role change is an event).

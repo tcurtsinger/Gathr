@@ -14,6 +14,7 @@ import { IconButton } from '../components/IconButton';
 import { Drawing } from './Drawing';
 import { Flow } from './Flow';
 import { PageFrame } from './PageFrame';
+import { Proposal } from './Proposal';
 import './shown.css';
 
 type Table = NonNullable<Block['table']>;
@@ -195,6 +196,8 @@ function draw(chat: string, block: Block) {
   }
   if (block.kind === 'page' && typeof page?.file === 'string')
     return <Page chat={chat} page={page} title={block.title} />;
+  if (block.kind === 'project' && block.message && Array.isArray(block.project?.team))
+    return <Proposal message={block.message} project={block.project} />;
   return null;
 }
 

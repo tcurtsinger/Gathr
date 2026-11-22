@@ -186,6 +186,7 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
       <Bar
         time={said.message.time}
         scheduled={said.message.scheduled}
+        from={said.message.from}
         text={words}
         said={[said.message]}
         ctx={ctx}
@@ -527,6 +528,8 @@ interface BarProps {
   time?: string | null;
   /** A scheduled run's words: when they were due, said in place of the time. */
   scheduled?: string;
+  /** A project's brief: the assistant that wrote it, said with its face in place of the time. */
+  from?: string;
   /** The words Copy takes; none, no Copy. */
   text: string;
   /** The messages whose thumbs-ups are counted. */
@@ -541,7 +544,7 @@ interface BarProps {
  * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, scheduled, text, said, last, ctx }: BarProps) {
+function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -560,7 +563,12 @@ function Bar({ time, scheduled, text, said, last, ctx }: BarProps) {
   if (!time && !text && !press && !given.length) return null;
   return (
     <div className="room-bar">
-      {scheduled ? (
+      {from ? (
+        <span className="room-time room-from">
+          <Face agent={ctx.people.face(from)} size={16} />
+          From {ctx.people.name(from)}
+        </span>
+      ) : scheduled ? (
         <span className="room-time room-scheduled">
           <ScheduledMark />
           Scheduled · {clock(scheduled)}

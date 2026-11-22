@@ -13,6 +13,7 @@ mod github;
 mod hook;
 mod note;
 mod person;
+mod propose;
 mod react;
 pub mod relay;
 mod schedule;

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use axum::extract::{Extension, Path as Id, State as Extract};
 use axum::http::StatusCode;
-use axum::routing::{get, patch};
+use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use gathr::event::Event;
 use gathr::projects::{self, Change, Project};
@@ -25,6 +25,75 @@ pub fn routes() -> Router<Arc<State>> {
             "/api/projects/{project}",
             patch(change).delete(crate::deletes::project),
         )
+        .route("/api/proposals/{message}/make", post(make))
+}
+
+#[derive(Deserialize, Default)]
+struct Changed {
+    name: Option<String>,
+    folder: Option<PathBuf>,
+    members: Option<Vec<Seat>>,
+}
+
+/// Make project, from the card of a project the assistant proposed (`propose_project`): as proposed, or with what
+/// the New project form changed. The project as `create` makes it, its first chat and the brief there, which starts
+/// the lead's turn; once only.
+async fn make(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Id(message): Id<String>,
+    body: Option<Json<Changed>>,
+) -> Answer {
+    const ERROR: &str = "Make project failed";
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    let id = message.clone();
+    let found = s.writer.call(move |c| gathr::proposals::find(c, &id)).await;
+    let Some(p) = written(&t, found, ERROR)? else {
+        return Err(fail(StatusCode::NOT_FOUND, ERROR, "no such proposal", &t.0));
+    };
+    if p.made.is_some() {
+        let why = "This project was made already.";
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let name = body.name.unwrap_or(p.name.clone());
+    let name = projects::name(&name)
+        .map_err(|why| bad(&t, ERROR, why))?
+        .to_string();
+    let seats = match body.members {
+        Some(seats) => seats,
+        None => p
+            .seats()
+            .into_iter()
+            .map(|(agent, role)| Seat {
+                agent,
+                role: role.as_str().to_string(),
+            })
+            .collect(),
+    };
+    let seats = checked(&s, &t, seats, ERROR).await?;
+    let folder = body.folder.unwrap_or_else(|| PathBuf::from(&p.folder));
+    let folder = crate::team::project(&t, &folder, ERROR).await?;
+    let made = s
+        .writer
+        .call(move |c| gathr::proposals::make(c, &message, (&name, &folder), &seats))
+        .await;
+    if let Some(Err(gathr::Error::Refused(why))) = &made {
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let made = written(&t, made, ERROR)?;
+    let event = Event::point("gathr.project.create").trace(&t.0).ok();
+    s.writer
+        .record(event.attr("gathr.project.id", made.project.clone()));
+    let chat = made.chat["id"].clone();
+    s.chats
+        .publish(json!({ "type": "project", "project": made.project, "change": "created" }));
+    s.chats
+        .publish(json!({ "type": "chat", "chat": chat, "change": "created" }));
+    s.chats
+        .publish(json!({ "type": "message", "chat": made.proposed_in, "message": made.block }));
+    let answer = json!({ "project": made.project, "chat": chat, "turn": made.start.turn, "message": made.block });
+    s.chats.start(vec![made.start]);
+    Ok(Json(answer))
 }
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
