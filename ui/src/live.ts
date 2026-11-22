@@ -73,6 +73,8 @@ export type LiveEvent =
   | { type: 'agents' }
   // A skill was added, changed or removed in Gathr: reload skills.
   | { type: 'skills' }
+  // A note in Memory was added, changed or removed, by the person or an agent: reload Memory.
+  | { type: 'memory' }
   | { type: 'tools'; sign_in?: string; tool?: string; why?: string; ref?: string }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };

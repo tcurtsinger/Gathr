@@ -1,0 +1,81 @@
+/* The Memory screen (Memory.tsx): a place's notes as rows, each with its More, and the box to add one. */
+.memory-nav .face {
+  flex: none;
+  mask-image: none;
+}
+.memory-nav-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+  stroke-width: 1.5;
+}
+.screen-page .memory-lede {
+  max-width: 40rem;
+  margin: -10px 0 18px;
+  font-size: 13.5px;
+}
+.memory-notes {
+  margin: 0 0 14px;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+.memory-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.memory-words {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+.memory-words span {
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.memory-words small {
+  font-size: 12.5px;
+}
+.memory-more {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--muted-foreground);
+}
+.memory-empty {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.memory-form {
+  flex: 1;
+  min-width: 0;
+}
+.memory-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.memory-box input {
+  flex: 1;
+  height: 36px;
+  font-size: 14px;
+}
+.memory-box input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.memory-box input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.memory-why {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}

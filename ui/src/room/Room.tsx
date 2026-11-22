@@ -8,11 +8,13 @@ import { PathTiles } from '../components/FileTile';
 import { fileName, OpenFile, parts, split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
+import { MemoryMark } from '../components/MemoryMark';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
+import { OpenMemory } from '../memory/Memory';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
-import { type Card, type Item, type Said, type Step, shape, stepsLine, working } from './shape';
+import { type Card, type Item, notedOf, type Said, type Step, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
 
@@ -57,6 +59,8 @@ export interface Found {
 interface Props {
   /** The chat: where its pictures are served from. */
   chat: string;
+  /** Its project: what a note about the project opens in Memory. */
+  project?: string | null;
   state: RoomState;
   people: People;
   acts: Acts;
@@ -71,11 +75,12 @@ interface Props {
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ chat, state, people, acts, found, header, after, children }: Props) {
+export function Room({ chat, project, state, people, acts, found, header, after, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state, found);
   const ctx = {
     chat,
+    project,
     people,
     reactions: state.reactions,
     approvals: state.approvals,
@@ -119,6 +124,7 @@ export function Room({ chat, state, people, acts, found, header, after, children
 
 interface Ctx {
   chat: string;
+  project?: string | null;
   people: People;
   reactions: Reaction[];
   approvals: Approval[];
@@ -266,6 +272,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           />
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
+        <Noted card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Foot said={card.said} last={card.last} ctx={ctx} />
         <Asks turn={card.id} agent={agent} ctx={ctx} />
@@ -329,6 +336,29 @@ function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
           )}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** What the turn kept in Memory, a quiet line each under its words: "Noted about you: …". A click opens it there. */
+function Noted({ card, ctx }: { card: Card; ctx: Ctx }) {
+  const open = useContext(OpenMemory);
+  const noted = notedOf(card.steps);
+  if (!noted.length) return null;
+  const place = (label: string) => {
+    if (label === 'Noted about you' || label === 'Changed a note about you') return 'you';
+    if (label.endsWith(' own work')) return `agent:${card.turn.agent}`;
+    return `project:${ctx.project}`;
+  };
+  return (
+    <div className="room-noted">
+      {noted.map((n, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: a turn's notes only grow, in order
+        <button key={i} type="button" onClick={() => open?.(place(n.label))}>
+          <MemoryMark aria-hidden="true" />
+          <span>{n.label}:</span> <b>{n.text}</b>
+        </button>
+      ))}
     </div>
   );
 }
@@ -463,6 +493,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             agent={agent}
           />
         )}
+        <Noted card={item} ctx={ctx} />
         <Foot said={item.said} last={item.last} ctx={ctx} />
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>

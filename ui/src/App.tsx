@@ -19,6 +19,7 @@ import { DeleteConfirm } from './DeleteConfirm';
 import { Designs } from './designs/Designs';
 import { kept, keep as remember } from './kept';
 import { listen } from './live';
+import { Memory, OpenMemory } from './memory/Memory';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
 import { Plugins } from './plugins/Plugins';
@@ -73,8 +74,14 @@ export function App() {
   // What a project's Delete couldn't remove yet.
   const [left, setLeft] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
-  // Agents, Plugins or Designs, in place of the chat list and the chat until Home or a chat is opened.
+  // Agents, Plugins, Designs or Memory, in place of the chat list and the chat until Home or a chat is opened.
   const [opened, setOpened] = useState<Opened>('home');
+  // The place Memory shows: About you until another is opened.
+  const [remembered, setRemembered] = useState('you');
+  const openMemory = useCallback((place: string) => {
+    setRemembered(place);
+    setOpened('memory');
+  }, []);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
@@ -372,6 +379,7 @@ export function App() {
       />
       {opened === 'agents' && <Agents onAssistant={loadYou} />}
       {opened === 'plugins' && <Plugins />}
+      {opened === 'memory' && <Memory at={remembered} onAt={setRemembered} />}
       {opened === 'designs' && (
         <Designs
           onChat={(chat, design, page) => {
@@ -413,13 +421,15 @@ export function App() {
         />
       )}
       {opened !== 'home' ? null : screen ? (
-        <RoomView
-          key={screen.chat.id || 'new'}
-          {...screen}
-          found={found?.chat === screen.chat.id ? found : undefined}
-          sidebar={sidebars[screen.chat.id]}
-          onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
-        />
+        <OpenMemory.Provider value={openMemory}>
+          <RoomView
+            key={screen.chat.id || 'new'}
+            {...screen}
+            found={found?.chat === screen.chat.id ? found : undefined}
+            sidebar={sidebars[screen.chat.id]}
+            onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
+          />
+        </OpenMemory.Provider>
       ) : (
         <>
           <TopLine />
@@ -485,7 +495,7 @@ const quiet = () => {};
 
 /** The screens' places in Back and Forward are their names: never a chat's id. */
 const away = (key: string): key is Exclude<Opened, 'home'> =>
-  key === 'agents' || key === 'plugins' || key === 'designs';
+  key === 'agents' || key === 'plugins' || key === 'designs' || key === 'memory';
 
 /** What Archive's question says of the open questions it closes. */
 function closes(open: Question[]) {

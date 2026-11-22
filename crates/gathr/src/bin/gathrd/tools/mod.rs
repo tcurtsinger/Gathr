@@ -10,6 +10,7 @@ mod board;
 pub mod briefing;
 mod github;
 mod hook;
+mod note;
 mod person;
 mod react;
 pub mod relay;

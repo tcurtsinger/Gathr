@@ -17,11 +17,12 @@ use super::{Assignment, Task};
 use crate::tools::{Pass, Place, briefing};
 
 /// What the briefing names beside the engine's folder: what it may read, the Skills folder, its own
-/// folder and Shared, and its project's Designs.
+/// folder and Shared, its project's Designs, and the Memory folder.
 type Briefed = (
     Vec<PathBuf>,
     Option<PathBuf>,
     Option<(PathBuf, PathBuf)>,
+    Option<PathBuf>,
     Option<PathBuf>,
 );
 
@@ -134,7 +135,9 @@ impl Task {
         let making = crate::cleanup::hold().await;
         let place = self.workspace(&assigned, trace).await?;
         // Claude Code reads only where its rules allow; Codex reads anywhere.
-        let read: Vec<PathBuf> = place.read.iter().chain(&place.skills).cloned().collect();
+        let read: Vec<PathBuf> = (place.read.iter().chain(&place.skills).chain(&place.memory))
+            .cloned()
+            .collect();
         let given = command::Assigned {
             model: assigned.model.as_deref(),
             effort: assigned.effort.as_deref(),
@@ -175,7 +178,7 @@ impl Task {
                 &assigned,
                 worktree,
                 given,
-                (place.read.clone(), place.skills, own, designs),
+                (place.read.clone(), place.skills, own, designs, place.memory),
                 trace,
             )
             .await?;
@@ -315,7 +318,7 @@ impl Task {
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
         place: Place,
-        (read, skills, own, designs): Briefed,
+        (read, skills, own, designs, memory): Briefed,
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
@@ -323,7 +326,7 @@ impl Task {
             .chats
             .writer
             .call(move |conn| {
-                let folders = (worktree, own, designs, read, skills);
+                let folders = (worktree, own, designs, read, skills, memory);
                 briefing::facts(conn, &chat, agent.as_deref(), folders)
             })
             .await;
