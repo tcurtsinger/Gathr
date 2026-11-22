@@ -92,6 +92,13 @@ export function useLook(room: RoomState, open: boolean) {
 
 const pagesOf = (entries: FileEntry[]) => entries.filter((e) => !e.folder && isPage(e.name));
 const letter = (i: number) => String.fromCharCode(65 + i);
+const newestOf = (entries: FileEntry[]) => Math.max(0, ...entries.map((e) => e.modified ?? 0));
+/** The newest change of a file in the folder at `path` or any folder in it. */
+const newestIn = async (chat: string, path: string): Promise<number> => {
+  const entries = await api.folder(chat, path);
+  const folders = await Promise.all(entries.filter((e) => e.folder).map((e) => newestIn(chat, e.path)));
+  return Math.max(newestOf(entries.filter((e) => !e.folder)), ...folders);
+};
 
 /**
  * The pages of the design in `folder` that a question asks the person to pick from, in its choices' order: when every
@@ -297,10 +304,10 @@ function NoteBox({
 }
 
 /**
- * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again when a file in
- * its folder changed, seen as a step or turn of the chat ends. While a question asks for a pick in it, its options are
- * the question's choices, each with Pick; else its pages in their files' order. Side by side when the panel is wide
- * enough.
+ * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again when it or a
+ * file it may use changed, seen as a step or turn of the chat ends. While a question asks for a pick in it, its options
+ * are the question's choices, each with Pick; else its pages in their files' order. Side by side when the panel is
+ * wide enough.
  */
 export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }: Props) {
   const name = design.crumbs.at(-1) ?? design.path;
@@ -321,19 +328,23 @@ export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }
   }, []);
   const w = written(room, design.path.replace(/[\\/][^\\/]*$/, '')).get(pathKey(design.path));
   const look = useLook(room, open);
-  // When the newest file right in the folder changed, a shared style sheet too: a change there draws the page again.
-  const [newest, setNewest] = useState(0);
+  // When the newest file the pages share changed (a style sheet, a file in a folder of the design): a change there
+  // draws each page again, a change to one page only that page.
+  const [shared, setShared] = useState(0);
   useEffect(() => {
     if (!look) return;
     let live = true;
-    api.folder(chat, design.path).then(
-      (e) => {
+    api
+      .folder(chat, design.path)
+      .then(async (e) => {
+        const folders = e.filter((f) => f.folder).map((f) => newestIn(chat, f.path).catch(() => 0));
+        const files = newestOf(e.filter((f) => !f.folder && !isPage(f.name)));
+        const newest = Math.max(files, ...(await Promise.all(folders)));
         if (!live) return;
         setPages(pagesOf(e));
-        setNewest(Math.max(0, ...e.filter((f) => !f.folder).map((f) => f.modified ?? 0)));
-      },
-      (f: Failure) => live && setFailure(f),
-    );
+        setShared(newest);
+      })
+      .catch((f: Failure) => live && setFailure(f));
     return () => {
       live = false;
     };
@@ -395,10 +406,11 @@ export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }
   const frame = (i: number) =>
     pages && (
       <PageFrame
+        key={options[i].path}
         chat={chat}
         path={options[i].path}
         name={options[i].name}
-        redraw={newest}
+        redraw={Math.max(shared, newestOf(pages.filter((p) => pathKey(p.path) === pathKey(options[i].path))))}
         notes={{ on: comment, pins: pinsOn(options[i].path), onPart: onPart(i) }}
       />
     );

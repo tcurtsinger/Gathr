@@ -20,6 +20,7 @@ pub struct AskPerson {
     /// Why, and what the person needs to know to answer.
     why: Option<String>,
     /// For a choice: your pick first, each with a few words on it.
+    /// Don't number or letter the labels: Gathr letters a design's options itself.
     choices: Option<Vec<ChoiceIn>>,
     /// Files for the person to open with it: full paths, in this chat's folders.
     files: Option<Vec<String>>,
