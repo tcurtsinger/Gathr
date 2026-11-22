@@ -491,7 +491,7 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
           // biome-ignore lint/suspicious/noArrayIndexKey: as above
           <span key={i} className="room-kept">
             <button type="button" className="room-kept-line" onClick={() => openMemory?.(place(k))}>
-              <MemoryMark aria-hidden="true" />
+              <MemoryMark />
               <span>{noteWords(k.label)}:</span> <b>{k.text}</b>
             </button>
           </span>

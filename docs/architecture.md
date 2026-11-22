@@ -92,7 +92,7 @@ When a chat starts needing the person, or a chat's agents have all stopped, and 
 Local Theme and panel widths persist in the client. Vite builds the UI; Biome, TypeScript and Vitest check it.
 [0012](archive/decisions/0012-ui-shell.md), [0016](archive/decisions/0016-macos.md), [0022](archive/decisions/0022-ui-tooling.md).
 
-The window has a rail (Home, Agents, Plugins, Designs, Memory, Settings), the chat list and the chat.
+The window has a rail (Home, Agents, Memory, Plugins, Designs, Settings), the chat list and the chat.
 A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes tiles, and the board), and a tab for
 each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
 PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today
