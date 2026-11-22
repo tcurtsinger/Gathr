@@ -649,10 +649,19 @@ notes.txt",
                 _ => None,
             })
             .flatten()
-            .map(|c| (c.path, c.added, c.removed))
+            .map(|c| (c.path, c.added, c.removed, c.new, c.diff))
             .collect();
         let notes = "gathr-test-data-agents\\Chats\\Recorder claude\\fv2e4t\\notes.txt".to_string();
-        assert_eq!(changed, [(notes.clone(), 3, 0), (notes, 1, 1)]);
+        // The new file is one hunk, every line added; the edit its patch as Claude Code gave it.
+        let made = "@@ -0,0 +1,3 @@\n+alpha line\n+beta line\n+gamma line\n".to_string();
+        let edit = "@@ -1,3 +1,3 @@\n alpha line\n-beta line\n+beta changed\n gamma line\n";
+        assert_eq!(
+            changed,
+            [
+                (notes.clone(), 3, 0, true, Some(made)),
+                (notes, 1, 1, false, Some(edit.to_string()))
+            ]
+        );
         let failed = json!({ "type": "user", "parent_tool_use_id": null,
             "message": { "content": [{ "type": "tool_result", "tool_use_id": "t1", "is_error": true,
                 "content": "String to replace not found in file." }] },

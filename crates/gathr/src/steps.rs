@@ -10,7 +10,8 @@ use crate::text;
 mod results;
 
 pub use results::{
-    Changed, StepResult, changed, counted, first_lines, found, last_lines, request, said,
+    Changed, StepResult, changed, counted, first_lines, found, last_lines, request, said, unlined,
+    whole,
 };
 
 const TEXT: usize = 200;

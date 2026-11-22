@@ -244,10 +244,11 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
     let role: String = r.get(3)?;
     let compacted = role == "gathr" && kind == "text" && crate::context::is_compacted_line(&body);
-    let body = match kind.as_str() {
+    let mut body = match kind.as_str() {
         "tool" | "thinking" | "block" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
+    crate::steps::unlined(&mut body);
     let mut row = json!({
         "id": r.get::<_, String>(0)?,
         "turn": r.get::<_, Option<String>>(1)?,

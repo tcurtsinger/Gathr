@@ -220,7 +220,8 @@ function Lines({ chat, agent, folder, file }: Omit<FileProps, 'open' | 'onFold'>
       <div className="changes-lines" style={{ '--digits': String(widest).length } as CSSProperties}>
         <div>
           {change.hunks.map((h, i) => (
-            <div key={`${h.old[0]} ${h.new[0]}`}>
+            // biome-ignore lint/suspicious/noArrayIndexKey: two edits of one file can start at the same lines
+            <div key={i}>
               {(i > 0 || h.old[0] > 1 || h.new[0] > 1) && (
                 <div className="changes-line changes-gap">
                   <span />
