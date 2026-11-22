@@ -156,13 +156,14 @@ export type Needs = { what: 'key' | 'sign-in' } | { what: 'value'; names: string
 
 /**
  * What the turn kept that lasts, from its answer's first lines ("Noted about you:" then the note, and for a tool's
- * note "place tool:<id>"; "Added the tool:" then its name, id and what it needs; "Wrote the skill:" then its name): a
- * note in Memory, a tool, a skill.
+ * note "place tool:<id>"; "Added the tool:" then its name, id and what it needs; "Wrote the skill:" then its name;
+ * "Scheduled weekdays at 9:00:" then the words and "schedule <id>"): a note in Memory, a tool, a skill, a schedule.
  */
 export type Kept =
   | { kind: 'note'; label: string; text: string; place?: string }
   | { kind: 'tool'; label: string; name: string; id: string; needs?: Needs }
-  | { kind: 'skill'; label: string; name: string };
+  | { kind: 'skill'; label: string; name: string }
+  | { kind: 'scheduled'; label: string; text: string; id: string };
 
 /** What an added tool's answer says it needs: "It needs a key, …", "It needs a value for NOTES_KEY, …". */
 function needsOf(line = ''): Needs | undefined {
@@ -172,7 +173,7 @@ function needsOf(line = ''): Needs | undefined {
   return names ? { what: 'value', names } : undefined;
 }
 
-/** What the turn's `note`, `add_tool` and `add_skill` calls kept, in the order they came: the step keeps each answer. */
+/** What the turn's `note`, `add_tool`, `add_skill` and `schedule` calls kept, in order: the step keeps each answer. */
 export function keptOf(steps: Step[]): Kept[] {
   return steps.flatMap((s): Kept[] => {
     if ('note' in s || s.status !== 'ok' || !s.result) return [];
@@ -184,6 +185,9 @@ export function keptOf(steps: Step[]): Kept[] {
       return [{ kind: 'note', label, text: (place ? [name] : [name, ...rest]).join(' '), place }];
     }
     if (s.tool === 'mcp__gathr__add_skill') return [{ kind: 'skill', label, name }];
+    const schedule = rest[0]?.match(/^schedule (\S+)$/)?.[1];
+    if (s.tool === 'mcp__gathr__schedule' && schedule)
+      return [{ kind: 'scheduled', label, text: name, id: schedule }];
     const id = rest[0]?.match(/^id (\S+)$/)?.[1];
     if (s.tool !== 'mcp__gathr__add_tool' || !id) return [];
     return [{ kind: 'tool', label, name, id, needs: needsOf(rest[1]) }];

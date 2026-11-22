@@ -1,0 +1,78 @@
+/* The Scheduled screen (Scheduled.tsx), on Plugins' page of a tool (plugins.css): who and where under the title, the
+   When and Next rows under Enabled, and the runs, each opening its chat. */
+.scheduled-nav .face {
+  flex: none;
+  mask-image: none;
+}
+.scheduled-nav .chatrow[data-disabled] .face {
+  opacity: 0.55;
+}
+.scheduled-none {
+  margin: 6px 8px;
+  font-size: 13px;
+}
+.screen-title .scheduled-where {
+  font-size: 14px;
+}
+.scheduled-chat {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+.scheduled-chat:hover {
+  background: none;
+  text-decoration: underline;
+}
+.scheduled-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.skill-enabled + .scheduled-row {
+  margin-top: -1px;
+}
+.scheduled-runs {
+  margin-top: 26px;
+}
+.tool-actions.scheduled-runs li {
+  padding: 0;
+}
+.scheduled-run {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  padding: 10px 0;
+  border-radius: 0;
+  font-size: 14px;
+  text-align: left;
+}
+.scheduled-run:hover:not(:disabled) {
+  background: none;
+}
+.scheduled-run:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.scheduled-run strong {
+  font-weight: 600;
+}
+.scheduled-run:hover:not(:disabled) strong {
+  text-decoration: underline;
+}
+.scheduled-run .muted {
+  font-size: 12.5px;
+}
+.scheduled-state {
+  margin-left: 8px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 450;
+}
+.scheduled-state:is([data-state="late"], [data-state="skipped"], [data-state="running"]) {
+  color: var(--attention);
+}
+.scheduled-state[data-state="failed"] {
+  color: var(--danger);
+}

@@ -79,8 +79,12 @@ pub fn copy_for(conn: &Connection, message: &str, reader: &str) -> Result<String
 }
 
 /// Gathr's line before the person's `message`, for the agent of the turn it is in: none for a
-/// message that answers nothing and went to that agent alone, or one that isn't the person's.
+/// message that answers nothing and went to that agent alone, or one that isn't the person's. A
+/// scheduled run's words get the line that says which schedule it is.
 pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
+    if let Some(line) = crate::schedules::line(conn, message)? {
+        return Ok(Some(line));
+    }
     match sent(conn, message)? {
         Some(sent) => said_to(conn, &sent.target, sent.agent.as_deref(), &sent.everyone),
         None => Ok(None),

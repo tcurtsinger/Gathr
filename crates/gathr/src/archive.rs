@@ -1,5 +1,6 @@
 //! Archiving and deleting a chat (F11, 0010). Archiving ends the chat's work in one transaction and
-//! one event: its queued turns stop, its pause goes and its open questions close unanswered. The service interrupts a turn still running.
+//! one event: its queued turns stop, its pause goes, its open questions close unanswered and its schedules are
+//! disabled. The service interrupts a turn still running.
 //! Deleting takes an archived chat and removes its rows; its files are the service's to remove.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -76,6 +77,11 @@ fn end_work(conn: &Transaction, chat: &str, now: i64) -> Result<Ended, Error> {
         "UPDATE questions SET closed_ts = ?2 WHERE chat_id = ?1 AND answered_ts IS NULL AND closed_ts IS NULL",
         params![chat, now],
     )?;
+    // Its schedules are disabled; Restore doesn't enable them.
+    conn.execute(
+        "UPDATE schedules SET next_ts = NULL WHERE chat_id = ?1",
+        [chat],
+    )?;
     Ok(Ended { turns })
 }
 
@@ -110,6 +116,8 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Erro
         "DELETE FROM reads WHERE chat_id = ?1".into(),
         "DELETE FROM board_lines WHERE chat_id = ?1".into(),
         "DELETE FROM questions WHERE chat_id = ?1".into(),
+        "DELETE FROM schedule_runs WHERE chat_id = ?1".into(),
+        "DELETE FROM schedules WHERE chat_id = ?1".into(),
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         "DELETE FROM open_checks WHERE chat_id = ?1".into(),

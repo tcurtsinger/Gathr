@@ -59,9 +59,13 @@ The service persists messages, replies, reactions, the person's likes, where the
 questions to the person, pause/Stop, usage holds and archives.
 Agents use Gathr's MCP server at `/mcp`, each engine with a token of its own, to read the chat (`read_chat`), react,
 set a board line, ask the person, keep a note in Memory (`note`), put a table or a chart in the chat (`show`), add a
-tool or a skill when the person asks (`add_tool`, `add_skill`) and read or update a pull request (`pr`,
-`ci_failures`, `update_pr`).
+tool or a skill when the person asks (`add_tool`, `add_skill`), schedule work in the chat (`schedule`,
+`unschedule`) and read or update a pull request (`pr`, `ci_failures`, `update_pr`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
+Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`): what an agent scheduled comes into its chat at its time, on this
+PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn as the person's
+message would; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
+transaction. A missed run runs late when it was due today, else one skipped run is kept.
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
 The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool (about the person, a project, their own work or a tool added in Plugins) and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.
@@ -92,7 +96,7 @@ When a chat starts needing the person, or a chat's agents have all stopped, and 
 Local Theme and panel widths persist in the client. Vite builds the UI; Biome, TypeScript and Vitest check it.
 [0012](archive/decisions/0012-ui-shell.md), [0016](archive/decisions/0016-macos.md), [0022](archive/decisions/0022-ui-tooling.md).
 
-The window has a rail (Home, Agents, Memory, Plugins, Designs, Settings), the chat list and the chat.
+The window has a rail (Home, Agents, Memory, Plugins, Designs, Scheduled, Settings), the chat list and the chat.
 A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes tiles, and the board), and a tab for
 each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
 PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today

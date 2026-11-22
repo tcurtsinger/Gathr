@@ -1,5 +1,6 @@
 //! Turns Gathr starts for an agent (0010): a check, a last word, a carry-on, the person's answer to
-//! a question. Its ask is Gathr's message, never the person's, and it queues behind what the agent
+//! a question, a scheduled run. Its ask is Gathr's message, or a scheduled run's words drawn as the
+//! person's, and it queues behind what the agent
 //! is doing, never steered into a turn under way. Every start passes the gate. Both are saved
 //! already, with the change that called for them.
 
@@ -17,7 +18,8 @@ impl Task {
             trace: start.trace,
             agent: Some(start.agent),
             answers: start.answers,
-            person: false,
+            // A scheduled run's words are the person's, as a pause sees them.
+            person: start.message["role"] == "user",
         };
         self.queue_given(ids, start.text, start.message).await;
     }

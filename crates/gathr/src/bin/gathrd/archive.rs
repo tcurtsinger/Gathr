@@ -177,4 +177,8 @@ async fn remove_files(s: &State, chat: &str, project: Option<PathBuf>) -> Vec<St
 fn announce(s: &State, chat: &str, change: &str) {
     s.chats
         .publish(json!({ "type": "chat", "chat": chat, "change": change }));
+    // Archiving disables the chat's schedules, deleting deletes them.
+    if change != "unarchived" {
+        s.chats.publish(json!({ "type": "schedules" }));
+    }
 }

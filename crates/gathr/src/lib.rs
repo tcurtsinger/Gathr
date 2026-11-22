@@ -49,6 +49,7 @@ pub mod redact;
 pub mod replies;
 pub mod room;
 pub mod run;
+pub mod schedules;
 pub mod seal;
 pub mod search;
 pub mod seed;

@@ -29,6 +29,7 @@ mod projects;
 mod questions;
 mod reads;
 mod routes;
+mod scheduled;
 mod search;
 mod serve;
 mod settings;
@@ -252,6 +253,8 @@ async fn serve(
     // Before the queues fill: what a pause holds stays held after a restart.
     chats.pauses_changed().await;
     chats.take_over().await;
+    // After the turns left waiting are taken over: a run queued now is never taken over twice.
+    tokio::spawn(scheduled::every(chats.clone()));
     tokio::spawn(chat_state::run(chats.clone(), changed));
     tokio::spawn(cleanup::every(chats.clone()));
     tokio::spawn(updates::run(updates.clone(), chats.clone()));

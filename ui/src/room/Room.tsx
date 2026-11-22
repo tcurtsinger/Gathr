@@ -11,10 +11,12 @@ import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { MemoryMark } from '../components/MemoryMark';
 import { since } from '../components/marks';
+import { ScheduledMark } from '../components/ScheduledMark';
 import { StateMark } from '../components/StateMark';
 import { listen } from '../live';
 import { OpenMemory } from '../memory/Memory';
 import { OpenPlugin, type ToolNext } from '../plugins/Plugins';
+import { OpenScheduled } from '../scheduled/Scheduled';
 import { FilesCard } from './FilesCard';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
@@ -180,7 +182,13 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
           {tiles}
         </div>
       )}
-      <Bar time={said.message.time} text={words} said={[said.message]} ctx={ctx} />
+      <Bar
+        time={said.message.time}
+        scheduled={said.message.scheduled}
+        text={words}
+        said={[said.message]}
+        ctx={ctx}
+      />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
@@ -453,11 +461,13 @@ function noteWords(label: string) {
 
 /**
  * What the turn kept that lasts, a quiet line each under its words: "Noted about you: …" opens Memory there, "Added
- * tool Notes" and "Added skill branch-names" open its page in Plugins.
+ * tool Notes" and "Added skill branch-names" open its page in Plugins, "Scheduled weekdays at 9:00: …" opens it in
+ * Scheduled.
  */
 function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
   const openMemory = useContext(OpenMemory);
   const openPlugin = useContext(OpenPlugin);
+  const openScheduled = useContext(OpenScheduled);
   const kept = keptOf(card.steps);
   if (!kept.length) return null;
   // A tool's note names its place; the others are known by their label.
@@ -472,6 +482,16 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
       {kept.map((k, i) => {
         // biome-ignore lint/suspicious/noArrayIndexKey: a turn's lines only grow, in order
         if (k.kind === 'tool') return <ToolLine key={i} tool={k} />;
+        if (k.kind === 'scheduled')
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: as above
+            <span key={i} className="room-kept">
+              <button type="button" className="room-kept-line" onClick={() => openScheduled?.(k.id)}>
+                <ScheduledMark />
+                <span className="room-kept-when">{k.label}:</span> <b>{k.text}</b>
+              </button>
+            </span>
+          );
         if (k.kind === 'skill')
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: as above
@@ -504,6 +524,8 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
 interface BarProps {
   /** Left out in a thread, where the time is beside the name. */
   time?: string | null;
+  /** A scheduled run's words: when they were due, said in place of the time. */
+  scheduled?: string;
   /** The words Copy takes; none, no Copy. */
   text: string;
   /** The messages whose thumbs-ups are counted. */
@@ -518,7 +540,7 @@ interface BarProps {
  * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, text, said, last, ctx }: BarProps) {
+function Bar({ time, scheduled, text, said, last, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -537,7 +559,14 @@ function Bar({ time, text, said, last, ctx }: BarProps) {
   if (!time && !text && !press && !given.length) return null;
   return (
     <div className="room-bar">
-      {time && <span className="room-time">{clock(time)}</span>}
+      {scheduled ? (
+        <span className="room-time room-scheduled">
+          <ScheduledMark />
+          Scheduled · {clock(scheduled)}
+        </span>
+      ) : (
+        time && <span className="room-time">{clock(time)}</span>
+      )}
       {text && (
         <IconButton aria-label="Copy" onClick={copy}>
           {copied ? <Check className="room-bar-icon" /> : <Copy className="room-bar-icon" />}

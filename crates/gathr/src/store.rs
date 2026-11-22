@@ -229,7 +229,9 @@ fn history_order() -> String {
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
 const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
-     m.copy_of, m.picks, m.reply_to FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+     m.copy_of, m.picks, m.reply_to,
+     CASE WHEN m.role = 'user' THEN (SELECT r.due_ts FROM schedule_runs r WHERE r.message_id = m.id) END
+     FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
 /// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
@@ -269,6 +271,10 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     // The quiet line a compaction left, which the window shows: only on that line.
     if compacted {
         row["compacted"] = json!(true);
+    }
+    // A scheduled run's words: when they were due, which the window shows under them.
+    if let Some(due) = r.get::<_, Option<i64>>(11)? {
+        row["scheduled"] = json!(crate::ids::utc(due));
     }
     Ok(row)
 }
