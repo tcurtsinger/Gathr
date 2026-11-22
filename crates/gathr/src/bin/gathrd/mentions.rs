@@ -85,6 +85,7 @@ async fn woken(chats: &Arc<Chats>, ended: &Ended) {
         chats.writer.record(joined.attr("members", seats));
         chats.publish(json!({ "type": "members", "chat": ended.chat, "members": members }));
     }
+    crate::team::stayed(chats, &ended.chat, mentions.stays);
     for named in mentions.named {
         let told = named.told;
         let delivered = deliver(

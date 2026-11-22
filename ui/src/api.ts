@@ -235,6 +235,15 @@ export interface Chat {
   needs?: boolean;
   /** The most pressing of its agents' marks its row shows (0071): none while nothing of those three holds. */
   mark?: ChatMark | null;
+  /** The assistant's own chat: the sidebar shows it as the assistant's row, in no list. */
+  assistant?: boolean;
+}
+
+/** A quiet line of the assistant's chat: an agent joined it or left it. */
+export interface Stay {
+  agent: string;
+  change: 'joined' | 'left';
+  time: string;
 }
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';
@@ -421,6 +430,8 @@ export interface History {
   questions?: Question[];
   /** The commands its agents' engines still run in the background, oldest first. */
   background?: Background[];
+  /** The assistant's chat's quiet lines, oldest first; none in another chat. */
+  stays?: Stay[];
 }
 
 /**
@@ -685,7 +696,9 @@ export const api = {
   archive: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/archive`),
   unarchive: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/unarchive`),
   deleteChat: (chat: string) => call<unknown>('DELETE', `/api/chats/${chat}`),
-  createChat: (project?: string) => call<Chat>('POST', '/api/chats', project ? { project } : {}),
+  /** With `assistant`, the assistant's own chat: the one there is, if there is. */
+  createChat: (project?: string, assistant?: boolean) =>
+    call<Chat>('POST', '/api/chats', assistant ? { assistant } : project ? { project } : {}),
   projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),

@@ -44,12 +44,16 @@ export interface Asked {
   at: number;
 }
 
-/** The quiet centred line a compaction left: "Compacted Ann's conversation: 468K to 52K". */
+/**
+ * The quiet centred line a compaction left, "Compacted Ann's conversation: 468K to 52K", or in the assistant's chat an
+ * agent's stay: its `agent` and "joined" or "left".
+ */
 export interface Line {
   kind: 'line';
   id: string;
   text: string;
   at: number;
+  agent?: string;
 }
 
 export type Item = Card | Said;
@@ -60,8 +64,8 @@ const open = (t: Turn) => t.status === 'running' || t.status === 'queued';
 /**
  * The room as the screen shows it: the person's messages and each agent's main message in the main chat, by when
  * they started; a reply, the service's or the person's, under the main message it answers. Of Gathr's own lines only
- * a compaction's shows, as a quiet line (the line that opens an answered question's turn isn't: the question's card
- * shows the answer), and a turn that said nothing and ended shows nothing, nor does a compaction's turn. An agent's
+ * a compaction's shows, as a quiet line, as does each agent joining or leaving the assistant's chat (the line that
+ * opens an answered question's turn isn't: the question's card shows the answer), and a turn that said nothing and ended shows nothing, nor does a compaction's turn. An agent's
  * question to the person sits in the main chat when it was asked.
  */
 export function shape(s: RoomState): (Item | Asked | Line)[] {
@@ -148,6 +152,14 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
   const lines = s.messages.flatMap((m): Line[] =>
     m.compacted ? [{ kind: 'line', id: m.id, text: m.body as string, at: time(m.time) }] : [],
   );
+  for (const st of s.stays)
+    lines.push({
+      kind: 'line',
+      id: `${st.agent}-${st.time}`,
+      text: st.change,
+      at: time(st.time),
+      agent: st.agent,
+    });
   return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 

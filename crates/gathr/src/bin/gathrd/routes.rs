@@ -94,6 +94,7 @@ async fn history(
         gathr::reactions::on_history(conn, &id, &mut history)?;
         gathr::reads::on_history(conn, &id, &mut history)?;
         history["background"] = json!(gathr::background::in_chat(conn, &id)?);
+        history["stays"] = json!(gathr::assistant::stays(conn, &id)?);
         Ok(history)
     })
     .await?;
@@ -536,6 +537,7 @@ async fn addressee(
     if let Some(members) = routed.joined {
         crate::team::changed(s, t, chat, members);
     }
+    crate::team::stayed(&s.chats, chat, routed.stays);
     Ok((routed.agent, routed.others))
 }
 

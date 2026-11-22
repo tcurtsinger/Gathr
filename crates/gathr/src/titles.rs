@@ -76,6 +76,10 @@ pub fn first(
     let Some((_, body)) = first.filter(|(id, _)| id == message) else {
         return Ok(None);
     };
+    // The assistant's chat keeps its name.
+    if crate::assistant::is_chat(conn, chat)? {
+        return Ok(None);
+    }
     let title: String = conn.query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
         r.get(0)
     })?;

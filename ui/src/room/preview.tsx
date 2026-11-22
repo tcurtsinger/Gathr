@@ -171,6 +171,7 @@ const room: RoomState = {
   partial: { [bo]: 'Wiring the button to the new download, then checking it with 40,000 rows.' },
   under: {},
   members,
+  stays: [],
   reactions: [
     { message: words(plan), agent: 'ann', time: at(1) },
     { message: words(plan), agent: 'bo', time: at(1) },

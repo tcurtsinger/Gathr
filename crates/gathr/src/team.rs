@@ -86,15 +86,20 @@ pub fn set_members(
     team: &[(String, Role)],
 ) -> Result<(), Error> {
     let tx = conn.transaction()?;
+    replace(&tx, chat, team)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// `set_members` inside a transaction the caller holds.
+pub fn replace(conn: &Connection, chat: &str, team: &[(String, Role)]) -> Result<(), Error> {
     let kept: Vec<&str> = team.iter().map(|(a, _)| a.as_str()).collect();
     let kept = serde_json::to_string(&kept).unwrap_or_default();
-    tx.execute(
+    conn.execute(
         "DELETE FROM chat_members WHERE chat_id = ?1 AND agent_id NOT IN (SELECT value FROM json_each(?2))",
         params![chat, kept],
     )?;
-    put(&tx, chat, team)?;
-    tx.commit()?;
-    Ok(())
+    put(conn, chat, team)
 }
 
 fn put(conn: &Connection, chat: &str, team: &[(String, Role)]) -> Result<(), Error> {
@@ -132,6 +137,8 @@ pub struct Routed {
     pub agent: Option<String>,
     pub others: Vec<String>,
     pub joined: Option<Vec<Member>>,
+    /// In the assistant's chat, a line for each agent that joined it.
+    pub stays: Vec<serde_json::Value>,
 }
 
 /// Where a message will go, worked out and nothing written: its agent, every other agent picked in
@@ -251,9 +258,17 @@ pub fn plan(
 
 /// Writes what `plan` worked out: the chat's team when agents join it.
 pub fn join(conn: &mut Connection, chat: &str, plan: Plan) -> Result<Routed, Error> {
+    let mut stays = Vec::new();
     let joined = match &plan.seats {
         Some(seats) => {
+            let had = members(conn, chat)?;
             set_members(conn, chat, seats)?;
+            for (agent, _) in seats
+                .iter()
+                .filter(|(a, _)| !had.iter().any(|m| m.agent == *a))
+            {
+                stays.extend(crate::assistant::stay_in(conn, chat, agent, "joined")?);
+            }
             Some(members(conn, chat)?)
         }
         None => None,
@@ -262,6 +277,7 @@ pub fn join(conn: &mut Connection, chat: &str, plan: Plan) -> Result<Routed, Err
         agent: plan.agent,
         others: plan.others,
         joined,
+        stays,
     })
 }
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one

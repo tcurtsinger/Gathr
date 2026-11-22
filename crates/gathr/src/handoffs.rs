@@ -104,6 +104,8 @@ pub struct Mentions {
     pub over: Option<Over>,
     /// The chat's agents, when the words brought one in.
     pub joined: Option<Vec<crate::team::Member>>,
+    /// In the assistant's chat, a line for each agent that joined it.
+    pub stays: Vec<Value>,
 }
 
 /// The members `turn`'s words name with `@Name` (0081), but its own agent and, for a check, the lead
@@ -163,6 +165,8 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
         }
         if joins {
             woke.joined = Some(crate::team::members(conn, &chat)?);
+            let line = crate::assistant::stay_in(conn, &chat, &member.agent, "joined")?;
+            woke.stays.extend(line);
         }
         let counted = record(conn, &chat, &from, &member.agent)?;
         if let Some(limit) = counted.over {

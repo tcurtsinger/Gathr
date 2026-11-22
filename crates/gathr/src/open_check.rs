@@ -50,7 +50,9 @@ pub fn settle(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Star
             "SELECT EXISTS (SELECT 1 FROM chats WHERE id = ?1 AND archived_ts IS NULL)",
         )?
         .query_row([chat], |r| r.get(0))?;
-    if !live || crate::team::members(&tx, chat)?.len() < 2 {
+    // The assistant's chat has no check: a guest there answers for one subject, not as a team.
+    let members = crate::team::members(&tx, chat)?.len();
+    if !live || members < 2 || crate::assistant::is_chat(&tx, chat)? {
         return Ok(Vec::new());
     }
     let mut starts = Vec::new();

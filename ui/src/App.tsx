@@ -73,7 +73,7 @@ export function App() {
   const faces = useMemo(() => new Map([...agents, ...removed].map((a) => [a.id, a])), [agents, removed]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
-  const [fresh, setFresh] = useState<{ project?: string } | null>(null);
+  const [fresh, setFresh] = useState<{ project?: string; assistant?: boolean } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   // What a project's Delete couldn't remove yet.
   const [left, setLeft] = useState<Failure | null>(null);
@@ -230,7 +230,7 @@ export function App() {
   const start = (text: string, agent?: string, picks?: PickedName[], files?: readonly File[]) => {
     const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, picks, files, failure: e });
     const draft = fresh;
-    api.createChat(draft?.project).then(
+    api.createChat(draft?.project, draft?.assistant).then(
       (made) => {
         // The live "created" may have reloaded the list with it already.
         setChats((list) => [made, ...list.filter((c) => c.id !== made.id)]);
@@ -250,7 +250,12 @@ export function App() {
 
   const chat =
     [...chats, ...archived].find((c) => c.id === selected) ??
-    (fresh && { id: '', title: 'New chat', project: fresh.project });
+    (fresh && {
+      id: '',
+      title: fresh.assistant ? 'Assistant' : 'New chat',
+      project: fresh.project,
+      assistant: fresh.assistant,
+    });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
   const choose = (id: string) => {
@@ -324,6 +329,15 @@ export function App() {
   };
   const name = (agent: string | null) =>
     [...agents, ...removed].find((a) => a.id === agent)?.name ?? 'An agent';
+  // The assistant's row opens its one chat; before its first message, a draft the service makes at that message.
+  const mine = agents.find((a) => a.id === you.assistant);
+  const ownChat = chats.find((c) => c.assistant);
+  const openAssistant = () => {
+    if (ownChat) return choose(ownChat.id);
+    setFresh({ assistant: true });
+    setSelected(null);
+    setOpened('home');
+  };
   // A chat this window hasn't loaded yet: load the lists first.
   const openChat = (id: string) => {
     if ([...chats, ...archived].some((c) => c.id === id)) choose(id);
@@ -431,6 +445,14 @@ export function App() {
           selected={selected}
           onSelect={choose}
           onNew={newChat}
+          assistant={
+            mine && {
+              agent: mine,
+              open: ownChat ? ownChat.id === selected : !!fresh?.assistant,
+              mark: ownChat?.mark,
+              onOpen: openAssistant,
+            }
+          }
           onDeleteProject={askDelete}
           onProjectSettings={(project, opener) =>
             setSettings({

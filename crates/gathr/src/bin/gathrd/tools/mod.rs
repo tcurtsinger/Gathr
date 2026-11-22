@@ -16,6 +16,7 @@ mod person;
 mod react;
 pub mod relay;
 mod schedule;
+mod send_out;
 mod server;
 mod show;
 

@@ -9,6 +9,7 @@ import type {
   Pauses,
   Question,
   Reaction,
+  Stay,
   ThinkingBody,
   ToolBody,
   TurnEnd,
@@ -65,6 +66,8 @@ export type LiveEvent =
   | { type: 'project'; project: string; change: 'created' | 'changed' | 'deleted' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
+  // In the assistant's chat, an agent joined or left: its quiet line.
+  | { type: 'stay'; chat: string; stay: Stay }
   // A room chat's questions, whole, after every ask and answer.
   | { type: 'questions'; chat: string; questions: Question[] }
   // How full an agent's context is, after each model call or compaction.
