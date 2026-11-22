@@ -25,6 +25,9 @@ pub struct StepInput {
     /// A command, whole, as the step's Request (0044), when it's more than `text`, its one line.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request: Option<String>,
+    /// A file tool's path, whole, when `text` is cut: the Changes tab finds the file by it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 /// `text` and `title` as a step keeps them; nothing when the text is empty.
@@ -33,7 +36,16 @@ pub fn input(text: &str, title: Option<&str>) -> Option<StepInput> {
         text: kept(text, TEXT)?,
         title: title.and_then(|title| kept(title, TITLE)),
         request: None,
+        path: None,
     })
+}
+
+/// A file tool's step: `input`, with the whole path as `path` when the text isn't all of it, unless
+/// the path holds what looks like a secret.
+pub fn file(path: &str) -> Option<StepInput> {
+    let mut step = input(path, None)?;
+    step.path = (step.text != path && redact(path) == path).then(|| path.to_string());
+    Some(step)
 }
 
 /// A command's step: `input`, with the whole command as its Request when that says more than the
