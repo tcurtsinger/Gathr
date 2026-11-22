@@ -18,8 +18,8 @@ impl Task {
             trace: start.trace,
             agent: Some(start.agent),
             answers: start.answers,
-            // A scheduled run's words are the person's, as a pause sees them.
-            person: start.message["role"] == "user",
+            // A scheduled run too: nobody sent it just now, so a pause holds it.
+            person: false,
         };
         self.queue_given(ids, start.text, start.message).await;
     }

@@ -63,9 +63,8 @@ tool or a skill when the person asks (`add_tool`, `add_skill`), schedule work in
 `unschedule`) and read or update a pull request (`pr`, `ci_failures`, `update_pr`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
 Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`): what an agent scheduled comes into its chat at its time, on this
-PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn as the person's
-message would; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
-transaction. A missed run runs late when it was due today, else one skipped run is kept.
+PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
+transaction. A missed run runs late when it was due today or less than two hours ago, else one skipped run is kept. A pause holds a run as it holds any turn Gathr starts.
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
 The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool (about the person, a project, their own work or a tool added in Plugins) and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.

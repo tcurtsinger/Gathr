@@ -108,6 +108,20 @@ fn a_once_runs_at_its_time_today_and_is_skipped_on_a_later_day() {
     let skipped = when.due(&c, once, on(&c, "2026-11-24", "8:00")).unwrap();
     assert_eq!(skipped, Due::Skip { due: once });
 
+    // Due two minutes before midnight and found a minute after it: it still runs. Found at three, it is skipped.
+    let night = on(&c, "2026-11-23", "23:58");
+    let when = When::Once(night);
+    let run = when.due(&c, night, on(&c, "2026-11-24", "0:01")).unwrap();
+    assert_eq!(
+        run,
+        Due::Run {
+            due: night,
+            late: false
+        }
+    );
+    let skipped = when.due(&c, night, on(&c, "2026-11-24", "3:00")).unwrap();
+    assert_eq!(skipped, Due::Skip { due: night });
+
     // in_minutes alone: once, that many minutes from now, and due then.
     let asked = Ask {
         in_minutes: Some(1),

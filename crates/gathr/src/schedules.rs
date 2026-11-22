@@ -108,8 +108,8 @@ pub fn add(
     })
 }
 
-/// Every schedule whose time has come by `now`, each in a transaction of its own: one due today runs, its run
-/// recorded and its turn queued together; one due on an earlier day records one skipped run. A once that ran leaves
+/// Every schedule whose time has come by `now`, each in a transaction of its own: one due today or less than two
+/// hours ago runs, its run recorded and its turn queued together; one due before that records one skipped run. A once that ran leaves
 /// the list with its runs; one that was skipped stays, disabled. The turns to queue, and whether any came due.
 pub fn due(conn: &mut Connection, now: i64) -> Result<(Vec<Start>, bool), Error> {
     let ids: Vec<String> = conn

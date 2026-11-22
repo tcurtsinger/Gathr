@@ -15,13 +15,15 @@ pub enum When {
 
 /// A late run is one that starts more than this after its time.
 pub const LATE_US: i64 = 5 * 60 * 1_000_000;
+/// A run missed on an earlier day still runs when it was due less than this ago.
+const STILL_RUNS_US: i64 = 2 * 60 * 60 * 1_000_000;
 
 /// What a schedule whose time has come does now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Due {
-    /// It was due today: it runs now, late or not.
+    /// It was due today, or less than two hours ago: it runs now, late or not.
     Run { due: i64, late: bool },
-    /// It was due on an earlier day: one skipped run for the latest time missed.
+    /// It was due before that: one skipped run for the latest time missed.
     Skip { due: i64 },
 }
 
@@ -96,12 +98,14 @@ impl When {
         Ok(None)
     }
 
-    /// What it does at `now`, due since `next`: the latest time missed runs when it was today (this PC's date), late
-    /// when more than five minutes have passed; one on an earlier day is skipped. Never one run per missed day.
+    /// What it does at `now`, due since `next`: the latest time missed runs when it was today (this PC's date) or
+    /// less than two hours ago, so one due just before midnight still runs; late when more than five minutes have
+    /// passed. One before that is skipped. Never one run per missed day.
     pub fn due(&self, conn: &Connection, next: i64, now: i64) -> Result<Due, Error> {
         let due = self.latest_by(conn, now)?.filter(|l| *l >= next);
         let due = due.unwrap_or(next);
-        Ok(match local(conn, due)?.date == local(conn, now)?.date {
+        let today = local(conn, due)?.date == local(conn, now)?.date;
+        Ok(match today || now - due < STILL_RUNS_US {
             true => Due::Run {
                 due,
                 late: now - due > LATE_US,
