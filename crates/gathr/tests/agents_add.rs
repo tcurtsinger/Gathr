@@ -127,14 +127,9 @@ fn an_agent_adds_tools_and_skills_and_its_engine_asks_first_as_its_approvals_say
     assert_eq!(state(&link), "needs_key", "{tools}");
 
     // A skill from a folder in Ann's own folder; one from anywhere else is refused.
-    let own = until(10, "Ann's folder", || {
-        let found = std::fs::read_dir(gathr::folders::real(&gathr::folders::beside(&data.0)))
-            .ok()?
-            .flatten()
-            .map(|e| e.path().join("Ann"))
-            .find(|p| p.is_dir());
-        found
-    });
+    let own = gathr::folders::real(&gathr::folders::beside(&data.0))
+        .join("Chats")
+        .join("Ann");
     let written = skill(&own, "branch-names", "How we name branches");
     let folder = json!({ "folder": written });
     let said = text(&call_tool(port, &token, "add_skill", folder.clone()));
