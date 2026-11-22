@@ -235,6 +235,33 @@ export interface DesignPart {
   chat: string | null;
   designs: Design[];
 }
+/** A file an agent changed in its worktree: its path there, what it was before a rename, and its lines added and removed. */
+export interface ChangedFile {
+  path: string;
+  from?: string;
+  added: number;
+  removed: number;
+  kind: 'changed' | 'new' | 'deleted' | 'renamed';
+  binary: boolean;
+}
+/** What each agent with a worktree changed in a project's chat; `more` when there were more files than are listed. */
+export interface Changes {
+  project: boolean;
+  agents: { id: string; name: string; branch: string; files: ChangedFile[] }[];
+  more: boolean;
+}
+export interface ChangeLine {
+  kind: 'context' | 'added' | 'removed';
+  old?: number;
+  new?: number;
+  text: string;
+}
+/** One file's change: its hunks, each with its old and new range as [start, count]; `cut` past its first 2,000 lines. */
+export interface FileChange {
+  binary: boolean;
+  cut: boolean;
+  hunks: { old: [number, number]; new: [number, number]; lines: ChangeLine[] }[];
+}
 /** Why a file isn't shown as text: it's gone, too large, or not text. */
 export type Unshown = 'gone' | 'large' | 'cant';
 const UNSHOWN: Record<number, Unshown> = { 404: 'gone', 413: 'large', 415: 'cant' };
@@ -552,6 +579,13 @@ export const api = {
     call<{ entries: FileEntry[] }>('GET', `/api/chats/${chat}/files?path=${encodeURIComponent(path)}`).then(
       (f) => f.entries,
     ),
+  /** What each agent changed in the chat, in its own worktree. */
+  changes: (chat: string) => call<Changes>('GET', `/api/chats/${chat}/changes`),
+  /** One file's change in an agent's worktree, as lines. */
+  change: (chat: string, agent: string, file: ChangedFile) => {
+    const q = new URLSearchParams({ agent, path: file.path, ...(file.from ? { from: file.from } : {}) });
+    return call<FileChange>('GET', `/api/chats/${chat}/change?${q}`);
+  },
   /** The chat's files whose name holds the words, best first: each with its place from the top folder down. */
   find: (chat: string, words: string) =>
     call<{ found: { path: string; crumbs: string[] }[] }>(

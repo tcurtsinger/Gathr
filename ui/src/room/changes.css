@@ -1,0 +1,199 @@
+/* The Changes tab: each agent's changed files one under another, each file's lines in one column. */
+.changes {
+  --plus: oklch(0.78 0.16 150);
+  --minus: oklch(0.72 0.17 25);
+  --mono: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+:root.light .changes {
+  --plus: oklch(0.5 0.14 150);
+  --minus: oklch(0.55 0.2 25);
+}
+.changes-bar {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--frame);
+  font-size: 13px;
+}
+.changes-bar strong,
+.changes-agent strong {
+  font-weight: 600;
+}
+.changes-totals {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  font: 500 12px / 1 var(--mono);
+}
+.changes-plus {
+  color: var(--plus);
+}
+.changes-minus {
+  color: var(--minus);
+}
+.changes-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.changes-agent {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.changes-branch {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font: 12px var(--mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.changes-files {
+  flex: none;
+}
+.changes-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--foreground) 3%, var(--background));
+  color: inherit;
+  font: 12.5px var(--mono);
+  text-align: left;
+}
+.changes-head:hover {
+  background: var(--hover-tint);
+}
+.changes-head > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--muted-foreground);
+  transition: rotate 0.1s;
+}
+.changes-head > svg[data-open="true"] {
+  rotate: 90deg;
+}
+/* A long path loses its start, never its file name. */
+.changes-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.changes-path strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.changes-pill {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--plus) 16%, transparent);
+  color: var(--plus);
+  font: 500 11px var(--font-sans, sans-serif);
+}
+.changes-pill.deleted {
+  background: color-mix(in oklab, var(--minus) 16%, transparent);
+  color: var(--minus);
+}
+.changes-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+/* A file's lines scroll sideways together and never wrap. */
+.changes-lines {
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  font: 12px / 20px var(--mono);
+}
+.changes-lines > div {
+  width: max-content;
+  min-width: 100%;
+}
+.changes-line {
+  --number: max(34px, calc(var(--digits) * 1ch + 12px));
+  display: grid;
+  grid-template-columns: var(--number) var(--number) 16px max-content;
+  height: 20px;
+  padding-right: 12px;
+  white-space: pre;
+}
+.changes-line > span:nth-child(-n + 2) {
+  padding-right: 6px;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  text-align: right;
+  user-select: none;
+}
+.changes-line > span:nth-child(3) {
+  color: var(--muted-foreground);
+  text-align: center;
+  user-select: none;
+}
+.changes-line[data-kind="added"] {
+  background: color-mix(in oklab, var(--plus) 13%, transparent);
+}
+.changes-line[data-kind="added"] > span:nth-child(3) {
+  color: var(--plus);
+}
+.changes-line[data-kind="removed"] {
+  background: color-mix(in oklab, var(--minus) 13%, transparent);
+}
+.changes-line[data-kind="removed"] > span:nth-child(3) {
+  color: var(--minus);
+}
+.changes-gap {
+  align-items: center;
+  height: 24px;
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.changes-gap > span:last-child {
+  grid-column: 3 / 5;
+  padding-left: 4px;
+}
+
+/* Home's tile: how many files are changed, at its top right. */
+.home-tile {
+  position: relative;
+}
+.changes-count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}

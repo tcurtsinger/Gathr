@@ -10,6 +10,7 @@ pub mod assistant;
 pub mod background;
 pub mod board;
 pub mod carry;
+pub mod changes;
 pub mod claude;
 pub mod codex;
 pub mod context;

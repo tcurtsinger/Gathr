@@ -277,7 +277,12 @@ fn write_hooks(hooks: &Path, own: &Path) -> std::io::Result<()> {
 }
 
 /// Runs git in `dir` with `env`: its output, or the line of what it said that gives the reason.
-async fn git(env: &Vars, dir: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
+pub(crate) async fn git(
+    env: &Vars,
+    dir: &Path,
+    args: &[&str],
+    limit: Duration,
+) -> Result<String, String> {
     let ran = crate::run::run(Path::new("git"), args, dir, env, limit).await?;
     match ran.code {
         Some(0) => Ok(ran.out),
