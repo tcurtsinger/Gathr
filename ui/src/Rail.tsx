@@ -4,10 +4,11 @@ import { DesignsMark } from './components/DesignsMark';
 import { IconButton } from './components/IconButton';
 import { MemoryMark } from './components/MemoryMark';
 import { EYES, SHAPES } from './components/pictures';
+import { ScheduledMark } from './components/ScheduledMark';
 import './rail.css';
 
-/** The screen in the frame: the chats (Home), Agents, Plugins, Designs or Memory. */
-export type Opened = 'home' | 'agents' | 'plugins' | 'designs' | 'memory';
+/** The screen in the frame: the chats (Home), Agents, Plugins, Designs, Memory or Scheduled. */
+export type Opened = 'home' | 'agents' | 'plugins' | 'designs' | 'memory' | 'scheduled';
 
 interface Props {
   /** Its icon is lit. */
@@ -19,8 +20,8 @@ interface Props {
 }
 
 /**
- * The rail on the window's shell (0070): Home, Agents, Memory, Plugins and Designs at the top, the open one lit; Update
- * and Settings at the foot.
+ * The rail on the window's shell (0070): Home, Agents, Memory, Plugins, Designs and Scheduled at the top, the open one
+ * lit; Update and Settings at the foot.
  */
 export function Rail({ open, onOpen, onSettings, update }: Props) {
   const button = (screen: Opened, name: string, icon: ReactNode) => (
@@ -40,6 +41,7 @@ export function Rail({ open, onOpen, onSettings, update }: Props) {
       {button('memory', 'Memory', <MemoryMark />)}
       {button('plugins', 'Plugins', <PlugMark />)}
       {button('designs', 'Designs', <DesignsMark />)}
+      {button('scheduled', 'Scheduled', <ScheduledMark />)}
       <div className="rail-foot">
         {update.ready && (
           <IconButton

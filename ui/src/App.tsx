@@ -31,6 +31,7 @@ import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
 import { openDesign } from './room/Sidebar';
 import { Sidebar } from './Sidebar';
+import { OpenScheduled, Scheduled } from './scheduled/Scheduled';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
 import { NavButtons, TopLine } from './TopLine';
@@ -77,13 +78,19 @@ export function App() {
   // What a project's Delete couldn't remove yet.
   const [left, setLeft] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
-  // Agents, Plugins, Designs or Memory, in place of the chat list and the chat until Home or a chat is opened.
+  // Agents, Plugins, Designs, Memory or Scheduled, in place of the chat list and the chat until Home or a chat opens.
   const [opened, setOpened] = useState<Opened>('home');
   // The place Memory shows: About you until another is opened.
   const [remembered, setRemembered] = useState('you');
   const openMemory = useCallback((place: string) => {
     setRemembered(place);
     setOpened('memory');
+  }, []);
+  // The schedule Scheduled shows: the first until another is opened, from its list or a line in a chat.
+  const [scheduledAt, setScheduledAt] = useState<string>();
+  const openScheduled = useCallback((id: string) => {
+    setScheduledAt(id);
+    setOpened('scheduled');
   }, []);
   // The page Plugins opens at, from a line in a chat: none when opened from the rail.
   const [pluginAt, setPluginAt] = useState<PluginAt>();
@@ -393,6 +400,16 @@ export function App() {
       {opened === 'agents' && <Agents onAssistant={loadYou} />}
       {opened === 'plugins' && <Plugins at={pluginAt} />}
       {opened === 'memory' && <Memory at={remembered} onAt={setRemembered} />}
+      {opened === 'scheduled' && (
+        <Scheduled
+          at={scheduledAt}
+          onAt={setScheduledAt}
+          onChat={(chat, message) => {
+            setFound(message ? { chat, message } : undefined);
+            openChat(chat);
+          }}
+        />
+      )}
       {opened === 'designs' && (
         <Designs
           onChat={(chat, design, page) => {
@@ -437,13 +454,15 @@ export function App() {
       {opened !== 'home' ? null : screen ? (
         <OpenMemory.Provider value={openMemory}>
           <OpenPlugin.Provider value={openPlugin}>
-            <RoomView
-              key={screen.chat.id || 'new'}
-              {...screen}
-              found={found?.chat === screen.chat.id ? found : undefined}
-              sidebar={sidebars[screen.chat.id]}
-              onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
-            />
+            <OpenScheduled.Provider value={openScheduled}>
+              <RoomView
+                key={screen.chat.id || 'new'}
+                {...screen}
+                found={found?.chat === screen.chat.id ? found : undefined}
+                sidebar={sidebars[screen.chat.id]}
+                onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
+              />
+            </OpenScheduled.Provider>
           </OpenPlugin.Provider>
         </OpenMemory.Provider>
       ) : (
@@ -519,7 +538,7 @@ const quiet = () => {};
 
 /** The screens' places in Back and Forward are their names: never a chat's id. */
 const away = (key: string): key is Exclude<Opened, 'home'> =>
-  key === 'agents' || key === 'plugins' || key === 'designs' || key === 'memory';
+  key === 'agents' || key === 'plugins' || key === 'designs' || key === 'memory' || key === 'scheduled';
 
 /** What Archive's question says of the open questions it closes. */
 function closes(open: Question[]) {

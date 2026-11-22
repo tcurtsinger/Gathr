@@ -328,6 +328,11 @@
   color: var(--foreground);
   font-weight: 500;
 }
+/* "Scheduled weekdays at 9:00:" stays one line: the words beside it wrap. */
+.room-kept-when {
+  flex: none;
+  white-space: nowrap;
+}
 /* The turn's tool runs: one quiet line, opened by a click. */
 .room-steps {
   padding: 0 12px 8px;
@@ -402,6 +407,17 @@
 .room-bar .room-time {
   margin-right: 5px;
   font-size: inherit;
+}
+/* A scheduled run's words: Scheduled's mark and when they were due, where the time is. */
+.room-bar .room-scheduled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.room-bar .room-scheduled svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.5;
 }
 .room-bar button {
   color: inherit;

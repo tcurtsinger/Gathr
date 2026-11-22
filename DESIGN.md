@@ -107,7 +107,8 @@ its cells 10px by 16px with no lines between rows.
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
   "Start failed" page keeps the system's title bar.
-- The rail: Home at the top, its centre on the word mark's line, then Agents, Memory, Plugins and Designs, 6px apart; the
+- The rail: Home at the top, its centre on the word mark's line, then Agents, Memory, Plugins, Designs and Scheduled (lucide's
+  Clock, `ScheduledMark.tsx`), 6px apart; the
   screen that is open is drawn as current (32px, 8px radius, foreground 9%). At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
   while it installs), above the Settings cog. Icons 18px at 1.75 stroke; Update 20px at 2.
@@ -195,8 +196,9 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   at its top right; each but a diagram with its title as a quiet 12.5px line above, a diagram in its frame.
 - **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" or "Noted
   about Seed catalogue: …" for a tool's note (Memory's mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
-  for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis. A click opens
-  Memory at the note's place, or the tool's or skill's page in Plugins.
+  for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis,
+  "Scheduled weekdays at 9:00: …" (Scheduled's mark; the label stays on one line). A click opens Memory at the note's
+  place, the tool's or skill's page in Plugins, or the schedule in Scheduled.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
   ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed
   one in the danger colour. The card of the files a turn changed shows once the turn ends, under its words,
@@ -205,7 +207,8 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   "Allow adding a tool?"), the agent's name under it, the command or the file it would write, Gathr's own
   reason when Gathr asks ("Writes outside the agent's folders. Allow covers files in … in this chat."),
   then Deny and Allow; Allowing… or Denying… while the answer is sent.
-- **The row under a message:** its time ("9:21", the person's clock), Copy (a check for a moment once
+- **The row under a message:** its time ("9:21", the person's clock; under a scheduled run's words, Scheduled's mark and
+  "Scheduled · 9:00 AM", when they were due), Copy (a check for a moment once
   copied), then one thumbs-up with its count last, so a growing count moves nothing; text and icons 13px,
   muted. Under a card it starts at the left and shows once the turn ends; under the bubble it ends at the
   right. The thumb is filled blue once the person gave theirs. Who gave one shows beside the count while the

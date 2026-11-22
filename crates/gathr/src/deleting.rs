@@ -157,7 +157,7 @@ pub struct Removed {
     pub projects: Vec<String>,
 }
 
-/// Removes `agent` in one transaction (0069): its queued turns stopped; it
+/// Removes `agent` in one transaction (0069): its queued turns stopped and its schedules deleted; it
 /// leaves every team it isn't the only agent of, the next agent leading where it led; its row stays,
 /// marked removed. What it was the only agent of stays for the service to delete, so a second call
 /// finds it again.
@@ -193,6 +193,7 @@ pub fn remove_agent(conn: &mut Connection, agent: &str) -> Result<Removed, Error
          WHERE agent_id = ?1 AND status IN ('queued', 'waiting_sign_in')",
         params![agent, WHY, now],
     )?;
+    tx.execute("DELETE FROM schedules WHERE agent_id = ?1", [agent])?;
     crate::agents::mark_removed(&tx, agent)?;
     tx.commit()?;
     removed.plan = plan;

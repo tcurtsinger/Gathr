@@ -1,6 +1,7 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
 import type { Deletable, DeleteCounts } from './deleting';
+import type { Schedule, ScheduleShown } from './scheduled/schedule';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -97,6 +98,8 @@ export interface Message {
   reply_task?: number | null;
   /** Gathr's line a compaction left, "Compacted Ann's conversation: 468K to 52K": the one line of Gathr's shown. */
   compacted?: boolean;
+  /** A scheduled run's words, drawn as the person's: when they were due. */
+  scheduled?: string;
 }
 
 /** A command an agent's engine still runs in the background: who started it, what it is, since when. */
@@ -863,6 +866,15 @@ export const api = {
   changeNote: (place: string, was: string, text: string) =>
     call<MemoryShown>('PATCH', memoryPath(place), { was, text }),
   removeNote: (place: string, text: string) => call<MemoryShown>('DELETE', memoryPath(place), { text }),
+  /** Everything scheduled in every chat, oldest first. */
+  schedules: () => call<{ schedules: Schedule[] }>('GET', '/api/schedules').then((s) => s.schedules),
+  /** One schedule with its last runs, newest first. */
+  schedule: (id: string) => call<ScheduleShown>('GET', `/api/schedules/${id}`),
+  enableSchedule: (id: string, enabled: boolean) =>
+    call<Schedule>('PATCH', `/api/schedules/${id}`, { enabled }),
+  deleteSchedule: (id: string) => call<unknown>('DELETE', `/api/schedules/${id}`),
+  /** A run at once: the next time stays. */
+  runSchedule: (id: string) => call<{ chat: string; turn: string }>('POST', `/api/schedules/${id}/run`),
   /** Every tool on the web, each enabled one's state asked of it now. */
   tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */

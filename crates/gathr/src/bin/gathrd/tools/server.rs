@@ -72,6 +72,7 @@ impl Tools {
             + Tools::github_router()
             + Tools::add_router()
             + Tools::show_router()
+            + Tools::schedule_router()
     }
 }
 

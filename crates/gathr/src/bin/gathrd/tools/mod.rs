@@ -15,6 +15,7 @@ mod note;
 mod person;
 mod react;
 pub mod relay;
+mod schedule;
 mod server;
 mod show;
 

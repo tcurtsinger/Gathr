@@ -11,6 +11,7 @@ pub const CHECK: i64 = 3;
 pub const LAST_WORD: i64 = 2;
 pub const REPLY: i64 = 2;
 pub const PICKED: i64 = 1;
+pub const SCHEDULED: i64 = 1;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +28,9 @@ pub enum Opened {
     /// The person picked several agents (0028): Gathr's line names the others. Or the person answered a
     /// question: the line carries the answer (`questions`).
     Picked,
+    /// What the person had an agent schedule (`schedules`): Gathr's line says which schedule and when it was due,
+    /// then the words, drawn as the person's.
+    Scheduled,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -43,6 +47,7 @@ impl Opened {
             Opened::LastWord => "last_word",
             Opened::Reply => "reply",
             Opened::Picked => "picked",
+            Opened::Scheduled => "scheduled",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -58,6 +63,7 @@ impl Opened {
             Opened::LastWord => Some(LAST_WORD),
             Opened::Reply => Some(REPLY),
             Opened::Picked => Some(PICKED),
+            Opened::Scheduled => Some(SCHEDULED),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }
