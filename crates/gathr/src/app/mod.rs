@@ -365,7 +365,9 @@ impl Copies {
 
     /// Deletes every copy `current` doesn't name, a staging folder left by a check that didn't
     /// finish, and a database kept for a version no longer on trial. A copy still running on
-    /// Windows can't be deleted: the next write tries again.
+    /// Windows can't be deleted: the next write tries again. A newer copy not refused stays: a
+    /// check installed it, and Update switches to it (a trial passing deleted 0.1.360 before its
+    /// Update, which then started 0.1.359 again).
     fn prune(&self, keep: &Current) {
         let Ok(entries) = std::fs::read_dir(&self.root) else {
             return;
@@ -374,10 +376,15 @@ impl Copies {
             .trial
             .then(|| self.kept_db(&keep.version))
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+        let ready = |name: &str| {
+            parse_version(name).is_some_and(|v| Some(v) > parse_version(&keep.version))
+                && !keep.refused.iter().any(|r| r == name)
+        };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             let path = entry.path();
-            if path.is_dir() && name != keep.version && Some(&name) != keep.previous.as_ref() {
+            let named = name == keep.version || Some(&name) == keep.previous.as_ref();
+            if path.is_dir() && !named && !ready(&name) {
                 let _ = std::fs::remove_dir_all(path);
             } else if name.starts_with("gathr.db.before-") && Some(&name) != kept_db.as_ref() {
                 let _ = std::fs::remove_file(path);
@@ -419,4 +426,31 @@ pub(crate) fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Copies, Current};
+    use crate::data::DataDir;
+
+    /// A release a check installed stays through a write until Update switches to it.
+    #[test]
+    fn a_write_keeps_a_newer_copy_a_check_installed() {
+        let root = std::env::temp_dir().join(format!("gathr-prune-{}", std::process::id()));
+        let copies = Copies::new(&DataDir::new(&root));
+        for v in ["0.1.357", "0.1.358", "0.1.359", "0.1.360", "0.1.361"] {
+            std::fs::create_dir_all(copies.root().join(v)).unwrap();
+        }
+        let current = Current {
+            version: "0.1.359".into(),
+            previous: Some("0.1.358".into()),
+            refused: vec!["0.1.361".into()],
+            ..Current::default()
+        };
+        copies.write(&current).unwrap();
+        let left = |v: &str| copies.root().join(v).is_dir();
+        let kept = ["0.1.357", "0.1.358", "0.1.359", "0.1.360", "0.1.361"].map(left);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(kept, [false, true, true, true, false]);
+    }
 }
