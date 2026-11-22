@@ -270,13 +270,16 @@ pub async fn change(
 /// it didn't start. A disabled one isn't started.
 pub async fn one(s: &Arc<State>, t: &Trace, tool: Tool) -> Answer {
     let id = tool.id.clone();
-    // Only the variables' names leave the writer.
-    let read = s
-        .writer
-        .call(move |conn| pc_tools::saved(conn, &id).map(nameless))
-        .await;
-    let runs = match read {
-        Some(Ok(runs)) => runs,
+    // Only the variables' names leave the writer, and which of them have no value yet.
+    let read = s.writer.call(move |conn| {
+        pc_tools::saved(conn, &id).map(|runs| {
+            let empty = runs.variables.iter().filter(|(_, value)| value.is_empty());
+            let empty: Vec<String> = empty.map(|(name, _)| name.clone()).collect();
+            (nameless(runs), empty)
+        })
+    });
+    let (runs, empty) = match read.await {
+        Some(Ok(read)) => read,
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::CONFLICT,
@@ -318,6 +321,7 @@ pub async fn one(s: &Arc<State>, t: &Trace, tool: Tool) -> Answer {
     shown["state"] = json!(state);
     shown["actions"] = json!(actions);
     shown["printed"] = json!(printed);
+    shown["empty"] = json!(empty);
     Ok(Json(shown))
 }
 
