@@ -432,22 +432,32 @@
 .room-thumb[data-mine] svg path:last-child {
   stroke: var(--background);
 }
-/* Who gave a thumbs-up, while the pointer or the keyboard is on the thumb. */
+/* Who gave a thumbs-up, while the pointer or the keyboard is on the thumb: beside the number, in the time's own
+   words (the owner's pick). It takes no room, so nothing moves under the pointer. */
 .room-tip {
   position: absolute;
-  z-index: 1;
-  top: 100%;
-  left: 12px;
+  top: 50%;
+  left: 100%;
   display: none;
-  margin-top: 3px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  font-size: 12px;
+  margin-left: 8px;
+  color: var(--muted-foreground);
   white-space: nowrap;
-  transform: translateX(-50%);
+  transform: translateY(-50%);
+}
+/* The person's own row ends at the chat's right edge: there the names go before the time. */
+.room-you + .room-bar,
+.room-you-files + .room-bar {
+  position: relative;
+}
+.room-you + .room-bar .room-thumb,
+.room-you-files + .room-bar .room-thumb {
+  position: static;
+}
+.room-you + .room-bar .room-tip,
+.room-you-files + .room-bar .room-tip {
+  right: 100%;
+  left: auto;
+  margin: 0 8px 0 0;
 }
 .room-thumb:hover .room-tip,
 .room-thumb:focus-within .room-tip {
