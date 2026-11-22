@@ -38,18 +38,27 @@ pub(super) fn result(item: &Value) -> Option<StepResult> {
         }
         Some("fileChange") => {
             let changes = item["changes"].as_array()?;
-            let lines: Vec<String> = changes
+            let counted: Vec<(&str, usize, usize)> = changes
                 .iter()
                 .map(|change| {
-                    let (added, removed) = diff_counts(change["diff"].as_str().unwrap_or_default());
-                    let path = change["path"].as_str().unwrap_or_default();
-                    format!("+{added} −{removed} {path}")
+                    let (added, removed) = change_counts(change);
+                    (change["path"].as_str().unwrap_or_default(), added, removed)
                 })
                 .collect();
-            steps::first_lines(&lines.join(
-                "
-",
-            ))
+            let lines: Vec<String> = counted
+                .iter()
+                .map(|(path, added, removed)| format!("+{added} −{removed} {path}"))
+                .collect();
+            let mut said = steps::first_lines(&lines.join("\n"))?;
+            // Only a change that went through changed a file: not a failed or declined one.
+            if item["status"] == "completed" {
+                said.changed = counted
+                    .into_iter()
+                    .filter(|(path, ..)| !path.is_empty())
+                    .map(|(path, added, removed)| steps::changed(path, added, removed))
+                    .collect();
+            }
+            Some(said)
         }
         Some("webSearch") => {
             let n = item["results"].as_array().map_or(0, Vec::len) as i64;
@@ -72,15 +81,26 @@ pub(super) fn result(item: &Value) -> Option<StepResult> {
     }
 }
 
-/// Lines added and removed in a unified diff, its file headers aside.
+/// Lines added and removed by one file's change. Codex gives a new file's whole text as its `diff`,
+/// so each line is added (`steps_codex`); a deleted file's, read the same way, each removed (not
+/// seen in a frame); an update's is a unified diff.
+fn change_counts(change: &Value) -> (usize, usize) {
+    let diff = change["diff"].as_str().unwrap_or_default();
+    match change["kind"]["type"].as_str() {
+        Some("add") => (diff.lines().count(), 0),
+        Some("delete") => (0, diff.lines().count()),
+        _ => diff_counts(diff),
+    }
+}
+
+/// Lines added and removed in a unified diff: from its first hunk on, so a file header isn't one.
 fn diff_counts(diff: &str) -> (usize, usize) {
-    diff.lines()
-        .filter(|l| !l.starts_with("+++") && !l.starts_with("---"))
-        .fold((0, 0), |(added, removed), line| match line.chars().next() {
-            Some('+') => (added + 1, removed),
-            Some('-') => (added, removed + 1),
-            _ => (added, removed),
-        })
+    let hunks = diff.lines().skip_while(|l| !l.starts_with("@@"));
+    hunks.fold((0, 0), |(added, removed), line| match line.chars().next() {
+        Some('+') => (added + 1, removed),
+        Some('-') => (added, removed + 1),
+        _ => (added, removed),
+    })
 }
 
 const SHELLS: [&str; 5] = ["pwsh", "powershell", "bash", "zsh", "sh"];
@@ -324,6 +344,33 @@ exit 1";
         // The third command exits 1 with `status: failed`; the search and the image say nothing.
         let expected = [true, true, false, true, true, true, true];
         assert_eq!(ended.collect::<Vec<_>>(), expected, "{frames:?}");
+    }
+
+    /// A file change keeps each file and its lines added and removed: an update by its diff, a new
+    /// file by its whole text. A failed one keeps none.
+    #[test]
+    fn a_file_change_keeps_each_file_it_changed_and_a_failed_one_none() {
+        let (_, frames) = played("steps_codex");
+        let changed: Vec<_> = frames
+            .iter()
+            .filter_map(|f| match f {
+                Frame::ToolEnd {
+                    result: Some(r), ..
+                } => Some(r.changed.clone()),
+                _ => None,
+            })
+            .flatten()
+            .map(|c| (c.path, c.added, c.removed))
+            .collect();
+        let expected = [
+            ("C:\\work\\demo\\src\\lib.rs".to_string(), 1, 1),
+            ("C:\\work\\demo\\notes\\plan.md".to_string(), 1, 0),
+        ];
+        assert_eq!(changed, expected);
+        let failed = serde_json::json!({ "type": "fileChange", "id": "f", "status": "failed",
+            "changes": [{ "path": "src/beds.rs", "kind": { "type": "update" },
+                "diff": "@@ -1 +1 @@\n-made-up before\n+made-up after\n" }] });
+        assert!(result(&failed).unwrap().changed.is_empty());
     }
 
     #[test]

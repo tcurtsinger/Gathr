@@ -20,6 +20,11 @@ export interface ToolBody {
   };
   /** What came back (0044): up to 5 lines, secrets hidden; how many lines there were, and whether more followed. */
   result?: { text: string; lines: number; more: boolean };
+  /**
+   * The files it changed, as the engine reported them: `path` from the engine's folder when it is there, `full` the
+   * whole path when that's another, and the lines added and removed. None from before they were kept.
+   */
+  changed?: { path: string; full?: string; added: number; removed: number }[];
 }
 
 /** That the agent thought (0042): how long, and the engine's count of its tokens when it gave one. Never its text. */
@@ -280,10 +285,18 @@ export interface ChangedFile {
   kind: 'changed' | 'new' | 'deleted' | 'renamed';
   binary: boolean;
 }
-/** What each agent with a worktree changed in a project's chat; `more` when there were more files than are listed. */
+/**
+ * What each agent changed in the chat: in its worktree (with its branch), and in each other git checkout it wrote in
+ * (`outside`, by the checkout's folder); `more` when there were more files than are listed.
+ */
 export interface Changes {
-  project: boolean;
-  agents: { id: string; name: string; branch: string; files: ChangedFile[] }[];
+  agents: {
+    id: string;
+    name: string;
+    branch: string | null;
+    files: ChangedFile[];
+    outside: { folder: string; files: ChangedFile[] }[];
+  }[];
   more: boolean;
 }
 export interface ChangeLine {
@@ -678,11 +691,16 @@ export const api = {
     call<{ entries: FileEntry[] }>('GET', `/api/chats/${chat}/files?path=${encodeURIComponent(path)}`).then(
       (f) => f.entries,
     ),
-  /** What each agent changed in the chat, in its own worktree. */
+  /** What each agent changed in the chat: in its own worktree, and in other checkouts it wrote in. */
   changes: (chat: string) => call<Changes>('GET', `/api/chats/${chat}/changes`),
-  /** One file's change in an agent's worktree, as lines. */
-  change: (chat: string, agent: string, file: ChangedFile) => {
-    const q = new URLSearchParams({ agent, path: file.path, ...(file.from ? { from: file.from } : {}) });
+  /** One file's change in an agent's worktree, or in the checkout at `folder`, as lines. */
+  change: (chat: string, agent: string, file: ChangedFile, folder?: string) => {
+    const q = new URLSearchParams({
+      agent,
+      path: file.path,
+      ...(file.from ? { from: file.from } : {}),
+      ...(folder ? { folder } : {}),
+    });
     return call<FileChange>('GET', `/api/chats/${chat}/change?${q}`);
   },
   /** The chat's files whose name holds the words, best first: each with its place from the top folder down. */

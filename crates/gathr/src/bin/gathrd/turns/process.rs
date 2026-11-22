@@ -251,6 +251,7 @@ impl Task {
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
                 self.pass = Some(pass);
+                self.cwd = Some(cwd.clone());
                 self.record(
                     Event::point("gathr.engine.start")
                         .trace(trace)

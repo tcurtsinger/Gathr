@@ -1,11 +1,13 @@
 //! Reading the engine's output: each line recorded, then read as frames that move the turn on.
 
+use std::path::Path;
+
 use gathr::claude::command;
 use gathr::claude::engine::Line;
 use gathr::claude::frames::{Frame, TurnEnd};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id};
-use gathr::steps::{StepInput, StepResult};
+use gathr::steps::{Changed, StepInput, StepResult};
 use gathr::store;
 use serde_json::{Value, json};
 
@@ -26,6 +28,27 @@ fn tool_body(
         body["input"] = json!(input);
     }
     body
+}
+
+/// The files a step changed, for its body: each `path` as the person reads it, from the folder the
+/// engine runs in when it's there, and `full`, the whole path, when that's another.
+fn changed(files: &[Changed], cwd: Option<&Path>) -> Value {
+    let each = files.iter().map(|c| {
+        let given = Path::new(&c.path);
+        let full = match cwd {
+            Some(cwd) if given.is_relative() => cwd.join(given),
+            _ => given.to_path_buf(),
+        };
+        let shown = cwd.and_then(|cwd| full.strip_prefix(cwd).ok());
+        let path = shown.map_or(c.path.clone(), |p| p.display().to_string());
+        let full = full.display().to_string();
+        let mut file = json!({ "path": path, "added": c.added, "removed": c.removed });
+        if full != path {
+            file["full"] = full.into();
+        }
+        file
+    });
+    Value::Array(each.collect())
 }
 
 impl Task {
@@ -504,6 +527,9 @@ impl Task {
         let duration_us = now_us() - open.started_us;
         let mut body = tool_body(&name, status, Some(duration_us / 1000), input.as_ref());
         if let Some(result) = result {
+            if !result.changed.is_empty() {
+                body["changed"] = changed(&result.changed, self.cwd.as_deref());
+            }
             body["result"] = json!(result);
         }
         let (body_text, mid) = (body.to_string(), message_id.clone());

@@ -20,6 +20,27 @@ pub struct StepResult {
     pub text: String,
     pub lines: usize,
     pub more: bool,
+    /// The files it changed, as the engine reported them: kept beside the result, not in it.
+    #[serde(skip)]
+    pub changed: Vec<Changed>,
+}
+
+/// A file a step changed: its path as the engine gave it, secrets hidden, and its lines added and
+/// removed. Never what the lines hold.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Changed {
+    pub path: String,
+    pub added: usize,
+    pub removed: usize,
+}
+
+/// A file changed, its path hidden as a step's input is.
+pub fn changed(path: &str, added: usize, removed: usize) -> Changed {
+    Changed {
+        path: redact(path),
+        added,
+        removed,
+    }
 }
 
 /// The first lines of what came back: a tool's answer, an error.
@@ -39,6 +60,7 @@ pub fn said(line: String) -> StepResult {
         text: line,
         lines: 1,
         more: false,
+        changed: Vec::new(),
     }
 }
 
@@ -53,7 +75,12 @@ pub fn found(count: String, hits: &str) -> StepResult {
         lines += shown.lines;
         text = format!("{text}\n{}", first.join("\n"));
     }
-    StepResult { text, lines, more }
+    StepResult {
+        text,
+        lines,
+        more,
+        changed: Vec::new(),
+    }
 }
 
 /// "1 line", "4 lines".
@@ -107,6 +134,7 @@ fn kept(out: &str, from_end: bool, exit: Option<i64>) -> Option<StepResult> {
         text: shown.join("\n"),
         lines: all.len(),
         more: all.len() > room,
+        changed: Vec::new(),
     })
 }
 
