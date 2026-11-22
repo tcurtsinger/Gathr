@@ -30,9 +30,7 @@ pub fn limit(conn: &Connection) -> Result<Option<i64>, Error> {
 /// Saves the limit: 1 to 1,000 hand-offs, or `None` for no limit.
 pub fn set_limit(conn: &Connection, limit: Option<i64>) -> Result<(), Error> {
     if limit.is_some_and(|n| !(1..=1000).contains(&n)) {
-        return Err(Error::Refused(
-            "The hand-off limit is 1 to 1000, or none".into(),
-        ));
+        return Err(Error::Refused("Use 1 to 1000, or none".into()));
     }
     let value = limit.map_or(NO_LIMIT.to_string(), |n| n.to_string());
     conn.execute(

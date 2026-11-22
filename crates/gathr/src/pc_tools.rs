@@ -25,7 +25,7 @@ use crate::{Error, seal};
 pub const START: Duration = Duration::from_secs(60);
 /// What an agent's call to a tool that won't start is told.
 pub const NOT_STARTED: &str = "The tool didn't start";
-const UNREADABLE: &str = "Gathr can't read this as a command or JSON.";
+const UNREADABLE: &str = "Not a command or JSON.";
 /// What is kept of what a program printed: its last lines, within this many lines and bytes.
 const PRINTED_LINES: usize = 40;
 const PRINTED_BYTES: usize = 8 * 1024;

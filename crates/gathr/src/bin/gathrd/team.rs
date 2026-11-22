@@ -249,7 +249,7 @@ pub async fn project(
     error: &'static str,
 ) -> Result<String, Fail> {
     if !dir.is_absolute() {
-        return Err(bad(t, error, "the project folder is a full path"));
+        return Err(bad(t, error, "Use a full path"));
     }
     let dir = dir.to_path_buf();
     let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect())).await;

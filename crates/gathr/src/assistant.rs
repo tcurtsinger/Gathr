@@ -38,7 +38,7 @@ pub fn set_person_name(conn: &Connection, name: Option<&str>) -> Result<(), Erro
     let name = name.map(str::trim).filter(|n| !n.is_empty());
     if name.is_some_and(|n| n.chars().count() > NAME_MOST || n.contains(['\n', '\r'])) {
         return Err(Error::Refused(format!(
-            "Your name is one line of up to {NAME_MOST} characters"
+            "One line, {NAME_MOST} characters at most"
         )));
     }
     put(conn, NAME, name)

@@ -28,8 +28,8 @@ export function Friction() {
   }, []);
 
   return (
-    <Page title="Friction" line="What agents reported got in their way, newest first.">
-      {list?.length === 0 && <p className="settings-empty">No friction reported yet</p>}
+    <Page title="Friction" line="What got in agents’ way, newest first.">
+      {list?.length === 0 && <p className="settings-empty">No friction yet</p>}
       {list && list.length > 0 && (
         <ul className="settings-rows settings-top friction">
           {list.map((f) => (

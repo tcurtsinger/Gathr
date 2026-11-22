@@ -74,7 +74,7 @@ export function SkillPage({ skill, onBack, onFailure, onEnable, onRemove }: Prop
         <span className="skill-enabled-words">
           <span id="skill-enabled">Enabled</span>
           <span className="muted" id="skill-enabled-why">
-            When it’s disabled, no agent can use it. It stays installed.
+            When disabled, no agent can use it.
           </span>
         </span>
         <Switch

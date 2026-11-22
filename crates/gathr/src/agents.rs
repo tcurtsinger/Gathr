@@ -124,15 +124,13 @@ impl Refused {
     pub fn why(&self) -> &'static str {
         match self {
             Refused::Name(name) => name.why(),
-            Refused::Taken => "Another agent has that name. Use a different name.",
+            Refused::Taken => "That name is taken.",
             Refused::Unknown => "no such agent",
             Refused::NoAccount => "no such account",
             Refused::Removing => "The account is being removed",
-            Refused::Moved => {
-                "The agent's account, model or effort changed while it was checked. Try again."
-            }
+            Refused::Moved => "The agent changed meanwhile. Try again.",
             Refused::Picture => "Choose a shape, eyes and colour from the lists",
-            Refused::Description => "A description is one line of up to 80 characters",
+            Refused::Description => "One line, 80 characters at most",
             Refused::Pushes => {
                 "Full approvals decide which pushes ask, which only the person changes"
             }

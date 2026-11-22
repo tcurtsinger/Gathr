@@ -53,7 +53,7 @@ test('friction is listed newest first, each with who reported it, on which task 
 test('with nothing reported it says so, and a failure shows with its reference', async () => {
   answers([]);
   const screen = await render(<Friction />);
-  await expect.element(screen.getByText('No friction reported yet')).toBeVisible();
+  await expect.element(screen.getByText('No friction yet')).toBeVisible();
   screen.unmount();
 
   const error = { error: 'Friction failed', why: 'made-up refusal', ref: 'made-up-ref' };

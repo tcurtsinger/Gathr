@@ -95,7 +95,7 @@ impl Task {
             .chain(self.queue.iter().map(|q| &q.ids))
             .any(compacting)
         {
-            return Some("its conversation is compacting already".into());
+            return Some("Already compacting".into());
         }
         // A first turn under way or waiting saves its conversation before the compaction runs.
         let running = self.turn.as_ref().map(|t| &t.ids);
@@ -108,7 +108,7 @@ impl Task {
         }
         let assigned = match self.assignment(queued).await {
             Ok(Some(assigned)) => assigned,
-            Ok(None) => return Some("there's no account to run it on".into()),
+            Ok(None) => return Some("No account to run it on".into()),
             Err(why) => return Some(why),
         };
         let session = self.chats.writer.call(move |conn| {
@@ -117,7 +117,7 @@ impl Task {
         });
         match session.await {
             Some(Ok(Some(_))) => None,
-            Some(Ok(None)) => Some("there's no conversation to compact yet".into()),
+            Some(Ok(None)) => Some("Nothing to compact yet".into()),
             Some(Err(e)) => Some(e.to_string()),
             None => Some("the database didn't answer".into()),
         }

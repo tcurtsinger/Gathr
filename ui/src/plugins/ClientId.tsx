@@ -31,9 +31,7 @@ export function ClientFields({ redirect, client, onChange }: FieldsProps) {
   return (
     <>
       <div className="agent-field">
-        <span className="tool-label">
-          Redirect address <small>Redirect URI</small>
-        </span>
+        <span className="tool-label">Redirect URI</span>
         <div className="tool-redirect">
           <code>{redirect}</code>
           <CopyButton text={redirect} label="Copy" small />
@@ -62,7 +60,7 @@ export function ClientFields({ redirect, client, onChange }: FieldsProps) {
           autoComplete="off"
         />
       </label>
-      <p className="muted">Both stay in Gathr. Agents never see them.</p>
+      <p className="muted">Agents never see these.</p>
     </>
   );
 }

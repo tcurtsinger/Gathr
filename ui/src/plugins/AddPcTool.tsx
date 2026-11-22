@@ -17,7 +17,7 @@ const PAUSE_MS = 400;
 
 /**
  * Add a tool on this PC, or change one: the command or JSON from its instructions, read back as what Gathr will run
- * before anything runs. Run it (Save) starts it; it's saved even when it doesn't start.
+ * before anything runs. Run (Save) starts it; it's saved even when it doesn't start.
  */
 export function AddPcTool({ onBack, onDone, changing }: Props) {
   const [text, setText] = useState(changing?.text ?? '');
@@ -79,8 +79,8 @@ export function AddPcTool({ onBack, onDone, changing }: Props) {
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>
-      <h1>{changing ? `Change ${changing.name}` : 'Add a tool on this PC'}</h1>
-      <p className="muted">Paste the command or the JSON from the tool’s instructions.</p>
+      <h1>{changing ? `Change ${changing.name}` : 'Add tool on this PC'}</h1>
+      <p className="muted">Paste the command or JSON from the tool’s instructions.</p>
       <label className="agent-field">
         Command
         <textarea
@@ -117,8 +117,7 @@ export function AddPcTool({ onBack, onDone, changing }: Props) {
             <p data-tone="attention">{read.missing}</p>
           ) : (
             <p className="muted">
-              It runs on this PC as you. It can read and change your files and reach the web, whatever its
-              actions say.
+              It runs as you: it can change your files and reach the web, whatever its actions say.
             </p>
           )}
         </section>
@@ -127,14 +126,14 @@ export function AddPcTool({ onBack, onDone, changing }: Props) {
         {starting && (
           <span className="tool-checking muted">
             <LoaderCircle aria-hidden="true" className="tool-spinner" />
-            Starting it
+            Starting
           </span>
         )}
         <Button type="button" size="sm" variant="outline" onClick={onBack}>
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!found || starting}>
-          {changing ? 'Save' : 'Run it'}
+          {changing ? 'Save' : 'Run'}
         </Button>
       </footer>
     </form>

@@ -449,7 +449,7 @@ fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
     match parts {
         Some(parts) if parts.len() == 3 => {
             let fine = parts[..] >= MIN_VERSION[..];
-            let why = format!("Claude Code {version} is too old: Gathr needs {min} or later");
+            let why = format!("Claude Code {version} is too old. Needs {min} or later.");
             (
                 Some(version.to_string()),
                 if fine { Ok(()) } else { Err(why) },
@@ -476,7 +476,7 @@ mod tests {
             (Some("2.1.318".into()), Ok(()))
         );
         assert_eq!(usable("2.10.0 (Claude Code)").1, Ok(()));
-        let old = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+        let old = "Claude Code 2.1.183 is too old. Needs 2.1.318 or later.";
         assert_eq!(
             usable("2.1.183 (Claude Code)"),
             (Some("2.1.183".into()), Err(old.into()))

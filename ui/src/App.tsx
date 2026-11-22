@@ -525,7 +525,7 @@ const away = (key: string): key is Exclude<Opened, 'home'> =>
 function closes(open: Question[]) {
   if (open.length === 0) return undefined;
   if (open.length === 1) return `${open[0].name}’s question closes unanswered.`;
-  return `${open.length} open questions close unanswered.`;
+  return `${open.length} questions close unanswered.`;
 }
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */

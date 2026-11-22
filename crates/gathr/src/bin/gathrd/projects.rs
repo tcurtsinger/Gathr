@@ -79,7 +79,7 @@ async fn change(
     Id(id): Id<String>,
     Json(body): Json<Settings>,
 ) -> Answer {
-    const ERROR: &str = "Project settings failed";
+    const ERROR: &str = "Save failed";
     find(&s, &t, &id, ERROR).await?;
     let name = match &body.name {
         Some(name) => Some(

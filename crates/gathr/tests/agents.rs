@@ -206,12 +206,12 @@ fn saves_are_checked_against_the_engine_and_an_account_in_use_stays() {
 
     let kept = service.call("DELETE", &format!("/api/accounts/{work}"));
     assert_eq!(kept.status, 409, "{}", kept.body);
-    assert_eq!(kept.json()["why"], "agents use it: Orin", "{}", kept.body);
+    assert_eq!(kept.json()["why"], "In use by Orin", "{}", kept.body);
     let reference = kept.json()["ref"].as_str().unwrap().to_string();
     let (ok, trace) = gathr(&data.0, &["diag", "trace", &reference]);
     assert!(ok, "{trace}");
     assert!(
-        trace.to_string().contains("agents use it: Orin"),
+        trace.to_string().contains("In use by Orin"),
         "the refusal's reference doesn't trace to why: {trace}"
     );
 

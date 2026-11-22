@@ -555,7 +555,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     });
   } catch {
-    throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
+    throw new Failure('Connection failed', 'No response. Try again.', null, true);
   }
   const answer = await response.json().catch(() => null);
   if (!response.ok || answer === null) throw refusal(path, response, answer);
@@ -578,7 +578,7 @@ async function shown(chat: string, what: string, file: string): Promise<Response
   try {
     response = await fetch(path);
   } catch {
-    throw new Failure('Connection failed', 'The service did not respond. Try again.', null, true);
+    throw new Failure('Connection failed', 'No response. Try again.', null, true);
   }
   if (response.ok) return response;
   const unshown = UNSHOWN[response.status];

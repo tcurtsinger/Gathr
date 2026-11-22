@@ -113,7 +113,7 @@ export function AgentFolder() {
           {saving ? 'Saving' : 'Save'}
         </Button>
       </span>
-      <small id="agent-folder-scope">Applies to new work. Current work stays where it is.</small>
+      <small id="agent-folder-scope">Applies to new work only.</small>
     </form>
   );
   return (

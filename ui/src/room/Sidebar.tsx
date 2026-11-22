@@ -182,7 +182,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           <Find
             chat={chat}
             icon={<Search aria-hidden="true" />}
-            label="Find a file"
+            label="Find file"
             onOpen={(f) => show(chat, f)}
           >
             <h2>Open</h2>

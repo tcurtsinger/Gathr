@@ -157,10 +157,10 @@ test('a Codex sign-in moves between the browser page and a device code, and a re
   const screen = await render(<WithCorner />);
   const rows = screen.getByRole('listitem');
 
-  await rows.filter({ hasText: 'Made-up page' }).getByRole('button', { name: 'Use a device code' }).click();
+  await rows.filter({ hasText: 'Made-up page' }).getByRole('button', { name: 'Use device code' }).click();
   const device = rows.filter({ hasText: 'Made-up device' });
   await expect.element(device.getByText('MADE-UP1')).toBeVisible();
-  await expect.element(device.getByRole('button', { name: 'Use a device code' })).not.toBeInTheDocument();
+  await expect.element(device.getByRole('button', { name: 'Use device code' })).not.toBeInTheDocument();
   await device.getByRole('button', { name: 'Use browser' }).click();
   const refused = screen.getByRole('alert').filter({ hasText: 'made-up refusal' });
   await expect.element(refused).toBeVisible();

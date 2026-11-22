@@ -41,9 +41,7 @@ test('a refused folder keeps what was typed with its reference; a good one saves
   const field = screen.getByRole('textbox', { name: 'Agent folder' });
   await expect.element(field).toHaveValue('X:\\Made\\Up');
   await expect.element(field).toHaveFocus();
-  await expect
-    .element(field)
-    .toHaveAccessibleDescription('Applies to new work. Current work stays where it is.');
+  await expect.element(field).toHaveAccessibleDescription('Applies to new work only.');
 
   await userEvent.fill(field, 'Y:\\bad');
   await userEvent.keyboard('{Enter}');

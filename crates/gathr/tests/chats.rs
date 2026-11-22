@@ -98,7 +98,7 @@ fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_re
     assert_eq!(sent.status, 500, "{}", sent.body);
     let answer = sent.json();
     assert_eq!(answer["error"], "Send failed");
-    let why = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+    let why = "Claude Code 2.1.183 is too old. Needs 2.1.318 or later.";
     assert_eq!(answer["why"], why, "{answer}");
     assert!(engine_runs(&runs).is_empty(), "an engine too old still ran");
 
@@ -269,7 +269,7 @@ fn a_claude_code_read_as_too_old_is_refused_again_without_asking_again() {
     let chat = service.new_chat();
     service.signed_in(&data.0);
     let path = format!("/api/chats/{chat}/messages");
-    let why = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+    let why = "Claude Code 2.1.183 is too old. Needs 2.1.318 or later.";
     for _ in 0..2 {
         let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
         assert_eq!(
@@ -319,7 +319,7 @@ fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
     let why = turn["why"].as_str().unwrap_or_default();
     assert_eq!(
         why,
-        format!("Claude Code exited during the turn (exit code 1): {line}"),
+        format!("Claude Code exited (code 1): {line}"),
         "{turn}"
     );
 

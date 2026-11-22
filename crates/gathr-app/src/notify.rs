@@ -126,7 +126,7 @@ fn tell(app: &AppHandle, notice: Notice, shown: &Shown, next: &mut i32, since: I
         Notice::Summary { at, count, chat } => {
             let title = match at {
                 "resume" => "Resumed",
-                _ => "Waiting on you",
+                _ => "Needs you",
             };
             let body = notice::summary_body(count);
             let (id, failed) = show(app, shown, next, title, &body, chat.clone());

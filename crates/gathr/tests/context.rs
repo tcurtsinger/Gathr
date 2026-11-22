@@ -703,7 +703,7 @@ fn compact_is_refused_with_a_reference_until_the_agent_has_a_conversation() {
 
     let refused = compact(&service, &chat, &agent);
     assert_eq!(refused.status, 409, "{}", refused.body);
-    let why = "there's no conversation to compact yet";
+    let why = "Nothing to compact yet";
     assert_eq!(refused.json()["why"], why, "{}", refused.body);
     let reference = refused.json()["ref"].as_str().unwrap().to_string();
     let trace = service.call("GET", &format!("/api/trace/{reference}")).body;

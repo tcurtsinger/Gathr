@@ -360,9 +360,9 @@ const ASKS: Record<Needs['what'], { next: ToolNext; button: string; given: strin
   value: { next: 'change', button: 'Add', given: 'Added' },
 };
 
-/** What an added tool needs, in a word or two: "needs a key", "needs NOTES_KEY", "needs 4 values". */
+/** What an added tool needs, in a word or two: "needs key", "needs NOTES_KEY", "needs 4 values". */
 function needsWords(needs: Needs) {
-  if (needs.what !== 'value') return needs.what === 'key' ? 'needs a key' : 'needs sign-in';
+  if (needs.what !== 'value') return needs.what === 'key' ? 'needs key' : 'needs sign-in';
   const names = needs.names.split(' and ');
   return names.length === 1 ? `needs ${names[0]}` : `needs ${names.length} values`;
 }
@@ -432,6 +432,11 @@ function ToolLine({ tool }: { tool: Extract<ReturnType<typeof keptOf>[number], {
   );
 }
 
+/** A note line's label as shown, from the stored one: "Noted for own work" is "Noted", "Changed a note …" "Changed note …". */
+function noteWords(label: string) {
+  return label.replace(/ for own work$/, '').replace(/^Changed a note/, 'Changed note');
+}
+
 /**
  * What the turn kept that lasts, a quiet line each under its words: "Noted about you: …" opens Memory there, "Added
  * tool Notes" and "Added skill branch-names" open its page in Plugins.
@@ -471,7 +476,7 @@ function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
           <span key={i} className="room-kept">
             <button type="button" className="room-kept-line" onClick={() => openMemory?.(place(k.label))}>
               <MemoryMark aria-hidden="true" />
-              <span>{k.label}:</span> <b>{k.text}</b>
+              <span>{noteWords(k.label)}:</span> <b>{k.text}</b>
             </button>
           </span>
         );

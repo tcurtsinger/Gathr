@@ -40,12 +40,8 @@ type Fields = {
 
 const modes: [Approvals, string, string][] = [
   ['ask', 'Ask', 'Ask before actions that need permission.'],
-  ['edits', 'Edits', 'Allow file edits in the worktree. Ask before other actions that need permission.'],
-  [
-    'auto',
-    'Auto',
-    'The engine checks actions. Pushes and file tools writing outside the worktree need approval.',
-  ],
+  ['edits', 'Edits', 'Allow file edits in the worktree. Ask before other actions.'],
+  ['auto', 'Auto', 'The engine checks actions. Pushes and writes outside the worktree need approval.'],
   ['full', 'Full', 'Allow actions without asking.'],
 ];
 
@@ -214,7 +210,7 @@ export function AgentPage(props: Props) {
             onChange={(e) => edit({ description: e.target.value })}
           />
         </Row>
-        <Row name="Account" id={`${id}account`} line="Its engine comes with the account.">
+        <Row name="Account" id={`${id}account`} line="Sets the engine.">
           <Dropdown
             id={`${id}account`}
             value={account}
@@ -225,10 +221,10 @@ export function AgentPage(props: Props) {
             }))}
           />
         </Row>
-        <Row name="Model" id={`${id}model`} line="One of the engine’s models. It stays until you change it.">
+        <Row name="Model" id={`${id}model`} line="Stays until you change it.">
           {models.list === null && !models.failure ? (
             <p className="muted" role="status">
-              Loading models
+              Loading
             </p>
           ) : (
             <Dropdown
@@ -243,7 +239,7 @@ export function AgentPage(props: Props) {
             />
           )}
         </Row>
-        <Row name="Effort" id={`${id}effort`} line="The levels the model offers.">
+        <Row name="Effort" id={`${id}effort`}>
           <Dropdown
             id={`${id}effort`}
             value={effort ?? ''}
@@ -262,7 +258,7 @@ export function AgentPage(props: Props) {
           id={`${id}approvals`}
           line={
             mode &&
-            `${mode[2]}${claude && approvals === 'auto' ? ' Shell commands can run outside the worktree in Auto mode.' : ''}`
+            `${mode[2]}${claude && approvals === 'auto' ? ' Shell commands can run outside the worktree.' : ''}`
           }
         >
           <Dropdown

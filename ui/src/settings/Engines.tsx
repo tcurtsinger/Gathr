@@ -9,7 +9,7 @@ import './engines.css';
 /** Settings > Engines (settings-entry/v5): the accounts, then each engine's program once. */
 export function Engines() {
   return (
-    <Page title="Engines" line="The accounts your agents sign in with, and each engine’s version.">
+    <Page title="Engines" line="Accounts and engine versions.">
       <Accounts />
       <Group title="Versions" />
       <div className="settings-rows settings-top">

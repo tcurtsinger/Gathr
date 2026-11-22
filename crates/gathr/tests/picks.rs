@@ -112,7 +112,7 @@ fn picks_that_dont_fit_the_text_are_refused_with_a_reason_and_a_reference() {
         (vec![pick(6, 5), pick(9, 4)], "two picked names overlap"),
         (
             vec![json!({ "at": 6, "len": 5, "agent": "nobody" })],
-            "a picked name's agent isn't known",
+            "Unknown agent picked",
         ),
     ];
     for (picks, why) in cases {

@@ -107,8 +107,10 @@ pub fn usable(root: &Path, data: &Path) -> Result<(), String> {
         return Err(format!("{} isn't a full path", root.display()));
     }
     if crate::approvals::overlaps(root, data) {
-        let why = "Gathr's data folder can't hold it or be in it. Choose another folder";
-        return Err(format!("{}: {why}", root.display()));
+        return Err(format!(
+            "{} overlaps Gathr's data folder. Choose another.",
+            root.display()
+        ));
     }
     std::fs::create_dir_all(root).map_err(|e| format!("{} can't be made: {e}", root.display()))?;
     let probe = root.join(format!(".gathr-{}", crate::ids::span_id()));

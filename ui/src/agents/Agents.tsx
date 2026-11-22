@@ -160,9 +160,7 @@ export function Agents({ onAssistant }: Props) {
           {agents.length === 0 ? (
             <div className="screen-empty">
               <h2>No agents yet</h2>
-              <p className="muted">
-                Each agent runs on one of your accounts, with its own model and approvals.
-              </p>
+              <p className="muted">Each agent has an account, a model and approvals.</p>
               {accounts.length === 0 && <p className="muted">No accounts</p>}
             </div>
           ) : (

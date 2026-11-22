@@ -116,10 +116,10 @@ impl AppUpdates {
         let version = {
             let mut shown = self.shown();
             if shown.installing.is_some() {
-                return Err(Refused::Not("Gathr is updating already".into()));
+                return Err(Refused::Not("Already updating".into()));
             }
             let Some((version, _)) = shown.ready.clone() else {
-                return Err(Refused::Not("no update is ready".into()));
+                return Err(Refused::Not("No update ready".into()));
             };
             shown.installing = Some((version.clone(), Value::Null));
             version
@@ -147,8 +147,7 @@ impl AppUpdates {
                 let event = event.error("carry_on").attr("why", why.clone());
                 self.chats.writer.record(event);
                 self.publish();
-                let why =
-                    format!("the agents' carry-ons weren't saved, so nothing was stopped: {why}");
+                let why = format!("Agents' work wasn't saved, so nothing stopped: {why}");
                 return Err(Refused::Failed(why));
             }
         };
@@ -354,7 +353,7 @@ impl AppUpdates {
 
     fn find(&self, feed: &str) -> Result<Found, Failure> {
         let target = platform::release_target()
-            .ok_or_else(|| failed("platform")("Gathr ships no build for this computer".into()))?;
+            .ok_or_else(|| failed("platform")("No build for this computer".into()))?;
         let latest = release::latest(feed, target, &self.stop)?;
         if parse_version(&latest.version) <= parse_version(&self.running) {
             return Ok(Found::UpToDate);

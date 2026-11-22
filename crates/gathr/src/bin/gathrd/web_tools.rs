@@ -198,7 +198,7 @@ async fn add(
             }));
         }
         Err(Problem::KeyRefused) => return refused("The key was refused."),
-        Err(Problem::NotReachable) => return refused("No tool answers at this link."),
+        Err(Problem::NotReachable) => return refused("No tool at this link."),
     };
     let given = new
         .name

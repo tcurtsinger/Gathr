@@ -97,7 +97,7 @@ export function Designs({ onChat }: { onChat: (chat: string, design: Design, pag
           {parts?.length === 0 ? (
             <div className="screen-empty">
               <h2>No designs yet</h2>
-              <p className="muted">When an agent draws a design in a chat, it shows here.</p>
+              <p className="muted">Designs agents draw in chats show here.</p>
             </div>
           ) : (
             parts && (

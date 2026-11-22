@@ -39,7 +39,7 @@ export function SignInWaiting({
             variant="outline"
             onClick={() => api.signIn(account.id, true).catch(onFailure)}
           >
-            Use a device code
+            Use device code
           </Button>
         )}
       </div>
@@ -123,9 +123,9 @@ function DeviceCode({
   return (
     <div className="signin-panel">
       <p>
-        <strong>Sign in with a device code</strong> <span className="muted">(beta)</span>
+        <strong>Device code</strong> <span className="muted">(beta)</span>
       </p>
-      <p className="muted">Enter this code on the sign-in page. Any browser works.</p>
+      <p className="muted">Enter this code on the sign-in page, in any browser.</p>
       <div className="signin-actions">
         <code className="device-code">{code}</code>
         <CopyButton text={code} label="Copy code" />

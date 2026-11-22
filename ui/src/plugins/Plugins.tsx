@@ -355,12 +355,8 @@ export function Plugins({ at }: { at?: PluginAt }) {
             {nothing ? (
               <div className="screen-empty">
                 <h2>Nothing installed yet</h2>
-                <p className="muted">
-                  A tool lets your agents use an app on the web, such as an issue tracker or a calendar.
-                </p>
-                <p className="muted">
-                  A skill is a folder of instructions an agent reads when a task needs them.
-                </p>
+                <p className="muted">A tool lets agents use an app, like an issue tracker.</p>
+                <p className="muted">A skill is instructions an agent reads when a task needs them.</p>
               </div>
             ) : (
               <>
@@ -380,9 +376,9 @@ export function Plugins({ at }: { at?: PluginAt }) {
           question={`Remove ${'skill' in removing ? removing.skill.name : removing.tool.name}?`}
           body={
             'skill' in removing
-              ? `Its folder is deleted, with all its files: ${removing.skill.path}`
+              ? `Deletes its folder and files: ${removing.skill.path}`
               : removing.tool.kind === 'pc'
-                ? 'Gathr stops it and forgets it. The program stays on this PC.'
+                ? 'Gathr stops and forgets it. The program stays on this PC.'
                 : removing.tool.signed_in
                   ? 'Its sign-in is deleted too.'
                   : 'Its key is deleted too.'
@@ -439,14 +435,14 @@ function AddMenu({ onTool, onPc, onFolder, onZip, onFile, onNew }: AddProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={6} className="plugins-add-menu">
           <DropdownMenuLabel>Tool</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={onTool}>On the web</DropdownMenuItem>
-          <DropdownMenuItem onSelect={onPc}>On this PC</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onTool}>Web</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onPc}>This PC</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Skill</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => folder.current?.click()}>From a folder</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => zip.current?.click()}>From a zip</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => file.current?.click()}>From a file</DropdownMenuItem>
-          <DropdownMenuItem onSelect={onNew}>New skill</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => folder.current?.click()}>Folder</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => zip.current?.click()}>Zip</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => file.current?.click()}>File</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onNew}>New</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <input

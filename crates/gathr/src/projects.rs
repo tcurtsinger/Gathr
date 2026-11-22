@@ -87,9 +87,7 @@ fn name_taken(written: rusqlite::Result<usize>) -> Result<(), Error> {
         Err(rusqlite::Error::SqliteFailure(e, _))
             if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
         {
-            Err(Error::Refused(
-                "Another project has that name. Use a different name.".into(),
-            ))
+            Err(Error::Refused("That name is taken.".into()))
         }
         other => {
             other?;

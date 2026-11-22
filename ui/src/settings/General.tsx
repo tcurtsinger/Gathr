@@ -59,14 +59,10 @@ export function General() {
   };
 
   return (
-    <Page title="General" line="Your name, the look of Gathr and its version.">
+    <Page title="General" line="Name, theme and version.">
       <div className="settings-rows">
         <YourName />
-        <Row
-          name={<label htmlFor="theme">Theme</label>}
-          line="Applies on this computer only."
-          lineId="theme-line"
-        >
+        <Row name={<label htmlFor="theme">Theme</label>} line="This computer only." lineId="theme-line">
           <Dropdown
             id="theme"
             aria-describedby="theme-line"
@@ -84,21 +80,11 @@ export function General() {
           />
         </Row>
         {on !== null && (
-          <Row
-            name={<span id="startup-label">Open at login</span>}
-            line="Opens Gathr when you sign in to this computer."
-            lineId="startup-line"
-          >
+          <Row name={<span id="startup-label">Open at login</span>}>
             <span className="visually-hidden" role="status">
               {saving ? 'Saving' : ''}
             </span>
-            <Switch
-              on={on}
-              labelledBy="startup-label"
-              describedBy="startup-line"
-              disabled={saving}
-              onChange={change}
-            />
+            <Switch on={on} labelledBy="startup-label" disabled={saving} onChange={change} />
           </Row>
         )}
         <AppVersion />
@@ -110,7 +96,7 @@ export function General() {
 /** Settings > Teamwork: how agents work together. Which one is the assistant is picked on the Agents screen. */
 export function Teamwork() {
   return (
-    <Page title="Teamwork" line="How your agents work together.">
+    <Page title="Teamwork" line="How agents work together.">
       <div className="settings-rows">
         <HandoffLimit />
         <AutoCompact />

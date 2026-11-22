@@ -136,7 +136,7 @@ fn a_save_that_fails_for_another_reason_says_why_and_not_that_the_name_is_taken(
         let answer = failed.json();
         assert_eq!(answer["error"], error, "{method} {path}: {answer}");
         assert!(
-            !answer["why"].as_str().unwrap().contains("has that name"),
+            !answer["why"].as_str().unwrap().contains("name is taken"),
             "{method} {path}: {answer}"
         );
         let (ok, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);

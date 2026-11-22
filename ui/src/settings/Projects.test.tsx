@@ -57,7 +57,7 @@ afterEach(() => {
 });
 
 test('a refused save says why with its reference, and keeps the draft', async () => {
-  const refused = { error: 'Project settings failed', why: 'made-up folder refusal', ref: 'made-up-ref' };
+  const refused = { error: 'Save failed', why: 'made-up folder refusal', ref: 'made-up-ref' };
   service(() => new Response(JSON.stringify(refused), { status: 400 }));
   const opened: string[] = [];
   const screen = await render(
