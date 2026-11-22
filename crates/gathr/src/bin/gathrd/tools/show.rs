@@ -520,19 +520,21 @@ fn check_math(math: &Math) -> Result<(), String> {
 
 /// A block as `read_chat` gives it: "[table: Beds, 12 rows]", "[chart: Rain, 30 points]",
 /// "[flow: Planting, 7 steps]", "[math: Compost, 4 steps]", "[diagram: Beds]", "[page: beds.html]"; a proposed project
-/// (`propose_project`) "[project: Garden app, proposed]" or "[project: Garden app, made]".
+/// (`propose_project`) "[project: Garden app, proposed]" or "[project: Garden app, made]", a proposed agent
+/// (`propose_agent`) "[agent: Kit, proposed]" or "[agent: Kit, added]".
 pub(super) fn line(body: &str) -> String {
     let block: Value = serde_json::from_str(body).unwrap_or_default();
     let kind = block["kind"].as_str().unwrap_or("block");
-    if kind == "project" {
-        let project = &block["project"];
-        let state = if project["made"].is_object() {
-            "made"
-        } else {
+    if kind == "project" || kind == "agent" {
+        let proposed = &block[kind];
+        let done = if kind == "project" { "made" } else { "added" };
+        let state = if proposed[done].is_null() {
             "proposed"
+        } else {
+            done
         };
-        let name = project["name"].as_str().unwrap_or_default();
-        return format!("[project: {name}, {state}]");
+        let name = proposed["name"].as_str().unwrap_or_default();
+        return format!("[{kind}: {name}, {state}]");
     }
     if kind == "diagram" || kind == "page" {
         let file = block["page"]["file"].as_str().unwrap_or_default();

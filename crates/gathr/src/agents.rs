@@ -330,6 +330,16 @@ pub fn mark_removed(conn: &Connection, id: &str) -> Result<(), Error> {
     crate::assistant::forget(conn, id)
 }
 
+/// What `add` would refuse `agent` for now, if anything: its name, face, description or account, or a name taken.
+pub fn would_refuse(conn: &Connection, agent: &Agent) -> Result<Option<Refused>, Error> {
+    if let Err(refused) = checked(conn, agent, &HashSet::new())? {
+        return Ok(Some(refused));
+    }
+    let sql = "SELECT EXISTS (SELECT 1 FROM agents WHERE name_key = ?1 AND removed_ts IS NULL)";
+    let taken: bool = conn.query_row(sql, [accounts::key(agent.name.trim())], |r| r.get(0))?;
+    Ok(taken.then_some(Refused::Taken))
+}
+
 /// The trimmed name, once the name, the face and the account pass.
 fn checked(
     conn: &Connection,
@@ -381,6 +391,13 @@ const COLOURS: [&str; 12] = [
     "red", "orange", "amber", "lime", "green", "teal", "sky", "blue", "violet", "plum", "pink",
     "grey",
 ];
+
+/// A shape, eyes and colour picked at random, as the window's Shuffle picks a new agent's.
+pub fn shuffled() -> [String; 3] {
+    let [a, b, c] = ids::random::<3>();
+    let any = |list: &[&str; 12], n: u8| list[n as usize % list.len()].to_string();
+    [any(&SHAPES, a), any(&EYES, b), any(&COLOURS, c)]
+}
 
 fn saved<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
     Ok(accounts::taken_or(done)?.map_err(|_| Refused::Taken))

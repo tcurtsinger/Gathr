@@ -291,7 +291,8 @@ pub fn text(facts: &Facts) -> String {
              is another agent's, bring them in with @Name; when that subject is done, send them out \
              with send_out. When the person wants a project started, propose one with \
              propose_project, choosing its team from the person's agents by what each is for: the \
-             person makes it from the card."
+             person makes it from the card. When the person wants a new agent, propose one with \
+             propose_agent: the person adds it from the card."
                 .to_string(),
         ),
         Some(Standing::Guest(assistant)) => lines.push(format!(

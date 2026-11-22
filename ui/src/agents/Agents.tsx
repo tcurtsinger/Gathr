@@ -7,6 +7,7 @@ import { Dropdown } from '../components/Dropdown';
 import { Face } from '../components/Face';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
+import type { AgentsAt, ProposingAgent } from '../room/Proposal';
 import { Screen } from '../Screen';
 import { AgentPage } from './AgentPage';
 import { chosen } from './models';
@@ -15,6 +16,8 @@ import './agents.css';
 const NEW = 'new';
 
 interface Props {
+  /** Where it opens from an agent the assistant proposed: that agent's page, or Add's form filled in with it. */
+  at?: AgentsAt;
   /** The assistant was changed here: a new chat's greeting names it. */
   onAssistant: () => void;
 }
@@ -23,16 +26,20 @@ interface Props {
  * The Agents screen (agents/v1, 0026), in place of the chat list and the chat, as Plugins is: every agent in its
  * sidebar; the list with the assistant and Add; each agent's page with its account, model, effort and approvals.
  */
-export function Agents({ onAssistant }: Props) {
+export function Agents({ at, onAssistant }: Props) {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
   /** The agent whose page is open, NEW for Add, or null for the list. */
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(() => (at ? ('agent' in at ? at.agent : NEW) : null));
   const [assistant, setAssistant] = useState<string | null>(null);
   /** The agent last saved, so its page says so until it changes again. */
   const [saved, setSaved] = useState<string | null>(null);
+  /** The proposal Add's form is filled in with, while it is open. */
+  const [proposal, setProposal] = useState<ProposingAgent | null>(() =>
+    at && 'proposal' in at ? at.proposal : null,
+  );
   const newest = useNewestWins();
 
   const load = useCallback(() => {
@@ -56,6 +63,7 @@ export function Agents({ onAssistant }: Props) {
   const show = (id: string | null) => {
     setOpen(id);
     setSaved(null);
+    setProposal(null);
   };
   const pickAssistant = (next: string) => {
     setAssistant(next);
@@ -101,11 +109,12 @@ export function Agents({ onAssistant }: Props) {
       {ready && (agent || open === NEW) && accounts.length > 0 && (
         // A new page for each agent, so one agent's draft never carries to another.
         <AgentPage
-          key={open}
+          key={agent ? open : (proposal?.message ?? open)}
           agent={agent}
           accounts={accounts}
           assistant={!!agent && agent.id === assistant}
           saved={!!agent && saved === agent.id}
+          proposal={agent ? null : proposal}
           onBack={() => show(null)}
           onSaved={(done) => {
             setAgents((list) =>
@@ -115,6 +124,7 @@ export function Agents({ onAssistant }: Props) {
             );
             setOpen(done.id);
             setSaved(done.id);
+            setProposal(null);
           }}
           onDeleted={(left) => {
             setAgents((list) => list?.filter((a) => a.id !== open) ?? null);

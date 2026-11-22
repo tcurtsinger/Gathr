@@ -1,13 +1,19 @@
-//! A project the person's assistant proposes with `propose_project`, in its own chat: a block of kind `project`
-//! (0078's `block` messages), its body `{kind, project: {name, folder, team, chat, brief, made?}}`. The person makes it
-//! from the card, once: the project, its first chat and the brief as that chat's first message, drawn as the person's,
-//! which starts the lead's turn as their message would. The block then records what was made.
+//! What the person's assistant proposes in its own chat, each a block (0078's `block` messages) the person acts on from
+//! its card, once. A project (`propose_project`), its body `{kind: "project", project: {name, folder, team, chat, brief,
+//! made?}}`: the person makes the project, its first chat and the brief as that chat's first message, drawn as the
+//! person's, which starts the lead's turn as their message would. An agent (`propose_agent`), its body `{kind: "agent",
+//! agent: {name, description, account, model, shape, eyes, colour, added?}}`: the person adds it. The block then records
+//! what was made or added.
+
+use std::collections::HashSet;
 
 use rusqlite::{Connection, OptionalExtension};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::Error;
+use crate::agents::{self, Agent, Approvals, Refused};
 use crate::ids::{now_us, trace_id, ulid};
 use crate::store::{self, Start};
 use crate::team::{self, Role};
@@ -61,14 +67,29 @@ impl Proposal {
     }
 }
 
-/// The proposal kept in `message`, if it is one.
+/// The project proposed in `message`, if it is one.
 pub fn find(conn: &Connection, message: &str) -> Result<Option<Proposal>, Error> {
+    proposed(conn, message, "project")
+}
+
+/// The proposal of `kind` kept in `message`, if it is one.
+fn proposed<T: DeserializeOwned>(
+    conn: &Connection,
+    message: &str,
+    kind: &str,
+) -> Result<Option<T>, Error> {
     let sql = "SELECT body FROM messages WHERE id = ?1 AND kind = 'block'";
     let body: Option<String> = conn.query_row(sql, [message], |r| r.get(0)).optional()?;
     let block: Option<Value> = body.and_then(|b| serde_json::from_str(&b).ok());
     Ok(block
-        .filter(|b| b["kind"] == "project")
-        .and_then(|b| serde_json::from_value(b["project"].clone()).ok()))
+        .filter(|b| b["kind"] == kind)
+        .and_then(|b| serde_json::from_value(b[kind].clone()).ok()))
+}
+
+/// The chat a proposal's message is in.
+fn proposed_in(conn: &Connection, message: &str) -> Result<String, Error> {
+    let sql = "SELECT chat_id FROM messages WHERE id = ?1";
+    Ok(conn.query_row(sql, [message], |r| r.get(0))?)
 }
 
 /// What making it did: the project's id, its chat, the proposal's block as it is now and the chat it is in, and the
@@ -134,8 +155,7 @@ pub fn make(
         message: store::message(&tx, &brief)?,
     };
     let block = store::message(&tx, message)?;
-    let sql = "SELECT chat_id FROM messages WHERE id = ?1";
-    let proposed_in = tx.query_row(sql, [message], |r| r.get(0))?;
+    let proposed_in = proposed_in(&tx, message)?;
     tx.commit()?;
     Ok(Making {
         project,
@@ -171,5 +191,98 @@ pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
         format!(
             "{who} wrote this brief for the person, and the person agreed to it when they made this project."
         )
+    }))
+}
+
+/// An agent the assistant proposed; once added, the agent as it was added.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewAgent {
+    pub name: String,
+    pub description: String,
+    /// The account's id.
+    pub account: String,
+    /// `None` is the engine's own default.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Its face, picked as it was proposed, so the card shows the face it is added with.
+    pub shape: String,
+    pub eyes: String,
+    pub colour: String,
+    /// The agent's id, once added.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added: Option<String>,
+}
+
+impl NewAgent {
+    /// The block's body as kept.
+    pub fn body(&self) -> String {
+        json!({ "kind": "agent", "agent": self }).to_string()
+    }
+
+    /// The agent to add: what was proposed, and for the rest what a new agent gets.
+    pub fn agent(&self) -> Agent {
+        Agent {
+            id: String::new(),
+            name: self.name.clone(),
+            account: self.account.clone(),
+            model: self.model.clone(),
+            effort: None,
+            approvals: Approvals::default(),
+            shape: Some(self.shape.clone()),
+            eyes: Some(self.eyes.clone()),
+            colour: Some(self.colour.clone()),
+            description: Some(self.description.clone()),
+        }
+    }
+}
+
+/// The agent proposed in `message`, if it is one.
+pub fn find_agent(conn: &Connection, message: &str) -> Result<Option<NewAgent>, Error> {
+    proposed(conn, message, "agent")
+}
+
+/// What adding it did: the agent, the proposal's block as it is now, and the chat it is in.
+pub struct Adding {
+    pub agent: Agent,
+    pub block: Value,
+    pub proposed_in: String,
+}
+
+/// Adds `agent` (its model and effort checked already) for the proposal in `message`, as `agents::add` adds one, and
+/// marks the proposal added with it, in one transaction. Refused for a proposal that isn't there or was added already.
+pub fn add_agent(
+    conn: &mut Connection,
+    message: &str,
+    agent: &Agent,
+    removing: &HashSet<String>,
+) -> Result<Result<Adding, Refused>, Error> {
+    let tx = conn.transaction()?;
+    let mut p = find_agent(&tx, message)?
+        .ok_or_else(|| Error::Refused("There's no such proposal.".into()))?;
+    if p.added.is_some() {
+        return Err(Error::Refused("This agent was added already.".into()));
+    }
+    let agent = match agents::add(&tx, agent, removing)? {
+        Ok(agent) => agent,
+        Err(refused) => return Ok(Err(refused)),
+    };
+    p = NewAgent {
+        name: agent.name.clone(),
+        description: agent.description.clone().unwrap_or_default(),
+        account: agent.account.clone(),
+        model: agent.model.clone(),
+        shape: agent.shape.clone().unwrap_or(p.shape),
+        eyes: agent.eyes.clone().unwrap_or(p.eyes),
+        colour: agent.colour.clone().unwrap_or(p.colour),
+        added: Some(agent.id.clone()),
+    };
+    store::set_message_body(&tx, message, &p.body())?;
+    let block = store::message(&tx, message)?;
+    let proposed_in = proposed_in(&tx, message)?;
+    tx.commit()?;
+    Ok(Ok(Adding {
+        agent,
+        block,
+        proposed_in,
     }))
 }

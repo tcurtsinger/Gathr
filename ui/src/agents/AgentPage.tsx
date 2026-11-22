@@ -8,6 +8,7 @@ import { Dropdown } from '../components/Dropdown';
 import { shuffled } from '../components/pictures';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { report, timeToPaint } from '../report';
+import type { ProposingAgent } from '../room/Proposal';
 import { engineName } from '../settings/Accounts';
 import { FaceFields } from './FaceFields';
 import { choices, chosen, efforts, firstChoice } from './models';
@@ -19,6 +20,8 @@ interface Props {
   /** It is the assistant: its title says so. */
   assistant: boolean;
   saved: boolean;
+  /** Change, on an agent the assistant proposed: Add's form filled in with it, and Save adds it from there. */
+  proposal?: ProposingAgent | null;
   onBack: () => void;
   onSaved: (agent: Agent) => void;
   /** What the delete couldn't remove yet, if anything. */
@@ -50,12 +53,13 @@ const modes: [Approvals, string, string][] = [
  * the engine), the account's models and their efforts, and Approvals, saved together with Save.
  */
 export function AgentPage(props: Props) {
-  const { agent, accounts, assistant, saved, onBack, onSaved, onDeleted } = props;
+  const { agent, accounts, assistant, saved, proposal, onBack, onSaved, onDeleted } = props;
   // Only the fields edited here, over the agent as saved, so a save from elsewhere shows in
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const edit = (fields: Partial<Fields>) => setEdits((e) => ({ ...e, ...fields }));
   // A new agent starts with three choices picked as Shuffle picks them, saved with it: its picture shows before it is.
+  // A proposed one starts as proposed, with the face its card showed.
   const [blank] = useState<Fields>(() => ({
     name: '',
     account: accounts[0].id,
@@ -63,6 +67,7 @@ export function AgentPage(props: Props) {
     effort: null,
     approvals: 'auto',
     ...shuffled(),
+    ...proposal?.agent,
   }));
   const { name, description, account, model, effort, approvals, shape, eyes, colour }: Fields = {
     ...(agent ?? blank),
@@ -128,7 +133,11 @@ export function AgentPage(props: Props) {
     e.preventDefault();
     setBusy(true);
     setFailure(null);
-    const call = agent ? api.saveAgent({ id: agent.id, ...draft }) : api.addAgent(draft);
+    const call = agent
+      ? api.saveAgent({ id: agent.id, ...draft })
+      : proposal
+        ? api.addProposedAgent(proposal.message, draft).then((added) => added.agent)
+        : api.addAgent(draft);
     call.then(
       (done) => {
         setBusy(false);
