@@ -146,10 +146,11 @@ pub fn make(
     })
 }
 
-/// Where a brief's message is: the proposal's block whose made message it is. Text, so no other message's body is
-/// read as JSON.
-pub const BRIEF_OF: &str =
-    "b.kind = 'block' AND instr(b.body, '\"message\":\"' || m.id || '\"') > 0";
+/// Where a brief's message is: the proposal's block whose made message it is. Only a block that holds the id is read
+/// as JSON, and only a project's counts: a table an agent showed can hold any words, a message's id too.
+pub const BRIEF_OF: &str = "b.kind = 'block' AND instr(b.body, m.id) > 0
+     AND CASE WHEN json_valid(b.body) THEN json_extract(b.body, '$.kind') = 'project'
+              AND json_extract(b.body, '$.project.made.message') = m.id END";
 
 /// Gathr's line before a brief's words, for the lead: who wrote it, and that the person agreed to it.
 pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
