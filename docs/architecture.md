@@ -28,12 +28,20 @@ not the originally planned shared trait. Shared process cleanup follows 0031.
 Gathr owns and updates both engine copies; an installed app waits for its checked copy.
 Each account has its own `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, never a copied personal login.
 Agents select an account, live model/effort options and an approval mode. Account isolation and gates are built;
-a background login watcher is not built yet. External account plugins and tools are disabled by default.
+a background login watcher is not built yet. The account's own connectors and MCP tools stay off, and
+Codex's plugins and apps: an agent gets the tools and skills added in Gathr.
 [0002](archive/decisions/0002-login-folders.md), [0024](archive/decisions/0024-only-what-gathr-gives.md),
 [0025](archive/decisions/0025-engine-copies.md), [0026](archive/decisions/0026-agent-settings.md),
 [0029](archive/decisions/0029-approvals.md).
 
-The background model (`gathrd/naming.rs`, `titles.rs`) is a small, quick model on one of the person's signed-in
+Tools and skills, on the Plugins screen, are added once for every agent. A tool on the web is a remote MCP server,
+with a key or a browser sign-in sealed for the computer's user (DPAPI, or the Keychain on a Mac) (`web_tools.rs`,
+`tool_sign_in.rs`, `seal.rs`). A tool on this PC is a program Gathr starts and talks to over its stdin and stdout,
+one running copy for every agent (`pc_tools.rs`). `gathrd` relays both, so an engine only ever talks to Gathr.
+A skill is a folder with a `SKILL.md` in the agent folder's Skills (`skills.rs`). An engine gets its tools and
+skills as it starts, so an agent's next turn after a change starts its engine again (`gathrd/turns/mod.rs`).
+
+The background model (`gathrd/naming.rs`, `src/titles.rs`) is a small, quick model on one of the person's signed-in
 accounts, for work nobody waits on. Its one job: a moment after a new chat's first message of 40 characters or
 more, a name of 2 to 5 words. Settings > Background picks it; left unset, Gathr takes the first Claude Code
 account's model whose id holds `haiku` (Codex names no small model, so none is picked there by itself). Each run is
@@ -42,19 +50,26 @@ the engine's one-shot mode, never a chat session: `claude -p` (no tools, `--safe
 `<data>/background`, with the question in its arguments and the message on its input. It passes the account's
 renewal gate as every start does, and past 30 s its answer is let go but it is never killed. One
 `gathr.background.name` event says `named`, `skipped` or `failed` and why, never the words. A rename by the person
-is final: the name lands only while the title is still the one the first line gave.
+(Rename, in a chat's More menu) is final: the name lands only while the title is still the one the first line gave.
 
 ## Chats, projects and the room
 
 A chat has one to five agents; team chats have a lead.
-The service persists messages, replies, reactions, a board, questions to the person, pause/Stop, usage holds and archives.
-Agents use Gathr's in-process MCP server to read chat history, react, set a board line and ask the person.
+The service persists messages, replies, reactions, the person's likes, where the person left off, chat names, a board,
+questions to the person, pause/Stop, usage holds and archives.
+Agents use Gathr's MCP server at `/mcp`, each engine with a token of its own, to read the chat (`read_chat`), react,
+set a board line, ask the person, keep a note in Memory (`note`), put a table or a chart in the chat (`show`), add a
+tool or a skill when the person asks (`add_tool`, `add_skill`) and read or update a pull request (`pr`,
+`ci_failures`, `update_pr`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
 The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.
 The service owns worktrees, engine-lifetime temp folders and cleanup, preserving work still in use.
 It supplies allowed folders to the engines and file-write guard; the limits in 0029 still apply.
+Gathr asks the person before a risky push (to the default branch, rewriting or deleting a branch, or to anywhere
+but the worktree's origin) and before a write outside the agent's folders; one Allow of such a write covers
+its folder for that agent in that chat (`approvals.rs`).
 [0034](archive/decisions/0034-agent-folder.md).
 Deleting a project removes its chats and every folder Gathr made for it but Shared and its Designs; deleting an agent
 passes its lead on and keeps its row as removed, so its old messages keep its name
@@ -63,7 +78,8 @@ passes its lead on and keeps its row as removed, so its old messages keep its na
 ## Events and diagnostics
 
 The local event record stores turn, tool and lifecycle events, timings and failure references.
-Engine frames are recorded for replay and troubleshooting. Settings > Turns shows turn timelines;
+Engine frames are recorded for replay and troubleshooting. Settings > Turns shows turn timelines, and
+Settings > Friction the reports agents made before their friction tool was removed;
 `gathr diag` supports `health`, `trace`, `failures`, `friction`, `query`, `turn --raw`, `words` and `bundle`.
 OTLP export, retention/pruning, daily rollups, `diag stalls` and `diag usage` are not built yet.
 [0011](archive/decisions/0011-event-record.md), [0019](archive/decisions/0019-troubleshooting.md).
@@ -72,13 +88,16 @@ OTLP export, retention/pruning, daily rollups, `diag stalls` and `diag usage` ar
 
 React and TypeScript run in a Tauri 2 window or a local browser. Windows uses WebView2; macOS uses WKWebView.
 The desktop window closes to the tray/menu bar and Quit ends it and its service.
-When a chat starts needing the person and the window isn't in front, the desktop app shows a system notification (`gathr::notice` decides, `crates/gathr-app/src/notify.rs` shows; [0058](archive/decisions/0058-gathr-tells-you-outside-the-window.md)).
+When a chat starts needing the person, or a chat's agents have all stopped, and the window isn't in front, the desktop app shows a system notification (`gathr::notice` decides, `crates/gathr-app/src/notify.rs` shows; [0058](archive/decisions/0058-gathr-tells-you-outside-the-window.md)).
 Local Theme and panel widths persist in the client. Vite builds the UI; Biome, TypeScript and Vitest check it.
 [0012](archive/decisions/0012-ui-shell.md), [0016](archive/decisions/0016-macos.md), [0022](archive/decisions/0022-ui-tooling.md).
 
-The accepted chat layout, Settings panel, reply states and registry controls are documented in
-[0015](archive/decisions/0015-chat-design.md), [0023](archive/decisions/0023-settings-and-reply-states.md) and
-[0030](archive/decisions/0030-ui-foundation.md). 0030 replaces 0027's renderer.
+The window has a rail (Home, Agents, Plugins, Designs, Memory, Settings), the chat list and the chat.
+A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes tiles, and the board), and a tab for
+each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
+PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). Changes shows what each agent changed in its
+worktree that isn't on the project's main line yet (`changes.rs`). `ui/src/registry` keeps the assistant-ui and
+shadcn files as published ([0030](archive/decisions/0030-ui-foundation.md)).
 The signed window updater and service handover are built.
 [0032](archive/decisions/0032-service-updates.md).
 
