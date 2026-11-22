@@ -22,7 +22,7 @@ import { listen } from './live';
 import { Memory, OpenMemory } from './memory/Memory';
 import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
-import { Plugins } from './plugins/Plugins';
+import { OpenPlugin, type PluginAt, Plugins } from './plugins/Plugins';
 import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
 import { waits } from './room/Question';
@@ -81,6 +81,12 @@ export function App() {
   const openMemory = useCallback((place: string) => {
     setRemembered(place);
     setOpened('memory');
+  }, []);
+  // The page Plugins opens at, from a line in a chat: none when opened from the rail.
+  const [pluginAt, setPluginAt] = useState<PluginAt>();
+  const openPlugin = useCallback((at: PluginAt) => {
+    setPluginAt(at);
+    setOpened('plugins');
   }, []);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
@@ -368,7 +374,10 @@ export function App() {
       />
       <Rail
         open={opened}
-        onOpen={setOpened}
+        onOpen={(open) => {
+          setPluginAt(undefined);
+          setOpened(open);
+        }}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
         update={{
           ready: readyVersion(appUpdate.app),
@@ -378,7 +387,7 @@ export function App() {
         }}
       />
       {opened === 'agents' && <Agents onAssistant={loadYou} />}
-      {opened === 'plugins' && <Plugins />}
+      {opened === 'plugins' && <Plugins at={pluginAt} />}
       {opened === 'memory' && <Memory at={remembered} onAt={setRemembered} />}
       {opened === 'designs' && (
         <Designs
@@ -422,13 +431,15 @@ export function App() {
       )}
       {opened !== 'home' ? null : screen ? (
         <OpenMemory.Provider value={openMemory}>
-          <RoomView
-            key={screen.chat.id || 'new'}
-            {...screen}
-            found={found?.chat === screen.chat.id ? found : undefined}
-            sidebar={sidebars[screen.chat.id]}
-            onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
-          />
+          <OpenPlugin.Provider value={openPlugin}>
+            <RoomView
+              key={screen.chat.id || 'new'}
+              {...screen}
+              found={found?.chat === screen.chat.id ? found : undefined}
+              sidebar={sidebars[screen.chat.id]}
+              onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
+            />
+          </OpenPlugin.Provider>
         </OpenMemory.Provider>
       ) : (
         <>

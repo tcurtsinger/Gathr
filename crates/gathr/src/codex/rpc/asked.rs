@@ -45,12 +45,13 @@ impl Session {
             "mcpServer/elicitation/request" if approves(params) => {
                 let server = params["serverName"].as_str().unwrap_or_default();
                 let call = self.mcp_call.clone();
-                let tool = call.filter(|c| c.starts_with(&format!("mcp__{server}__")));
-                let tool = tool.unwrap_or_else(|| format!("mcp__{server}"));
+                let call = call.filter(|(c, _)| c.starts_with(&format!("mcp__{server}__")));
+                // Its arguments, as Claude Code's ask carries them: the card shows a command.
+                let (tool, input) = call.unwrap_or_else(|| (format!("mcp__{server}"), json!({})));
                 read.frames.push(Frame::ApprovalAsked {
                     request_id: request_id.clone(),
                     tool,
-                    input: json!({}),
+                    input,
                     why: params["message"].as_str().map(String::from),
                 });
                 self.approvals.insert(request_id, (id.clone(), true));

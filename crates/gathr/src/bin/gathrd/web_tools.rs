@@ -30,7 +30,9 @@ fn state(answer: &Result<web_tools::Remote, Problem>) -> &'static str {
         Ok(_) => "connected",
         Err(Problem::NotReachable) => "not_reachable",
         Err(Problem::SignIn) => "sign_in",
-        Err(_) => "key_refused",
+        // Saved without a key: an agent added it, for the person to give one.
+        Err(Problem::NeedsKey) => "needs_key",
+        Err(Problem::KeyRefused) => "key_refused",
     }
 }
 

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+mod add;
 mod board;
 pub mod briefing;
 mod github;

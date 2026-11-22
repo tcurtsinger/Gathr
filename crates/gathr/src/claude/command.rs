@@ -204,10 +204,14 @@ pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 /// Where the worktree's `pre-push` hook asks Gathr, with the token above (0029).
 pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
-/// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking, and
-/// the briefing in `briefing`, a file for the same reason as the token (0005, 0021). Beside them,
-/// each tool on the web (`outside`: its entry's name and Gathr's relay for it), with the same
-/// token, asked about as the agent's permission mode says and loaded only when needed.
+/// Gathr's tools an engine asks about as the agent's Approvals say, as it does a tool on the web:
+/// what they add reaches every agent.
+pub const ASKED_TOOLS: &[&str] = &["add_tool", "add_skill"];
+
+/// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking but
+/// `ASKED_TOOLS`, and the briefing in `briefing`, a file for the same reason as the token (0005,
+/// 0021). Beside them, each tool on the web (`outside`: its entry's name and Gathr's relay for it),
+/// with the same token, asked about as the agent's permission mode says and loaded only when needed.
 pub fn given(
     url: &str,
     briefing: &Path,
@@ -216,6 +220,7 @@ pub fn given(
 ) -> Vec<String> {
     let allowed: Vec<String> = tools
         .iter()
+        .filter(|name| !ASKED_TOOLS.contains(&name.as_str()))
         .map(|name| format!("mcp__gathr__{name}"))
         .collect();
     let auth = format!("Bearer ${{{TOKEN_VAR}}}");

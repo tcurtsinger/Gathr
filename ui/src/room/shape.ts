@@ -146,18 +146,38 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
   return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
-/** A note the turn kept in Memory: what `note` answered, "Noted about you:" then the note. */
-export interface Noted {
-  label: string;
-  text: string;
+/** What a tool added by an agent needs from the person before it works. */
+export type Needs = { what: 'key' | 'sign-in' } | { what: 'value'; names: string };
+
+/**
+ * What the turn kept that lasts, from its answer's first lines ("Noted about you:" then the note; "Added the tool:"
+ * then its name, id and what it needs; "Wrote the skill:" then its name): a note in Memory, a tool, a skill.
+ */
+export type Kept =
+  | { kind: 'note'; label: string; text: string }
+  | { kind: 'tool'; label: string; name: string; id: string; needs?: Needs }
+  | { kind: 'skill'; label: string; name: string };
+
+/** What an added tool's answer says it needs: "It needs a key, …", "It needs a value for NOTES_KEY, …". */
+function needsOf(line = ''): Needs | undefined {
+  if (line.startsWith('It needs a key')) return { what: 'key' };
+  if (line.startsWith('It needs a sign-in')) return { what: 'sign-in' };
+  const names = line.match(/^It needs a value for (.+?), which/)?.[1];
+  return names ? { what: 'value', names } : undefined;
 }
 
-/** The notes the turn's `note` calls kept, in the order they came: the step keeps each answer. */
-export function notedOf(steps: Step[]): Noted[] {
-  return steps.flatMap((s): Noted[] => {
-    if ('note' in s || s.tool !== 'mcp__gathr__note' || s.status !== 'ok' || !s.result) return [];
-    const [label, ...text] = s.result.text.split('\n');
-    return label.endsWith(':') && text.length ? [{ label: label.slice(0, -1), text: text.join(' ') }] : [];
+/** What the turn's `note`, `add_tool` and `add_skill` calls kept, in the order they came: the step keeps each answer. */
+export function keptOf(steps: Step[]): Kept[] {
+  return steps.flatMap((s): Kept[] => {
+    if ('note' in s || s.status !== 'ok' || !s.result) return [];
+    const [first, name, ...rest] = s.result.text.split('\n');
+    if (!first.endsWith(':') || !name) return [];
+    const label = first.slice(0, -1);
+    if (s.tool === 'mcp__gathr__note') return [{ kind: 'note', label, text: [name, ...rest].join(' ') }];
+    if (s.tool === 'mcp__gathr__add_skill') return [{ kind: 'skill', label, name }];
+    const id = rest[0]?.match(/^id (\S+)$/)?.[1];
+    if (s.tool !== 'mcp__gathr__add_tool' || !id) return [];
+    return [{ kind: 'tool', label, name, id, needs: needsOf(rest[1]) }];
   });
 }
 

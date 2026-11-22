@@ -151,6 +151,26 @@ pub async fn remote(s: &Arc<State>, id: &str) -> Result<Arc<Remote>, ErrorData> 
     }
 }
 
+/// How the tool's start went: its actions' names when it runs, else what it printed, if anything.
+pub async fn outcome(s: &Arc<State>, id: &str) -> Result<Vec<String>, Option<String>> {
+    let copy = copy(s, id);
+    match copy.phase(web_tools::CONNECT).await {
+        Phase::Running(remote) => {
+            let actions = web_tools::actions(&remote, web_tools::CONNECT).await;
+            Ok(actions
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| a.name)
+                .collect())
+        }
+        _ => Err(copy
+            .printed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .text()),
+    }
+}
+
 /// What a tool runs, as an answer says it: the program found, each variable by its name only.
 fn said(runs: &Runs, vars: &Vars) -> Value {
     let found = pc_tools::find(&runs.program, vars);

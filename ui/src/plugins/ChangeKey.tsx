@@ -23,7 +23,14 @@ export function ChangeKey({ tool, opener, onClose }: Props) {
     });
   };
   return (
-    <Dialog open title="Change key" onClose={onClose} opener={opener} bare className="change-key">
+    <Dialog
+      open
+      title={tool.has_key ? 'Change key' : 'Add key'}
+      onClose={onClose}
+      opener={opener}
+      bare
+      className="change-key"
+    >
       <form
         className="tool-form"
         onSubmit={(e) => {

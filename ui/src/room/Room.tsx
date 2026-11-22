@@ -1,5 +1,6 @@
-import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, Plug, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import type { Member, Message, Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { DesignsMark } from '../components/DesignsMark';
@@ -12,9 +13,20 @@ import { MemoryMark } from '../components/MemoryMark';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
 import { OpenMemory } from '../memory/Memory';
+import { OpenPlugin, type PluginAt, type ToolNext } from '../plugins/Plugins';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
-import { type Card, type Item, notedOf, type Said, type Step, shape, stepsLine, working } from './shape';
+import {
+  type Card,
+  type Item,
+  keptOf,
+  type Needs,
+  type Said,
+  type Step,
+  shape,
+  stepsLine,
+  working,
+} from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
 
@@ -272,7 +284,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
           />
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
-        <Noted card={card} ctx={ctx} />
+        <Kept card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Foot said={card.said} last={card.last} ctx={ctx} />
         <Asks turn={card.id} agent={agent} ctx={ctx} />
@@ -340,25 +352,77 @@ function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
   );
 }
 
-/** What the turn kept in Memory, a quiet line each under its words: "Noted about you: …". A click opens it there. */
-function Noted({ card, ctx }: { card: Card; ctx: Ctx }) {
-  const open = useContext(OpenMemory);
-  const noted = notedOf(card.steps);
-  if (!noted.length) return null;
+/** What a tool's line asks of the person, and its button: the tool's page opens straight there. */
+const ASKS: Record<Needs['what'], { next: ToolNext; button: string }> = {
+  key: { next: 'key', button: 'Add key' },
+  'sign-in': { next: 'sign-in', button: 'Sign in' },
+  value: { next: 'change', button: 'Add it' },
+};
+
+/**
+ * What the turn kept that lasts, a quiet line each under its words: "Noted about you: …" opens Memory there, "Added the
+ * tool Notes" and "Wrote the skill branch-names" open its page in Plugins. A tool that needs something says so, with
+ * a button for it.
+ */
+function Kept({ card, ctx }: { card: Card; ctx: Ctx }) {
+  const openMemory = useContext(OpenMemory);
+  const openPlugin = useContext(OpenPlugin);
+  const kept = keptOf(card.steps);
+  if (!kept.length) return null;
   const place = (label: string) => {
     if (label === 'Noted about you' || label === 'Changed a note about you') return 'you';
     if (label.endsWith(' own work')) return `agent:${card.turn.agent}`;
     return `project:${ctx.project}`;
   };
+  const line = (k: (typeof kept)[number]) => {
+    if (k.kind === 'note') {
+      const words = (
+        <>
+          <MemoryMark aria-hidden="true" />
+          <span>{k.label}:</span> <b>{k.text}</b>
+        </>
+      );
+      return { words, open: () => openMemory?.(place(k.label)) };
+    }
+    const Mark = k.kind === 'tool' ? Plug : BookOpen;
+    const words = (
+      <>
+        <Mark aria-hidden="true" />
+        <span>{k.label}</span> <b>{k.name}</b>
+        {k.kind === 'tool' && k.needs && (
+          <span>
+            · it needs {k.needs.what === 'value' ? `a value for ${k.needs.names}` : `a ${k.needs.what}`}
+          </span>
+        )}
+      </>
+    );
+    const at: PluginAt = k.kind === 'tool' ? { tool: k.id } : { skill: k.name };
+    return { words, open: () => openPlugin?.(at) };
+  };
   return (
     <div className="room-noted">
-      {noted.map((n, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: a turn's notes only grow, in order
-        <button key={i} type="button" onClick={() => open?.(place(n.label))}>
-          <MemoryMark aria-hidden="true" />
-          <span>{n.label}:</span> <b>{n.text}</b>
-        </button>
-      ))}
+      {kept.map((k, i) => {
+        const { words, open } = line(k);
+        const asks = k.kind === 'tool' && k.needs && ASKS[k.needs.what];
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a turn's lines only grow, in order
+          <span key={i} className="room-kept">
+            <button type="button" className="room-kept-line" onClick={open}>
+              {words}
+            </button>
+            {k.kind === 'tool' && asks && (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => openPlugin?.({ tool: k.id, next: asks.next })}
+              >
+                {asks.button}
+              </Button>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -493,7 +557,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             agent={agent}
           />
         )}
-        <Noted card={item} ctx={ctx} />
+        <Kept card={item} ctx={ctx} />
         <Foot said={item.said} last={item.last} ctx={ctx} />
         <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>
