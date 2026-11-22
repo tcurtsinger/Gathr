@@ -190,17 +190,21 @@
 .markdown [data-streamdown="code-block-header"] {
   display: none;
 }
+/* Room at the right for Copy, so it never covers the code. */
 .markdown [data-streamdown="code-block-body"] {
-  padding: 11px 12px;
+  padding: 11px 46px 11px 12px;
   border-radius: 8px;
 }
 .markdown :has(> [data-streamdown="code-block-actions"]) {
   top: 5px;
   right: 5px;
 }
+/* A line too long for the block wraps, as the words around it do, and nothing scrolls sideways. */
 .markdown [data-streamdown="code-block"] pre {
   font-size: 13px;
   line-height: 1.625;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* A table at the label size, its header row tinted and semibold, cells 10px by 6px. */
 .markdown [data-streamdown="table"] {
