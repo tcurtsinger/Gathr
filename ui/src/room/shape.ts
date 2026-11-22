@@ -157,7 +157,7 @@ export type Needs = { what: 'key' | 'sign-in' } | { what: 'value'; names: string
 /**
  * What the turn kept that lasts, from its answer's first lines ("Noted about you:" then the note, and for a tool's
  * note "place tool:<id>"; "Added the tool:" then its name, id and what it needs; "Wrote the skill:" then its name;
- * "Scheduled weekdays at 9:00:" then the words and "schedule <id>"): a note in Memory, a tool, a skill, a schedule.
+ * "Scheduled weekdays at 9:00:" then its name and "schedule <id>"): a note in Memory, a tool, a skill, a schedule.
  */
 export type Kept =
   | { kind: 'note'; label: string; text: string; place?: string }
