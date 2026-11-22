@@ -205,7 +205,9 @@ async fn run(s: &State, choice: &Choice, words: &str) -> Result<String, String> 
     let gate = crate::sign_in::pass_gate(s, &folder).await?;
     let (mut engine, mut lines) = Engine::start(&program, &args, env, &cwd)
         .map_err(|e| format!("it didn't start from {}: {e}", program.display()))?;
-    let written = engine.write_line(words).await;
+    let written = engine
+        .write_line(&format!("<message>\n{words}\n</message>"))
+        .await;
     engine.close_input();
     let read = async {
         let mut out = String::new();
