@@ -95,7 +95,9 @@ export function AddPcTool({ onBack, onDone, changing }: Props) {
         />
       </label>
       {why && <p className="tool-why">{why}</p>}
-      {changing && !why && <p className="muted">A variable left empty keeps its value.</p>}
+      {changing?.text.includes('"env"') && !why && (
+        <p className="muted">A variable left empty keeps its value.</p>
+      )}
       <label className="agent-field">
         Name
         <input
