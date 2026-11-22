@@ -6,3 +6,19 @@
   border: 0;
   background: #fff;
 }
+/* A page small: drawn at `--shrink` times its box's width, shrunk to it. */
+.page-preview {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+.page-preview .pageframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% * var(--shrink, 4));
+  height: calc(100% * var(--shrink, 4));
+  transform: scale(calc(1 / var(--shrink, 4)));
+  transform-origin: 0 0;
+  pointer-events: none;
+}

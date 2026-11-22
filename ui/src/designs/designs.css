@@ -46,27 +46,14 @@
 .designs-card .muted {
   font-size: 13px;
 }
-/* The first page at four times the card's width, shrunk to it. */
+/* The first page at four times the card's width, shrunk to it (pageframe.css). */
 .designs-preview {
-  position: relative;
   aspect-ratio: 16 / 10;
-  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
 }
 .designs-card:hover .designs-preview {
   border-color: var(--control);
-}
-.designs-preview .pageframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 400%;
-  height: 400%;
-  transform: scale(0.25);
-  transform-origin: 0 0;
-  pointer-events: none;
 }
 .designs-page {
   display: flex;

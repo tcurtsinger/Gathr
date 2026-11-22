@@ -54,6 +54,21 @@ button.file-face:has(img) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A design's page, small, behind its name; the button over it is the click. */
+.file-face > .page-preview {
+  position: absolute;
+  inset: 0;
+  --shrink: 8;
+}
+.file-over,
+.file-over:hover {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: inherit;
+  background: none;
+}
 /* Remove: a small round x at the top right, always shown. */
 .file-remove.file-remove {
   position: absolute;
