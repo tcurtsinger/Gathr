@@ -91,32 +91,55 @@ button.file-face:has(img) {
   height: 12px;
 }
 
-/* A picture opened large: the app's dim backdrop, its name at the top left, an x at the top right. */
+/* A picture opened large: the app's dim backdrop, and the picture in a box with its name and an x. The box is never
+   larger than most of the window and shrinks with it, so its x stays clear of the window's own buttons; a click
+   beside it closes it. */
 .dialog.file-view {
   width: 100vw;
   height: 100dvh;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #fff;
-}
-.file-view .dialog-header {
-  border: 0;
-}
-.file-view .dialog-x {
-  color: #fff;
 }
 .file-stage {
+  --wide: min(86vw, 100vw - 96px);
+  --tall: min(86dvh, 100dvh - 112px);
   display: grid;
   flex: 1;
   min-height: 0;
   place-items: center;
-  padding: 0 48px 48px;
 }
-.file-stage img {
-  max-width: 100%;
-  max-height: calc(100dvh - 101px);
-  border-radius: 8px;
+.file-large {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--wide);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--control);
+  border-radius: 16px;
+  background: var(--popover);
+  color: var(--text);
+}
+.file-large figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  padding: 0 8px 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.file-large figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-large img {
+  display: block;
+  max-width: var(--wide);
+  max-height: calc(var(--tall) - 48px);
   object-fit: contain;
 }
 

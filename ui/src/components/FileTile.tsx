@@ -71,11 +71,19 @@ export function FileTile({ name, src, onRemove, onOpen, preview }: Props) {
         </IconButton>
       )}
       {open && shown && (
-        <Dialog open title={name} onClose={close} className="file-view" closeIcon>
+        <Dialog open title={name} onClose={close} className="file-view" noHeader bare>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: a click beside the picture closes it; Escape does too */}
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it, through the dialog */}
           <div className="file-stage" onClick={(e) => e.target === e.currentTarget && close()}>
-            <img src={shown} alt={name} />
+            <figure className="file-large">
+              <figcaption>
+                <span>{name}</span>
+                <IconButton aria-label={`Close ${name}`} onClick={close}>
+                  <X aria-hidden="true" />
+                </IconButton>
+              </figcaption>
+              <img src={shown} alt={name} />
+            </figure>
           </div>
         </Dialog>
       )}
