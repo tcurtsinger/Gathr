@@ -445,7 +445,8 @@ fn one_allow_covers_the_checkout_for_the_rest_of_the_chat() {
     assert_eq!(asked["permissionDecisionReason"], said.as_str());
     answer(&chat, true);
     let again = repo.join("src").join("tools.ts");
-    assert_eq!(write(&token, &again), Value::Null, "the same checkout");
+    let covered = write(&token, &again);
+    assert_eq!(covered["permissionDecision"], "allow", "the same checkout");
     let other = elsewhere.0.join("other").join("a.md");
     assert_eq!(
         write(&token, &other)["permissionDecision"],
