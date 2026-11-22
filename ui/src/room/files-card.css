@@ -1,0 +1,125 @@
+/* The files a turn changed: a card inside the agent's card, a little lighter, a row per file under its head. The
+   added and removed colours are the Changes tab's. */
+.files-card {
+  --plus: oklch(0.78 0.16 150);
+  --minus: oklch(0.72 0.17 25);
+  margin: 2px 18px 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  font-size: 13px;
+}
+.room-reply .files-card {
+  margin: 8px 0 2px;
+}
+:root.light .files-card {
+  --plus: oklch(0.5 0.14 150);
+  --minus: oklch(0.55 0.2 25);
+  background: var(--background);
+}
+.files-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px 10px 12px;
+}
+.files-card-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+  color: var(--muted-foreground);
+}
+.files-card-mark svg {
+  width: 16px;
+  height: 16px;
+}
+.files-card-sum {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.files-card-sum b {
+  font-weight: 600;
+}
+.files-card-counts {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.files-card-plus {
+  color: var(--plus);
+}
+.files-card-minus {
+  color: var(--minus);
+}
+/* A file's numbers line up with the rows above and below. */
+.files-card-each > span {
+  min-width: 4ch;
+  text-align: right;
+}
+.files-card-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.files-card-list > li {
+  border-top: 1px solid var(--border);
+}
+.files-card-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.files-card-row:hover {
+  background: var(--hover-tint);
+}
+.files-card-path {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+/* The folders give way first, from their start. */
+.files-card-dir {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  direction: rtl;
+}
+.files-card-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.files-card-more {
+  gap: 4px;
+  color: var(--muted-foreground);
+}
+.files-card-more svg {
+  width: 14px;
+  height: 14px;
+  transition: rotate 0.15s;
+}
+.files-card-more[aria-expanded="true"] svg {
+  rotate: 180deg;
+}

@@ -75,6 +75,9 @@ export async function openTab(chat: string, path: string, agent?: string) {
   show(chat, { path: folder, crumbs: [name], design: true, page: file.path });
 }
 
+/** Opens the chat's Changes tab, as Home's tile does. */
+export const openChanges = (chat: string) => change(chat, { ...tabsOf(chat), changes: true, at: CHANGES });
+
 function place(tree: FileTree, path: string, agent?: string): Opened {
   const full = windows(path) || path.startsWith('/');
   const base = full ? undefined : tree.agents.find((a) => a.agent === agent)?.path;

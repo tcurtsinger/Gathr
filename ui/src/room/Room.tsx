@@ -15,6 +15,7 @@ import { StateMark } from '../components/StateMark';
 import { listen } from '../live';
 import { OpenMemory } from '../memory/Memory';
 import { OpenPlugin, type ToolNext } from '../plugins/Plugins';
+import { FilesCard } from './FilesCard';
 import { type Made, notesOf, readNote } from './note';
 import { QuestionCard, waits } from './Question';
 import { Shown } from './Shown';
@@ -62,6 +63,8 @@ export interface Acts {
   ask: (question: number) => void;
   /** Unset in an archived chat, which reads only. */
   like?: (message: string, give: boolean) => void;
+  /** Opens the chat's Changes tab. */
+  changes?: () => void;
 }
 
 /** A search hit: the chat it opened and the message in it. */
@@ -284,6 +287,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         )}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         <Shown blocks={card.blocks} />
+        <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />
         <Kept card={card} ctx={ctx} />
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
@@ -647,6 +651,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           />
         )}
         <Shown blocks={item.blocks} />
+        <FilesCard steps={item.steps} agent={agent} onView={ctx.acts.changes} />
         <Kept card={item} ctx={ctx} />
         {!running && <Bar text={item.text ?? ''} said={item.said} last={item.last} ctx={ctx} />}
         <Asks turn={item.id} agent={agent} ctx={ctx} />

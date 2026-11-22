@@ -636,6 +636,36 @@ notes.txt",
         }
     }
 
+    /// A written and an edited file keep their path and their lines added and removed, from Claude
+    /// Code's own patch (a live turn, 2.1.322); a failed edit keeps none.
+    #[test]
+    fn an_edit_keeps_the_file_it_changed_and_a_failed_one_none() {
+        let changed: Vec<_> = replayed("results_claude")
+            .into_iter()
+            .filter_map(|f| match f {
+                Frame::ToolEnd {
+                    result: Some(r), ..
+                } => Some(r.changed),
+                _ => None,
+            })
+            .flatten()
+            .map(|c| (c.path, c.added, c.removed))
+            .collect();
+        let notes = "gathr-test-data-agents\\Chats\\Recorder claude\\fv2e4t\\notes.txt".to_string();
+        assert_eq!(changed, [(notes.clone(), 3, 0), (notes, 1, 1)]);
+        let failed = json!({ "type": "user", "parent_tool_use_id": null,
+            "message": { "content": [{ "type": "tool_result", "tool_use_id": "t1", "is_error": true,
+                "content": "String to replace not found in file." }] },
+            "tool_use_result": { "filePath": "src/beds.rs", "structuredPatch": [
+                { "lines": ["-made-up before", "+made-up after"] }] } });
+        let ended = read(&failed);
+        let Some(Frame::ToolEnd { result, ok, .. }) = ended.first() else {
+            panic!("{ended:?}");
+        };
+        assert!(!ok);
+        assert!(result.iter().all(|r| r.changed.is_empty()), "{result:?}");
+    }
+
     fn steps_of(name: &str) -> Vec<(String, Option<String>, Option<String>)> {
         let own = replayed(name).into_iter().filter_map(|f| match f {
             Frame::ToolStart { name, input, .. } => {

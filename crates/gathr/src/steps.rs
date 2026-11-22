@@ -9,7 +9,9 @@ use crate::text;
 
 mod results;
 
-pub use results::{StepResult, counted, first_lines, found, last_lines, request, said};
+pub use results::{
+    Changed, StepResult, changed, counted, first_lines, found, last_lines, request, said,
+};
 
 const TEXT: usize = 200;
 const TITLE: usize = 80;

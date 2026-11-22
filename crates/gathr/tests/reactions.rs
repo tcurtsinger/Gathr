@@ -157,7 +157,9 @@ fn a_thumbs_up_on_the_persons_message_by_person_or_by_id_is_one_row_each_and_wak
 fn a_thumbs_up_on_gathrs_copy_of_the_persons_message_lands_on_the_message() {
     let data = TempDir::new();
     let room = room(&data.0);
-    let words = "@Lead @Ann made-up question for you both";
+    // Under 40 characters: a longer first message has the background model name the chat, and its
+    // engine's start is a line in env.jsonl with no token, at times before the second agent's.
+    let words = "@Lead @Ann a made-up question";
     let picks = json!([
         { "at": 0, "len": 5, "agent": room.lead },
         { "at": 6, "len": 4, "agent": room.ann },

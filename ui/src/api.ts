@@ -20,6 +20,11 @@ export interface ToolBody {
   };
   /** What came back (0044): up to 5 lines, secrets hidden; how many lines there were, and whether more followed. */
   result?: { text: string; lines: number; more: boolean };
+  /**
+   * The files it changed, as the engine reported them: `path` from the engine's folder when it is there, `full` the
+   * whole path when that's another, and the lines added and removed. None from before they were kept.
+   */
+  changed?: { path: string; full?: string; added: number; removed: number }[];
 }
 
 /** That the agent thought (0042): how long, and the engine's count of its tokens when it gave one. Never its text. */

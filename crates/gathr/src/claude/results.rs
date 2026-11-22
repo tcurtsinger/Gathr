@@ -39,13 +39,20 @@ fn kind(done: &Value, said: &str) -> Option<Option<StepResult>> {
     if let Some(n) = done["file"]["numLines"].as_i64() {
         return Some(Some(steps::said(counted(n, "line", "lines"))));
     }
-    // An edit or a new file: lines added and removed.
+    // An edit or a new file: lines added and removed, and the file they're in. A new file's patch is
+    // empty: each of its lines is added.
     if let Some(patch) = done["structuredPatch"].as_array() {
         let (added, removed) = match (patch.is_empty(), done["content"].as_str()) {
             (true, Some(made)) => (made.lines().count(), 0),
             _ => patch_counts(patch),
         };
-        return Some(Some(steps::said(format!("+{added} −{removed}"))));
+        let mut said = steps::said(format!("+{added} −{removed}"));
+        let file = done["filePath"].as_str().filter(|p| !p.is_empty());
+        said.changed = file
+            .map(|path| steps::changed(path, added, removed))
+            .into_iter()
+            .collect();
+        return Some(Some(said));
     }
     // A search: how many it found, then its first hits.
     if let Some(files) = done["numFiles"].as_i64() {

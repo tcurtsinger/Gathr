@@ -29,7 +29,7 @@ import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
 import { Questions } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
-import { openTab, RoomSidebar } from './Sidebar';
+import { openChanges, openTab, RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -151,6 +151,10 @@ export function RoomView(props: Props) {
   const acts = {
     approve,
     ask: setAsking,
+    changes: () => {
+      props.onSidebar(true);
+      openChanges(chat.id);
+    },
     like: chat.archived
       ? undefined
       : (message: string, give: boolean) =>
