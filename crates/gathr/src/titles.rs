@@ -108,7 +108,7 @@ pub fn rename(conn: &Connection, chat: &str, title: &str) -> Result<String, Erro
     let count = title.chars().count();
     if count == 0 || count > LONGEST || title.contains(['\n', '\r']) {
         return Err(Error::Refused(format!(
-            "A chat's name is one line of 1 to {LONGEST} characters"
+            "One line, {LONGEST} characters at most"
         )));
     }
     let done = conn.execute(

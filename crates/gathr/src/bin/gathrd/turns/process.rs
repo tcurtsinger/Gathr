@@ -557,10 +557,7 @@ impl Task {
             return self.try_next().await;
         };
         let code = code.map_or("none".into(), |c| c.to_string());
-        let mut why = format!(
-            "{} exited during the turn (exit code {code})",
-            self.engine_label()
-        );
+        let mut why = format!("{} exited (code {code})", self.engine_label());
         if let Some(line) = last_stderr {
             why = format!("{why}: {}", redact(line.trim()));
         }

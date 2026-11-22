@@ -207,7 +207,7 @@ fn new_name(name: &str) -> Result<(), Error> {
         return Ok(());
     }
     Err(Error::Refused(format!(
-        "\"{name}\" can't be a skill's name: use lowercase letters, digits and hyphens, {LONGEST} at most"
+        "\"{name}\": use lowercase letters, digits and hyphens, {LONGEST} at most"
     )))
 }
 
@@ -216,9 +216,7 @@ fn make(dir: &Path, name: &str) -> Result<PathBuf, Error> {
     new_name(name)?;
     let path = dir.join(name);
     if path.exists() {
-        return Err(Error::Refused(format!(
-            "There's already a skill named {name}"
-        )));
+        return Err(Error::Refused(format!("Skill {name} already exists")));
     }
     std::fs::create_dir_all(&path)?;
     Ok(path)
@@ -321,7 +319,7 @@ pub fn add_zip(dir: &Path, file: &str, bytes: &[u8]) -> Result<String, Error> {
             || parts.iter().any(|p| !hidden(p) && plain(p).is_err());
         if outside {
             return Err(Error::Refused(format!(
-                "This zip can't be unpacked: {name} would land outside the skill"
+                "{name} would land outside the skill"
             )));
         }
         if !entry.is_dir() && !parts.iter().any(hidden) {
@@ -344,9 +342,7 @@ pub fn add_zip(dir: &Path, file: &str, bytes: &[u8]) -> Result<String, Error> {
         }
     }
     let Some(&(at, _)) = kept.iter().find(|(_, p)| p.len() == 1 && p[0] == FILE) else {
-        return Err(Error::Refused(
-            "This zip isn't a skill: it has no SKILL.md".into(),
-        ));
+        return Err(Error::Refused("This zip has no SKILL.md".into()));
     };
     let name = match top {
         Some(top) => top,
@@ -425,9 +421,7 @@ pub fn add_folder(dir: &Path, from: &Path, replace: bool) -> Result<(String, boo
     let path = dir.join(&name);
     let had = path.exists();
     if had && !replace {
-        return Err(Error::Refused(format!(
-            "There's already a skill named {name}"
-        )));
+        return Err(Error::Refused(format!("Skill {name} already exists")));
     }
     // Hidden, so the list never shows it half copied.
     let new = dir.join(format!(".{name}.new"));

@@ -157,7 +157,7 @@ async fn on_web(s: &Arc<State>, link: String, name: Option<String>) -> Result<St
                 Some("a sign-in".to_string()),
                 "It's saved without one.".into(),
             ),
-            Err(_) => return Err("No tool answers at this link.".into()),
+            Err(_) => return Err("No tool at this link.".into()),
         };
     let name = name.or(named).unwrap_or(host);
     let saved = db(s, move |c| web_tools::add(c, &name, &link, None)).await?;

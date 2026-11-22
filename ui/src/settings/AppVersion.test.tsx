@@ -25,7 +25,7 @@ test('the version shows, with Update when a release is ready', async () => {
   const screen = await render(<AppVersion />);
   await expect.element(screen.getByText('Version 9.9.8')).toBeVisible();
   await expect.element(screen.getByText('9.9.9 is ready')).toBeVisible();
-  await screen.getByRole('button', { name: 'Update to 9.9.9' }).click();
+  await screen.getByRole('button', { name: 'Update' }).click();
   await expect.poll(() => sent).toEqual([{ install: true }]);
 });
 
@@ -33,7 +33,7 @@ test('with nothing ready it says so and checks when asked', async () => {
   service({});
   const screen = await render(<AppVersion />);
   await expect.element(screen.getByText('Up to date')).toBeVisible();
-  await screen.getByRole('button', { name: 'Check for updates' }).click();
+  await screen.getByRole('button', { name: 'Check' }).click();
   await expect.poll(() => sent).toEqual([null]);
 });
 
@@ -55,7 +55,7 @@ test('the last failure shows with its reference, and a build with no feed offers
   // Not "Up to date": the check behind it didn't finish.
   service({ failed });
   const idle = await render(<AppVersion />);
-  await expect.element(idle.getByText('The last check failed')).toBeVisible();
+  await expect.element(idle.getByText('Last check failed')).toBeVisible();
   await idle.unmount();
 
   service({ state: 'off' });

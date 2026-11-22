@@ -189,7 +189,7 @@ fn checked(text: &str) -> Result<String, Error> {
 fn repeats(lines: &[String], text: &str, but: Option<usize>) -> Result<(), Error> {
     let same = |(i, l): (usize, &String)| Some(i) != but && note(l).is_some_and(|n| n.text == text);
     match lines.iter().enumerate().any(same) {
-        true => Err(Error::Refused("That note is already there".into())),
+        true => Err(Error::Refused("Already noted".into())),
         false => Ok(()),
     }
 }
@@ -199,7 +199,7 @@ fn find(lines: &[String], text: &str) -> Result<usize, Error> {
     let at = lines
         .iter()
         .position(|l| note(l).is_some_and(|n| n.text == text));
-    at.ok_or_else(|| Error::Refused(format!("There's no note \"{text}\" here")))
+    at.ok_or_else(|| Error::Refused("Note not found".into()))
 }
 
 /// A note's line, without its ending.

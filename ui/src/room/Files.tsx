@@ -194,7 +194,6 @@ export function FileTab({ chat, file }: { chat: string; file: Opened }) {
                   ? `Can't show ${kind} files`
                   : "Can't show this file"}
           </strong>
-          {unshown === 'gone' && <span>It was moved or deleted.</span>}
         </div>
       ) : Document ? (
         <Document chat={chat} path={file.path} onUnshown={unshow} onFailure={setFailure} />

@@ -29,11 +29,11 @@ export function Background() {
       {saved && listed && (
         <div className="settings-rows">
           <Row
-            name={<label htmlFor="background-model">Background model</label>}
+            name={<label htmlFor="background-model">Model</label>}
             line={
               none
-                ? 'No account has a small model yet.'
-                : 'A small, quick model for work nobody waits on. Gathr picks the smallest one your accounts have; you can pick another. It uses that account’s usage.'
+                ? 'No account has a small model.'
+                : 'A small model for work nobody waits on. It uses that account’s usage.'
             }
             lineId="background-line"
           >

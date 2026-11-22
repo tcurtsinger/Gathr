@@ -199,7 +199,7 @@ fn a_code_with_no_sign_in_running_fails() {
     let code = json!({ "code": "made-up-code#made-up-state" });
     let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
     assert_eq!(sent.status, 409, "{}", sent.body);
-    assert_eq!(sent.json()["error"], "Sign in failed", "{}", sent.body);
+    assert_eq!(sent.json()["error"], "Sign-in failed", "{}", sent.body);
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn sign_in_fails_with_why_when_claude_code_isnt_there() {
     let started = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(started.status, 500, "{}", started.body);
     let answer = started.json();
-    assert_eq!(answer["error"], "Sign in failed", "{answer}");
+    assert_eq!(answer["error"], "Sign-in failed", "{answer}");
     assert!(
         answer["why"].as_str().unwrap().contains("isn't a file"),
         "{answer}"

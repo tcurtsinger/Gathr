@@ -194,7 +194,7 @@ async fn save(
         };
         let offered = models::list(s, &t.0, &account)
             .await
-            .map_err(|why| format!("the account's models weren't listed: {why}"))
+            .map_err(|why| format!("Models weren't listed: {why}"))
             .and_then(|list| {
                 models::offered(&list, agent.model.as_deref(), agent.effort.as_deref())
             });

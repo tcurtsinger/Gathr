@@ -41,10 +41,7 @@ export function FaceFields({ id, name, picked, onChange }: Props) {
           aria-label="Picture"
         >
           <div className="picture-head">
-            <div>
-              <h2>Picture</h2>
-              <p className="muted">Shuffle picks a new shape, eyes and colour.</p>
-            </div>
+            <h2>Picture</h2>
             <Button type="button" size="sm" variant="outline" onClick={() => onChange(shuffled())}>
               Shuffle
             </Button>

@@ -18,7 +18,7 @@ export function ChangeKey({ tool, opener, onClose }: Props) {
       label="Key"
       verb="Save"
       password
-      note="The key stays in Gathr. Agents never see it."
+      note="Agents never see the key."
       opener={opener}
       onClose={onClose}
       onSave={(key) => api.changeTool(tool.id, { key })}

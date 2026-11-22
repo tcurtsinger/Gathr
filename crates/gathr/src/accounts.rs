@@ -45,8 +45,8 @@ impl Refused {
     pub fn why(&self) -> &'static str {
         match self {
             Refused::Blank => "the name is blank",
-            Refused::TooLong => "The name must be 80 characters or fewer",
-            Refused::Taken => "Another account has that name. Use a different name.",
+            Refused::TooLong => "80 characters at most",
+            Refused::Taken => "That name is taken.",
             Refused::Unknown => "no such account",
             Refused::Engine => "Choose Claude Code or Codex",
         }

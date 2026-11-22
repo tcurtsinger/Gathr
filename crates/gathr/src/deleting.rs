@@ -227,7 +227,7 @@ pub fn delete_project(
     )?;
     if chats > 0 {
         return Err(Error::Refused(
-            "a chat was made in it while it was deleted: delete it again".into(),
+            "A chat was added meanwhile. Delete again.".into(),
         ));
     }
     let parts = match folder_name {

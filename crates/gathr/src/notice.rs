@@ -112,7 +112,7 @@ pub enum Notice {
 const NEEDS_YOU: &str = "Needs you";
 
 /// What a chat whose agents have all stopped says.
-const STOPPED: &str = "Work has stopped";
+const STOPPED: &str = "Work stopped";
 
 /// What to tell the person after the read `now`. `front`: the window is in front now. `visited`:
 /// it has been in front since the last read, if only for a moment. `approvals` gives a chat's open

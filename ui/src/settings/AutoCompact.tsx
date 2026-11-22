@@ -12,7 +12,7 @@ export function AutoCompact() {
     <SettingChoice
       field="auto_compact"
       label="Auto-compact"
-      line="How full a conversation gets before it is compacted."
+      line="When a conversation is compacted."
       choices={choices}
       other={(n) => `${Math.round(n / 1000)}K`}
     />

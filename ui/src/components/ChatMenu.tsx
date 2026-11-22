@@ -38,7 +38,7 @@ interface Props {
 /**
  * A More menu (the prototype's ChatActions): the pause item, then Rename, then Archive or Restore, then Delete,
  * each after a separator. The chat's header has them all, a sidebar row Rename, Archive and Delete, a
- * project's row Project settings and Delete.
+ * project's row Settings and Delete.
  */
 export function ChatMenu({
   label = 'More',
@@ -93,7 +93,7 @@ export function ChatMenu({
       'project',
       <DropdownMenuItem key="project" onSelect={() => onProjectSettings(trigger.current)}>
         <Settings />
-        Project settings
+        Settings
       </DropdownMenuItem>,
     ]);
   if (onDelete)

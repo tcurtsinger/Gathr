@@ -175,7 +175,7 @@ pub fn usable(user_agent: &str) -> Result<String, String> {
     match parts.len() == 3 {
         true if parts.as_slice() >= MIN_VERSION.as_slice() => Ok(version.to_string()),
         true => Err(format!(
-            "Codex {version} is too old: Gathr needs {}.{}.{} or later",
+            "Codex {version} is too old. Needs {}.{}.{} or later.",
             MIN_VERSION[0], MIN_VERSION[1], MIN_VERSION[2]
         )),
         false => Err(format!("Codex's version wasn't read from \"{user_agent}\"")),

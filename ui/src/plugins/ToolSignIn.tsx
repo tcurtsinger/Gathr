@@ -48,7 +48,7 @@ export function ToolSignInWaiting({ url, onCancel }: { url: string; onCancel: ()
     <>
       <span className="tool-checking muted" role="status">
         <LoaderCircle aria-hidden="true" className="tool-spinner" />
-        Finish signing in in your browser
+        Finish in your browser
       </span>
       <OpenPage url={url} small />
       <Button type="button" size="sm" variant="outline" onClick={onCancel}>

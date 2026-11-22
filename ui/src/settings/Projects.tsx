@@ -60,7 +60,7 @@ export function Projects({ start }: { start?: string }) {
     );
   const face = (id: string, name: string) => agents.find((a) => a.id === id) ?? { id, name };
   return (
-    <Page title="Projects" line="Each project’s folder and the team a new chat starts with.">
+    <Page title="Projects" line="Each project’s folder and default team.">
       {projects?.length === 0 && <p className="settings-empty">No projects</p>}
       {projects && projects.length > 0 && (
         <ul className="settings-rows settings-top">

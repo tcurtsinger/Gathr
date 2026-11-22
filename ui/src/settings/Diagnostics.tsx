@@ -86,7 +86,7 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
 
   if (!chat) return <Page wide title="Turns" line="No chat open" />;
   return (
-    <Page wide title={title ?? 'Turns'} line="Each turn of this chat, step by step.">
+    <Page wide title={title ?? 'Turns'} line="Each turn, step by step.">
       <div className="toolbar">
         <label htmlFor="diagnostics-filter">Turns</label>
         <Dropdown

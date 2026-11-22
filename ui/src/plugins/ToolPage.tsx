@@ -40,7 +40,7 @@ function asJson(name: string, runs: PcRuns): string {
 /**
  * A tool's page: its link and state, Change key (Sign in again for one signed in through the browser) and Remove,
  * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now. A tool on this
- * PC has what Gathr runs with Change, Try again when it didn't start, and then what it printed.
+ * PC has what Gathr runs with Change, Retry when it didn't start, and then its Output.
  */
 export function ToolPage({
   tool,
@@ -118,7 +118,7 @@ export function ToolPage({
           {pc ? (
             asked?.state === 'not_started' && (
               <Button type="button" size="sm" variant="outline" disabled={trying} onClick={tryAgain}>
-                Try again
+                Retry
               </Button>
             )
           ) : signsIn ? (
@@ -164,8 +164,8 @@ export function ToolPage({
           <span id="tool-enabled">Enabled</span>
           <span className="muted" id="tool-enabled-why">
             {pc
-              ? 'While it’s enabled, Gathr keeps it running for every agent. Disabled, it’s stopped.'
-              : 'When it’s disabled, no agent can use it. It stays installed.'}
+              ? 'Gathr keeps it running for every agent while enabled.'
+              : 'When disabled, no agent can use it.'}
           </span>
         </span>
         <Switch
@@ -216,9 +216,7 @@ export function ToolPage({
           <h2>
             Actions <span className="nav-count">{actions.length}</span>
           </h2>
-          <p className="muted">
-            What it lets an agent do. Each agent asks first or not as its Approvals say.
-          </p>
+          <p className="muted">Agents ask first as their Approvals say.</p>
           <ul>
             {actions.map((a) => (
               <li key={a.name}>
@@ -232,7 +230,7 @@ export function ToolPage({
       {asked?.state === 'not_started' && asked.printed && (
         <section className="tool-block">
           <div className="tool-block-head">
-            <h2>What it printed</h2>
+            <h2>Output</h2>
           </div>
           <pre className="tool-printed">{asked.printed}</pre>
         </section>

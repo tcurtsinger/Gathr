@@ -157,7 +157,7 @@ async fn remove(
     };
     if !using.is_empty() {
         s.chats.removing(&account.id, false).await;
-        let why = format!("agents use it: {}", using.join(", "));
+        let why = format!("In use by {}", using.join(", "));
         let event = Event::point("gathr.account.change")
             .trace(&t.0)
             .error("in_use")

@@ -142,7 +142,7 @@ pub fn routes() -> Router<Arc<State>> {
 }
 
 fn failed(status: StatusCode, why: &str, trace: &str) -> Fail {
-    fail(status, "Sign in failed", why, trace)
+    fail(status, "Sign-in failed", why, trace)
 }
 
 /// A newer start replaces one still waiting. Registered before the process starts, so Cancel
@@ -153,7 +153,7 @@ async fn start(
     Path(account): Path<String>,
     body: Option<Json<Value>>,
 ) -> Answer {
-    let account = find(&s, &t, &account, "Sign in failed").await?;
+    let account = find(&s, &t, &account, "Sign-in failed").await?;
     if account.engine == "codex" {
         let device = body.is_some_and(|b| b.0["device"] == true);
         return codex::start(s, t, account, device).await;
@@ -312,7 +312,7 @@ async fn watch(
         tokio::select! {
             line = lines.recv() => match line {
                 Some(Line::Err(text)) if !text.trim().is_empty() => {
-                    // Settings already says "Sign in failed".
+                    // Settings already says "Sign-in failed".
                     let why = text.trim().trim_start_matches("Login failed:").trim_start();
                     last_error = Some(why.to_string());
                 }
@@ -395,7 +395,7 @@ async fn code(
     Path(account): Path<String>,
     Json(body): Json<Code>,
 ) -> Answer {
-    let account = find(&s, &t, &account, "Sign in failed").await?;
+    let account = find(&s, &t, &account, "Sign-in failed").await?;
     if account.engine == "codex" {
         return Err(failed(
             StatusCode::CONFLICT,

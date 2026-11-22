@@ -206,7 +206,7 @@ test('a new agent takes the exact model its account’s engine default means and
   const screen = await show();
   await screen.getByRole('button', { name: 'Add' }).click();
   await screen.getByRole('textbox', { name: 'Name' }).fill('Made-up new');
-  await expect.element(screen.getByText('Loading models')).toBeVisible();
+  await expect.element(screen.getByText('Loading')).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   release();
   await expect.element(screen.getByRole('combobox', { name: 'Model' })).toHaveTextContent('Opus 5.5');

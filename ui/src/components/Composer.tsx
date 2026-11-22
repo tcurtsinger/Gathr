@@ -80,7 +80,7 @@ export function Composer(props: Props) {
       fits.length < more.length
         ? 'Files over 10 MB can’t be added'
         : room.length < fits.length
-          ? 'A message takes up to 10 files'
+          ? 'Up to 10 files'
           : '',
     );
     if (room.length) onFiles([...files, ...room.map(named)]);
@@ -93,7 +93,7 @@ export function Composer(props: Props) {
   const picker = useRef<HTMLInputElement>(null);
   const stopping = !!onStop && !canSend;
   // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
-  const label = stopping ? 'Stop this chat now' : 'Send';
+  const label = stopping ? 'Stop chat' : 'Send';
   const box = useRef<HTMLTextAreaElement | null>(null);
   const ref = useCallback(
     (el: HTMLTextAreaElement | null) => {
@@ -273,7 +273,7 @@ export function Composer(props: Props) {
         createPortal(
           <div className="file-drop">
             <FilePlus aria-hidden="true" />
-            Drop to add to your message
+            Drop to add
           </div>,
           props.dropOn.current,
         )}

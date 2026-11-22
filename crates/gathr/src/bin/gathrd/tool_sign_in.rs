@@ -173,7 +173,7 @@ async fn back(
     let state = query.get("state").cloned().unwrap_or_default();
     let found = waiting().as_mut().and_then(|all| all.remove(&state));
     let Some(sign_in) = found else {
-        let words = "This sign-in isn’t waiting anymore. Go back to Gathr to sign in again.";
+        let words = "This sign-in expired. Sign in again in Gathr.";
         return (StatusCode::BAD_REQUEST, page("Not signed in", words));
     };
     let called = sign_in.called.clone();
@@ -183,7 +183,7 @@ async fn back(
                 .chats
                 .live
                 .send(json!({ "type": "tools", "sign_in": state, "tool": id }));
-            let words = format!("Signed in to {called}. You can go back to Gathr.");
+            let words = format!("Signed in to {called}. Return to Gathr.");
             (StatusCode::OK, page("Signed in", &words))
         }
         Err(refused) => {
@@ -192,7 +192,7 @@ async fn back(
             let reference = ids::reference(&t.0);
             let told = json!({ "type": "tools", "sign_in": state, "why": why, "ref": reference });
             let _ = s.chats.live.send(told);
-            let words = format!("{why} Go back to Gathr to try again.");
+            let words = format!("{why} Try again in Gathr.");
             (StatusCode::OK, page("Sign-in failed", &words))
         }
     }

@@ -9,8 +9,8 @@ import { Row } from './Row';
 const standing: Record<string, string> = {
   off: 'This build does not update',
   idle: 'Up to date',
-  checking: 'Checking for updates',
-  updating: 'Updating Gathr',
+  checking: 'Checking',
+  updating: 'Updating',
 };
 
 /**
@@ -21,7 +21,7 @@ export function AppVersion() {
   const [refused, setRefused] = useState<Failure | null>(null);
   const { app, asking, update, check } = useAppUpdate(setRefused);
   const ready = readyVersion(app);
-  // With nothing ready the row says "The last check failed"; with a release ready, only a card says the update failed.
+  // With nothing ready the row says "Last check failed"; with a release ready, only a card says the update failed.
   const { why, ref } = app?.failed ?? {};
   const last = useMemo(() => (ref ? new Failure('Update failed', why ?? null, ref) : null), [why, ref]);
   useCard(refused ?? (ready ? last : null));
@@ -38,19 +38,19 @@ export function AppVersion() {
           {ready
             ? `${ready} is ready`
             : app.failed && app.state === 'idle'
-              ? 'The last check failed'
+              ? 'Last check failed'
               : standing[app.state]}
         </span>
       }
     >
       {ready ? (
         <Button type="button" onClick={act(update)} disabled={asking}>
-          Update to {ready}
+          Update
         </Button>
       ) : (
         app.state !== 'off' && (
           <Button type="button" variant="outline" onClick={act(check)} disabled={app.state !== 'idle'}>
-            Check for updates
+            Check
           </Button>
         )
       )}

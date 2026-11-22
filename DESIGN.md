@@ -322,7 +322,7 @@ accessible immediate setting, with pending save and referenced failure states.
 Projects lists the projects, each row its folder and its team's faces; a row opens the project's own page, with a
 back link to the list, as a tool's page in Plugins. A project's page has its name, folder and default team in one
 draft, Delete (the outlined danger Button) at the title's right, and Cancel and Save at its foot. A project's
-More in the sidebar has Project settings, which opens that project's page, then Delete after a separator. An
+More in the sidebar has Settings, which opens that project's page, then Delete after a separator. An
 agent's page has Delete at the right of its header.
 
 Turns (Diagnostics) is a Settings page the whole width of the content side: a 214px turn list beside the

@@ -71,7 +71,7 @@ export function QuestionCard(props: {
             </Button>
           </div>
         ) : q.closed ? (
-          <p className="room-closed">Closed when the chat was archived</p>
+          <p className="room-closed">Closed when archived</p>
         ) : (
           <div className="room-answer">
             <div className="room-line">
@@ -151,7 +151,7 @@ export function Questions(props: {
           }}
         >
           <h3>Questions</h3>
-          {open.length === 0 && <p className="questions-none">No open questions</p>}
+          {open.length === 0 && <p className="questions-none">No questions</p>}
           {open.map((q) => (
             <section key={q.id} className="questions-item" data-question={q.id} aria-label={q.name}>
               <div className="room-line">
@@ -228,7 +228,7 @@ function Answer(props: { question: Question; onAnswer: OnAnswer }) {
         files={files}
         onFiles={setFiles}
         onSend={() => send()}
-        hint="Your answer"
+        hint="Answer"
         label="Answer"
       />
     </div>

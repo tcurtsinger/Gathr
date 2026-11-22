@@ -275,7 +275,7 @@ async fn picked(
     });
     match known.await {
         Some(Ok(true)) => Ok(kept),
-        Some(Ok(false)) => Err(refuse("a picked name's agent isn't known")),
+        Some(Ok(false)) => Err(refuse("Unknown agent picked")),
         Some(Err(e)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",

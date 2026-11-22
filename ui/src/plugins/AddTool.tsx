@@ -14,7 +14,7 @@ interface Props {
 
 /**
  * Add a tool: its link, and its name unless the tool's own will do. Gathr asks the tool what it needs: one that
- * wants a key gets the Key field; one that signs in through the browser gets Sign in, and Use a key for one that
+ * wants a key gets the Key field; one that signs in through the browser gets Sign in, and Use key for one that
  * takes a key as well. One whose sign-in service takes no app it doesn't know gets the address for its admin, and the
  * Client ID and secret they send.
  */
@@ -69,7 +69,7 @@ export function AddTool({ onBack, onAdded }: Props) {
             className="tool-use-key"
             onClick={() => setNeeds('key')}
           >
-            Use a key
+            Use key
           </Button>
           {cancel}
           <Button
@@ -93,7 +93,7 @@ export function AddTool({ onBack, onAdded }: Props) {
         {checking && (
           <span className="tool-checking muted">
             <LoaderCircle aria-hidden="true" className="tool-spinner" />
-            Checking the link
+            Checking
           </span>
         )}
         {cancel}
@@ -115,8 +115,8 @@ export function AddTool({ onBack, onAdded }: Props) {
         <ChevronLeft aria-hidden="true" />
         Plugins
       </button>
-      <h1>Add a tool</h1>
-      <p className="muted">Paste the tool’s link. Gathr asks the tool what it needs.</p>
+      <h1>Add tool</h1>
+      <p className="muted">Paste the tool’s link.</p>
       <label className="agent-field">
         Link
         <input
@@ -155,13 +155,11 @@ export function AddTool({ onBack, onAdded }: Props) {
               autoFocus
             />
           </label>
-          {under('key') || <p className="muted">The key stays in Gathr. Agents never see it.</p>}
+          {under('key') || <p className="muted">Agents never see the key.</p>}
         </>
       )}
       {needs === 'sign_in' && !needsClient && !signIn.waiting && !signIn.failed && (
-        <p className="muted">
-          {name.trim() || host(link.trim())} signs in with your account, in your browser.
-        </p>
+        <p className="muted">{name.trim() || host(link.trim())} signs in through your browser.</p>
       )}
       {needs === 'sign_in' && redirect !== null && !signIn.waiting && !signIn.failed && (
         <>

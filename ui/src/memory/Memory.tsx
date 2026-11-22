@@ -136,7 +136,7 @@ export function Memory({ at, onAt }: Props) {
       </Screen>
       {removing && (
         <Confirm
-          question="Remove this note?"
+          question="Remove note?"
           body={removing.note.text}
           verb="Remove"
           danger
@@ -156,10 +156,9 @@ export function Memory({ at, onAt }: Props) {
 
 /** The sentence under a place's title. */
 function lede(kind: MemoryPlace['kind'] | undefined, name: string) {
-  if (kind === 'project') return 'What agents working in this project know about it.';
-  if (kind === 'agent')
-    return `What ${name} has learned about doing the work. It goes with ${name} into every project.`;
-  return 'What every agent knows about you. Agents add a line when they learn something that lasts; you can change or remove any of them.';
+  if (kind === 'project') return 'What agents know about this project.';
+  if (kind === 'agent') return `What ${name} has learned. It goes with ${name} into every project.`;
+  return 'What every agent knows about you. Agents add to it as they learn.';
 }
 
 /** Who added it and how long ago: "Ann · 3d", "You", or nothing for a line written in the file. */

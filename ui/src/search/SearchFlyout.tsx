@@ -130,13 +130,7 @@ export function SearchFlyout({ name, onOpen, onShortcut }: Props) {
         {list.map((hit, i) => row(hit, from + i))}
       </div>
     );
-  const status = !q.trim()
-    ? 'Search chats and messages'
-    : slow
-      ? 'Searching…'
-      : found && hits.length === 0
-        ? 'No matches'
-        : '';
+  const status = !q.trim() ? '' : slow ? 'Searching…' : found && hits.length === 0 ? 'No matches' : '';
 
   return (
     <NavFlyout
@@ -160,7 +154,7 @@ export function SearchFlyout({ name, onOpen, onShortcut }: Props) {
           ref={input}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search chats and messages"
+          placeholder="Search"
           aria-label="Search chats and messages"
           maxLength={200}
           autoComplete="off"

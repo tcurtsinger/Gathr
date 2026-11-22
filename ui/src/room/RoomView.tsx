@@ -221,7 +221,7 @@ export function RoomView(props: Props) {
                 {none && (
                   <Button variant="outline" onClick={props.onAgents}>
                     <Plus aria-hidden="true" />
-                    Add an agent
+                    Add agent
                   </Button>
                 )}
               </div>

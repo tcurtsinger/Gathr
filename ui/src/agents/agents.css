@@ -158,10 +158,6 @@ html.light .picture-panel {
   font-size: 14px;
   font-weight: 600;
 }
-.picture-head p {
-  margin: 0;
-  font-size: 12.5px;
-}
 .picture-row {
   display: flex;
   align-items: center;

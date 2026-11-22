@@ -269,7 +269,7 @@ fn slug(name: &str) -> String {
 
 /// The link's host and port, refused unless it's https, or http to this computer.
 pub fn checked(link: &str) -> Result<String, Error> {
-    let refused = || Error::Refused("Use an https link, or http on this computer.".into());
+    let refused = || Error::Refused("Use https, or http on this computer.".into());
     let (scheme, rest) = link.trim().split_once("://").ok_or_else(refused)?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
     if authority.is_empty() || authority.contains('@') {

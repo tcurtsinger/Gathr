@@ -15,7 +15,7 @@ export function Runs({ runs, from }: { runs: PcRuns; from?: string | null }) {
         {runs.program ? (
           <code>{runs.program}</code>
         ) : (
-          <code data-tone="attention">{runs.typed} · not found on this PC</code>
+          <code data-tone="attention">{runs.typed} · not found</code>
         )}
       </dd>
       {runs.args.length > 0 && (

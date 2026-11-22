@@ -47,7 +47,7 @@ export function AskApproval({
       command={command}
       data-approval={a.request}
       description={
-        tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.' : undefined
+        tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the sandbox.' : undefined
       }
       style={{ overflowWrap: 'anywhere' }}
       subtitle={agent}

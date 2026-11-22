@@ -85,7 +85,6 @@ export function Changes({ chat, room, open }: Props) {
       <div className="filetab-none">
         <ChangesMark />
         <strong>No changes</strong>
-        <span>What agents change in this chat shows here.</span>
       </div>
     );
   const total = sum(all);
@@ -126,7 +125,7 @@ export function Changes({ chat, room, open }: Props) {
             })}
           </section>
         ))}
-        {changes.more && <p className="changes-note">Showing the first {count(all.length, 'file')}</p>}
+        {changes.more && <p className="changes-note">First {count(all.length, 'file')}</p>}
       </div>
     </div>
   );
@@ -191,7 +190,7 @@ function Lines({ chat, agent, file }: { chat: string; agent: string; file: Chang
   const widest = Math.max(1, ...change.hunks.map((h) => Math.max(h.old[0] + h.old[1], h.new[0] + h.new[1])));
   return (
     <>
-      {change.cut && <p className="changes-note">Showing the first 2,000 lines</p>}
+      {change.cut && <p className="changes-note">First 2,000 lines</p>}
       <div className="changes-lines" style={{ '--digits': String(widest).length } as CSSProperties}>
         <div>
           {change.hunks.map((h, i) => (
@@ -201,7 +200,7 @@ function Lines({ chat, agent, file }: { chat: string; agent: string; file: Chang
                   <span />
                   <span />
                   <span>
-                    Lines {h.new[0]} to {h.new[0] + Math.max(h.new[1], 1) - 1}
+                    Lines {h.new[0]}–{h.new[0] + Math.max(h.new[1], 1) - 1}
                   </span>
                 </div>
               )}
