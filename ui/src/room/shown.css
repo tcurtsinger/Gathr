@@ -1,4 +1,4 @@
-/* Tables and charts an agent showed: under its words in the card, the card's text width. */
+/* What an agent showed: under its words in the card, the card's text width. */
 .shown {
   display: flex;
   flex-direction: column;
@@ -8,8 +8,22 @@
 .room-reply .shown {
   padding: 8px 0 2px;
 }
+/* A table wider than the card scrolls inside its own frame. */
+.shown-block {
+  min-width: 0;
+}
 .shown-title {
   margin: 0 0 6px 2px;
   color: var(--muted-foreground);
   font-size: 12.5px;
+}
+/* Charts that follow one another, side by side in equal columns, as many as fit, none wider than a chart is alone. */
+.shown-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+.shown-row > .shown-block {
+  max-width: 24rem;
 }

@@ -21,7 +21,7 @@ export interface Card {
   last?: Message;
   /** Its tool runs and its working notes, in the order they came. */
   steps: Step[];
-  /** The tables and charts it showed, in the order it showed them: drawn under its words. */
+  /** What it showed, in the order it showed it: drawn under its words. */
   blocks: Block[];
   at: number;
   replies: Item[];

@@ -185,8 +185,10 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   words; while the turn runs they are muted, and a turn with no words shows its reason muted. A turn that
   ended with nothing to say shows nothing.
 - **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
-  table as assistant-ui's Data table (a click on a header sorts) or a chart as its Chart, each with its title
-  as a quiet 12.5px line above.
+  table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
+  link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
+  row sit side by side), a flow as its Flow graph (laid out by what follows what) or math as its Math block
+  (`^` and `_` raised and lowered), each with its title as a quiet 12.5px line above.
 - **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" (Memory's
   mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
   for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis. A click opens

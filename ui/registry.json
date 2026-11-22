@@ -18,7 +18,19 @@
     {
       "path": "components/assistant-ui/elements/data-table.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/data-table.tsx",
-      "sha256": "8b2b3ba77ea50b1daf79355526fdb4669522cee5e38538c4a1e9a10f69fa19fe"
+      "sha256": "8b2b3ba77ea50b1daf79355526fdb4669522cee5e38538c4a1e9a10f69fa19fe",
+      "adapted": "450be8a0bfce3abb6db5423bb73dbdbc841a54defd95fdb70f3eb0ae202a2f1d",
+      "why": "The owner asked that a date column sort by date and an empty cell stay blank and sort last: the date's title attribute is gone (Gathr shows no hover text) and an empty value draws nothing."
+    },
+    {
+      "path": "components/assistant-ui/elements/flow-graph.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/flow-graph.tsx",
+      "sha256": "5cf6918da703dcc7c87a49e7744d24152d626d8e7794c02363ed5f7a186741e4"
+    },
+    {
+      "path": "components/assistant-ui/elements/math-block.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/math-block.tsx",
+      "sha256": "6b4784e13df658fef0a0ede10c867aa7e995aa42736d314af6fa9163c06f96e8"
     },
     {
       "path": "components/assistant-ui/elements/receipt-focus.ts",

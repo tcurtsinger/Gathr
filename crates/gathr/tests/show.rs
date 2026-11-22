@@ -1,6 +1,6 @@
-//! `show`: an agent puts a table or a chart in the chat, through a real service and the replay
-//! engine. Its engine may call it without asking, a good block is kept in the chat's history, and a
-//! bad one is refused with nothing kept.
+//! `show`: an agent puts a table, a chart, a flow or math in the chat, through a real service and
+//! the replay engine. Its engine may call it without asking, a good block is kept in the chat's
+//! history, and a bad one is refused with nothing kept.
 
 mod common;
 
@@ -84,13 +84,29 @@ fn an_agent_shows_a_table_and_a_chart_and_a_bad_one_keeps_nothing() {
         "chart": { "label": "Rain", "value": "16.8 mm", "points": [1, 4, 2.5], "style": "bars" } });
     assert_eq!(text(&call_tool(port, &token, "show", chart)), "Shown.");
 
+    let nodes = json!([
+        { "id": "dig", "label": "Dig the beds", "state": "done" },
+        { "id": "sow", "label": "Sow", "after": ["dig"], "state": "active" },
+        { "id": "water", "label": "Water", "after": ["sow"] },
+    ]);
+    let flow = json!({ "kind": "flow", "title": "Planting", "flow": { "nodes": nodes } });
+    assert_eq!(text(&call_tool(port, &token, "show", flow)), "Shown.");
+    let steps = json!([
+        { "expression": "a = 2^3" },
+        { "expression": "a = 8", "note": "a cube" },
+    ]);
+    let math = json!({ "kind": "math", "math": { "label": "Compost", "steps": steps } });
+    assert_eq!(text(&call_tool(port, &token, "show", math)), "Shown.");
+
     let kept = blocks(&service, &chat);
-    assert_eq!(kept.len(), 2, "{kept:?}");
+    assert_eq!(kept.len(), 4, "{kept:?}");
     assert_eq!(kept[0]["role"], "assistant");
     assert_eq!(kept[0]["body"]["title"], "Seed orders");
     assert_eq!(kept[0]["body"]["table"]["rows"], rows);
     assert_eq!(kept[0]["body"]["table"]["columns"][1]["as"], "money");
     assert_eq!(kept[1]["body"]["chart"]["points"], json!([1.0, 4.0, 2.5]));
+    assert_eq!(kept[2]["body"]["flow"]["nodes"], nodes);
+    assert_eq!(kept[3]["body"]["math"]["steps"], steps);
 
     // Refused, each with what is wrong and the shape, and nothing kept.
     let no_table = call_tool(port, &token, "show", json!({ "kind": "table" }));
@@ -101,11 +117,36 @@ fn an_agent_shows_a_table_and_a_chart_and_a_bad_one_keeps_nothing() {
     let refused = call_tool(port, &token, "show", too_many);
     assert_eq!(refused["isError"], true, "{refused}");
     assert!(text(&refused).contains("201 rows"), "{refused}");
-    assert_eq!(blocks(&service, &chat).len(), 2);
+    let refuses = |ask: Value, why: &str| {
+        let refused = call_tool(port, &token, "show", ask);
+        assert_eq!(refused["isError"], true, "{refused}");
+        assert!(text(&refused).contains(why), "{refused}");
+    };
+    let looped = json!([
+        { "id": "a", "label": "Sow", "after": ["b"] },
+        { "id": "b", "label": "Water", "after": ["a"] },
+    ]);
+    refuses(
+        json!({ "kind": "flow", "flow": { "nodes": looped } }),
+        "loop: b -> a -> b",
+    );
+    let missing =
+        json!([{ "id": "a", "label": "Sow" }, { "id": "b", "label": "Water", "after": ["c"] }]);
+    refuses(
+        json!({ "kind": "flow", "flow": { "nodes": missing } }),
+        "after names c",
+    );
+    let link = json!({ "kind": "table", "table": {
+        "columns": [{ "key": "shop", "label": "Shop", "as": "link" }],
+        "rows": [{ "shop": "[Seed shop](javascript:alert(1))" }] } });
+    refuses(link, "Row 0, shop");
+    assert_eq!(blocks(&service, &chat).len(), 4);
 
     // An agent reading the chat sees a block as one line.
     let read = text(&call_tool(port, &token, "read_chat", json!({})));
     assert!(read.contains("[table: Seed orders, 2 rows]"), "{read}");
     assert!(read.contains("[chart: Rain, 3 points]"), "{read}");
+    assert!(read.contains("[flow: Planting, 3 steps]"), "{read}");
+    assert!(read.contains("[math: Compost, 2 steps]"), "{read}");
     std::fs::write(&go, "").unwrap();
 }

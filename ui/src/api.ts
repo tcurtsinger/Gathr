@@ -37,7 +37,7 @@ export interface ThinkingBody {
 /** A cell of a shown table: what the agent gave, as its column's `as` wants. */
 export type Cell = string | number | boolean | null;
 
-/** A table or a chart an agent showed with `show`, as the service keeps it. A later kind adds one more field. */
+/** A table, chart, flow or math an agent showed with `show`, as the service keeps it. A later kind adds one more field. */
 export interface Block {
   kind: string;
   title?: string;
@@ -60,6 +60,13 @@ export interface Block {
     change?: string;
     style?: 'line' | 'area' | 'bars';
     up_is_good?: boolean;
+  };
+  flow?: {
+    nodes: { id: string; label: string; after?: string[]; state?: 'done' | 'active' | 'pending' }[];
+  };
+  math?: {
+    label?: string;
+    steps: { expression: string; note?: string }[];
   };
 }
 

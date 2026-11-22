@@ -210,7 +210,7 @@ const withUnit = (text: string, unit: string | undefined) =>
       ? `${text}${unit}`
       : `${text} ${unit}`;
 
-const EmptyValue = () => <span className="text-muted-foreground">none</span>;
+const EmptyValue = () => null;
 
 function Value({
   column,
@@ -316,7 +316,7 @@ function Value({
                 },
           ).format(date),
     );
-    return <span title={date.toISOString()}>{content}</span>;
+    return <span>{content}</span>;
   }
 
   if (format.kind === "boolean") {
