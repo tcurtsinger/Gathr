@@ -27,11 +27,9 @@
 .shown-row > .shown-block {
   max-width: 24rem;
 }
-/* A diagram keeps its picture's own size, the frame as wide as it up to the card's width; wider, or zoomed past it,
-   it scrolls in its frame. Gathr sizes the picture for the zoom, so the frame's own scaling is off. */
+/* A diagram's frame is as wide as the card at every zoom, the picture at its own size in the middle; wider, or
+   zoomed past it, it scrolls in its frame. Gathr sizes the picture for the zoom, so the frame's own scaling is off. */
 .shown-diagram {
-  width: fit-content;
-  min-width: 18rem;
   max-width: 100%;
 }
 .shown-diagram > :last-child {
