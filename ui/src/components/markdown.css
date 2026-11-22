@@ -206,19 +206,58 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-/* A table at the label size, its header row tinted and semibold, cells 10px by 6px. */
+/* A table is one quiet frame, the look of assistant-ui's Data table (the owner's pick, 2026-11-22) drawn on Gathr's own
+   table so a cell still holds code, bold and links. Streamdown's two frames, the outer one tinted, become one: the
+   Data table's `paper` surface, 16px corners, and nothing between the frame and the rows. The rules near the top of this
+   file still hold: words kept whole, a wide table scrolling sideways inside the frame, headers wrapping, code on one
+   line; and the column alignment the agent wrote is the cell's own style, which these rules leave alone. */
+.markdown [data-streamdown="table-wrapper"] {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: 16px;
+  background: var(--popover);
+}
+:root.light .markdown [data-streamdown="table-wrapper"] {
+  background: var(--background);
+}
+.markdown :has(> [data-streamdown="table"]) {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* No line between rows: only a hairline under the header. */
+.markdown [data-streamdown="table"] :is(thead, tbody, tr) {
+  border: 0;
+}
 .markdown [data-streamdown="table"] {
   font-size: 13px;
 }
-.markdown :is([data-streamdown="table-header-cell"], [data-streamdown="table-cell"]) {
-  padding: 6px 10px;
-  font-size: inherit;
+.markdown [data-streamdown="table"] thead tr {
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 .markdown [data-streamdown="table-header"] {
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  background: none;
 }
+/* The header small, quiet and monospace; the cells at the label size, top-aligned, a little softer than the words. */
 .markdown [data-streamdown="table-header-cell"] {
-  font-weight: 600;
+  padding: 12px 16px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.markdown [data-streamdown="table-cell"] {
+  padding: 10px 16px;
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+  font-size: inherit;
+  line-height: 20px;
+  vertical-align: top;
+}
+.markdown [data-streamdown="table-body"] > tr:hover {
+  background: color-mix(in oklab, var(--foreground) 2.5%, transparent);
 }
 /* An @Name of the chat's in an agent's words (0082): the mention's blue, in the run of the words. */
 .markdown .mention {
