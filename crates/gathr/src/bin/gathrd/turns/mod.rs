@@ -225,6 +225,8 @@ struct Task {
     held_raw: Vec<(Option<String>, u32, &'static str, String)>,
     /// The conversation the engine was opened in.
     session: session::Session,
+    /// The folder the engine runs in: a changed file's path is shown from it.
+    cwd: Option<PathBuf>,
 }
 
 pub async fn run(
@@ -262,6 +264,7 @@ pub async fn run(
         compactions: HashSet::new(),
         held_raw: Vec::new(),
         session: Default::default(),
+        cwd: None,
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
