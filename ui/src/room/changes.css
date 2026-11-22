@@ -64,6 +64,16 @@
 .changes-files {
   flex: none;
 }
+/* A checkout outside the chat's worktrees the agent wrote in, over its files. */
+.changes-folder {
+  border-top: 1px solid var(--border);
+}
+.changes-folder > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-foreground);
+}
 .changes-head {
   display: flex;
   gap: 6px;

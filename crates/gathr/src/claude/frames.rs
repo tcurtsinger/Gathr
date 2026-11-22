@@ -342,6 +342,7 @@ fn step(tool: &str, input: &Value, own: bool) -> Result<Option<StepInput>, &'sta
     let text = input[field].as_str().ok_or(field)?;
     let step = match field {
         "command" => steps::command(text, title),
+        "file_path" => steps::file(text),
         _ => steps::input(text, title),
     };
     Ok(own.then_some(step).flatten())
