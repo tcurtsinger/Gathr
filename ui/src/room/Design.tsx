@@ -24,12 +24,10 @@ interface Listed {
   modified: number;
 }
 
-/** What the chat's steps say of one design: who wrote in it last, whether a running turn writes in it, how many of
- * its writes have ended. */
+/** What the chat's steps say of one design: who wrote in it last, and whether a running turn writes in it. */
 interface Written {
   agent?: string;
   writing: boolean;
-  saves: number;
 }
 
 /** The steps that write a file and name it: Claude Code's Write and Edit, and Codex's file change, shown as Edit. */
@@ -53,14 +51,43 @@ function written(room: RoomState, designs: string) {
     if (rest.length < 2) continue;
     const folder = `${base}/${rest[0]}`;
     const turn = m.turn ? room.turns[m.turn] : undefined;
-    const was = out.get(folder) ?? { writing: false, saves: 0 };
+    const was = out.get(folder);
     out.set(folder, {
-      agent: turn?.agent ?? was.agent,
-      writing: was.writing || turn?.status === 'running',
-      saves: was.saves + (body.status === 'running' ? 0 : 1),
+      agent: turn?.agent ?? was?.agent,
+      writing: !!was?.writing || turn?.status === 'running',
     });
   }
   return out;
+}
+
+const ENDED = ['done', 'stopped', 'failed'];
+
+/**
+ * A count that moves on each time a tool step or a turn of the chat ends, at most about once a second (the last one
+ * always counts), and only while `open`: each move is a time to read the folder again. An agent may write a design
+ * any way, a shell command too, so any step ending is a time to look; what changed is told by the files.
+ */
+function useLook(room: RoomState, open: boolean) {
+  const ended =
+    room.messages.filter(
+      (m) =>
+        m.kind === 'tool' && typeof m.body === 'object' && 'tool' in m.body && m.body.status !== 'running',
+    ).length + Object.values(room.turns).filter((t) => ENDED.includes(t.status)).length;
+  const [look, setLook] = useState(0);
+  const last = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each step or turn that ends looks again
+  useEffect(() => {
+    if (!open) return;
+    const wait = setTimeout(
+      () => {
+        last.current = Date.now();
+        setLook((n) => n + 1);
+      },
+      Math.max(0, last.current + 1000 - Date.now()),
+    );
+    return () => clearTimeout(wait);
+  }, [ended, open]);
+  return look;
 }
 
 const pagesOf = (entries: FileEntry[]) => entries.filter((e) => !e.folder && isPage(e.name));
@@ -105,25 +132,27 @@ function Writing() {
 export function Designs({
   chat,
   room,
+  open,
   onOpen,
 }: {
   chat: string;
   room: RoomState;
+  open: boolean;
   onOpen: (d: Listed) => void;
 }) {
   const [designs, setDesigns] = useState<string | null>();
   const [list, setList] = useState<Listed[]>();
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
-  // The project's Designs is made when its first engine starts: until it is there, each step looks again.
-  const lookAgain = designs === null ? room.messages.filter((m) => m.kind === 'tool').length : 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each step looks again while there is no Designs
+  const look = useLook(room, open);
+  // The project's Designs is made when its first engine starts: until it is there, each look asks again.
+  const lookAgain = designs === null ? look : 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the first look asks, and each one while there is no Designs
   useEffect(() => {
-    api.tree(chat).then((t) => setDesigns(t.designs?.path ?? null), setFailure);
-  }, [chat, lookAgain]);
+    if (look) api.tree(chat).then((t) => setDesigns(t.designs?.path ?? null), setFailure);
+  }, [chat, look > 0, lookAgain]);
   const seen = designs ? written(room, designs) : new Map<string, Written>();
-  const saves = [...seen.values()].reduce((n, w) => n + w.saves, 0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each write that ends reads the list again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each look reads the list again
   useEffect(() => {
     if (designs === undefined) return;
     if (designs === null) return setList([]);
@@ -146,7 +175,7 @@ export function Designs({
     return () => {
       live = false;
     };
-  }, [chat, designs, saves]);
+  }, [chat, designs, look]);
   if (!list) return null;
   if (!list.length)
     return (
@@ -203,6 +232,8 @@ interface Props {
   chat: string;
   design: Opened;
   room: RoomState;
+  /** Whether it is the shown tab: only then it looks at its folder. */
+  open: boolean;
   /** Shows the option on that page. */
   onShow: (page: string) => void;
   onAnswer: OnAnswer;
@@ -266,11 +297,12 @@ function NoteBox({
 }
 
 /**
- * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again each time an
- * agent's write in the folder ends. While a question asks for a pick in it, its options are the question's choices,
- * each with Pick; else its pages in their files' order. Side by side when the panel is wide enough.
+ * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again when a file in
+ * its folder changed, seen as a step or turn of the chat ends. While a question asks for a pick in it, its options are
+ * the question's choices, each with Pick; else its pages in their files' order. Side by side when the panel is wide
+ * enough.
  */
-export function DesignTab({ chat, design, room, onShow, onAnswer, onNote }: Props) {
+export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }: Props) {
   const name = design.crumbs.at(-1) ?? design.path;
   const [pages, setPages] = useState<FileEntry[]>();
   const [side, setSide] = useState(false);
@@ -288,18 +320,24 @@ export function DesignTab({ chat, design, room, onShow, onAnswer, onNote }: Prop
     return () => seen.disconnect();
   }, []);
   const w = written(room, design.path.replace(/[\\/][^\\/]*$/, '')).get(pathKey(design.path));
-  const saves = w?.saves ?? 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each write that ends reads the options again
+  const look = useLook(room, open);
+  // When the newest file right in the folder changed, a shared style sheet too: a change there draws the page again.
+  const [newest, setNewest] = useState(0);
   useEffect(() => {
+    if (!look) return;
     let live = true;
     api.folder(chat, design.path).then(
-      (e) => live && setPages(pagesOf(e)),
+      (e) => {
+        if (!live) return;
+        setPages(pagesOf(e));
+        setNewest(Math.max(0, ...e.filter((f) => !f.folder).map((f) => f.modified ?? 0)));
+      },
       (f: Failure) => live && setFailure(f),
     );
     return () => {
       live = false;
     };
-  }, [chat, design.path, saves]);
+  }, [chat, design.path, look]);
   const q = following(room, design.path);
   const options = q
     ? (asked(q, design.path) ?? []).map((path, i) => ({
@@ -353,15 +391,17 @@ export function DesignTab({ chat, design, room, onShow, onAnswer, onNote }: Prop
     const top = below + NOTE_HIGH < t.height ? below : Math.max(8, at.top - t.top - NOTE_HIGH - 8);
     setAsking({ part, page: options[i].path, letter: letter(i), left, top, focus });
   };
-  const frame = (i: number) => (
-    <PageFrame
-      chat={chat}
-      path={options[i].path}
-      name={options[i].name}
-      redraw={saves}
-      notes={{ on: comment, pins: pinsOn(options[i].path), onPart: onPart(i) }}
-    />
-  );
+  // Drawn once the folder is read, so the first load is not followed by a second.
+  const frame = (i: number) =>
+    pages && (
+      <PageFrame
+        chat={chat}
+        path={options[i].path}
+        name={options[i].name}
+        redraw={newest}
+        notes={{ on: comment, pins: pinsOn(options[i].path), onPart: onPart(i) }}
+      />
+    );
   const pair = shown + 1 < options.length ? [shown, shown + 1] : [shown - 1, shown];
   return (
     <div className="filetab design-tab" ref={tab}>
