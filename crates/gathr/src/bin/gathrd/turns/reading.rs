@@ -455,7 +455,7 @@ impl Task {
             .collect();
         let unknown: Vec<&String> = tools
             .iter()
-            .filter(|t| !command::KNOWN_TOOLS.contains(&t.as_str()))
+            .filter(|t| !t.starts_with("mcp__") && !command::KNOWN_TOOLS.contains(&t.as_str()))
             .collect();
         if !denied.is_empty() || !unknown.is_empty() {
             self.record(

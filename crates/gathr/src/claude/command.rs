@@ -18,6 +18,11 @@ pub const DENIED_TOOLS: &[(&str, &str)] = &[
         "ScheduleWakeup",
         "a wake-up lives only as long as the process; coming back later is Gathr's job (0010)",
     ),
+    // Makes and runs scheduled tasks in the cloud on claude.ai (tools reference, 2026-11-22).
+    (
+        "RemoteTrigger",
+        "it schedules work outside the chat; coming back later is Gathr's job (0010)",
+    ),
     // Offered only once the folder is signed in to a claude.ai account: they come with the
     // account and act outside Gathr. Agents get only what Gathr gives them (0024).
     ("PublishPlugin", "comes with the claude.ai account (0024)"),
@@ -37,7 +42,8 @@ pub const DENIED_TOOLS: &[(&str, &str)] = &[
 ];
 
 /// Every tool Claude Code 2.1.318 offered in `system/init` with the flags below, looked at.
-/// A tool missing here is one nobody has looked at yet: the driver records it.
+/// A tool missing here is one nobody has looked at yet: the driver records it. An `mcp__` tool is a
+/// server's, not Claude Code's own, so it's never listed.
 pub const KNOWN_TOOLS: &[&str] = &[
     "Task",
     "AskUserQuestion",
