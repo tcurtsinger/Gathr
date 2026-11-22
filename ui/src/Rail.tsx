@@ -19,7 +19,7 @@ interface Props {
 }
 
 /**
- * The rail on the window's shell (0070): Home, Agents, Plugins, Designs and Memory at the top, the open one lit; Update
+ * The rail on the window's shell (0070): Home, Agents, Memory, Plugins and Designs at the top, the open one lit; Update
  * and Settings at the foot.
  */
 export function Rail({ open, onOpen, onSettings, update }: Props) {
@@ -37,9 +37,9 @@ export function Rail({ open, onOpen, onSettings, update }: Props) {
     <div className="rail">
       {button('home', 'Home', <House aria-hidden="true" />)}
       {button('agents', 'Agents', <AgentsMark />)}
+      {button('memory', 'Memory', <MemoryMark />)}
       {button('plugins', 'Plugins', <PlugMark />)}
       {button('designs', 'Designs', <DesignsMark />)}
-      {button('memory', 'Memory', <MemoryMark aria-hidden="true" />)}
       <div className="rail-foot">
         {update.ready && (
           <IconButton

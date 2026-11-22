@@ -107,7 +107,7 @@ its cells 10px by 16px with no lines between rows.
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
   "Start failed" page keeps the system's title bar.
-- The rail: Home at the top, its centre on the word mark's line, then Agents, Plugins, Designs and Memory, 6px apart; the
+- The rail: Home at the top, its centre on the word mark's line, then Agents, Memory, Plugins and Designs, 6px apart; the
   screen that is open is drawn as current (32px, 8px radius, foreground 9%). At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
   while it installs), above the Settings cog. Icons 18px at 1.75 stroke; Update 20px at 2.
