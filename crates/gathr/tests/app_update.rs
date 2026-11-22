@@ -85,6 +85,11 @@ fn a_ready_release_waits_for_the_person_then_its_agents_carry_on() {
     assert_eq!(install(&service)["installing"], VERSION);
     std::fs::write(&go, "").unwrap();
     let next = successor(&data, service.info.pid);
+    // The window and the page stay signed in: none of their requests is refused meanwhile.
+    assert_eq!(
+        next.token, service.info.token,
+        "a new token after the hand-over"
+    );
     let app = get(&next, "/api/app");
     assert_eq!(
         (&app["version"], &app["previous"]),

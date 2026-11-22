@@ -144,10 +144,7 @@ fn start(
         early_lines.len(),
     ));
     let copies = Copies::new(data);
-    let mut hand_over = match &served {
-        Ok(Some(version)) => Some(HandOver::new(&copies.running_version(), version)),
-        _ => None,
-    };
+    let mut hand_over = served.as_ref().ok().cloned().flatten();
     let at = |hand_over: &mut Option<HandOver>, step| {
         if let Some(hand_over) = hand_over
             && let Err(e) = copies.hand_over_at(hand_over, step)
@@ -170,7 +167,7 @@ fn start(
             hand_over.left_running = true;
         }
     }
-    let update = served?;
+    let update = served?.map(|h| h.to);
     if let Some(version) = &update {
         at(&mut hand_over, "switching copies");
         if let Err(e) = copies.switch_to(version) {
@@ -196,10 +193,13 @@ async fn serve(
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
-) -> Result<Option<String>, Error> {
+) -> Result<Option<HandOver>, Error> {
     let listener = bind(data, port).await?;
     let port = listener.local_addr()?.port();
-    let token = ids::token();
+    // After a hand-over, the stopped service's: what the window and the page send meanwhile isn't refused.
+    let (token, session) = Copies::new(data)
+        .handed_over_secrets()
+        .unwrap_or_else(|| (ids::token(), ids::token()));
     // A copy on trial is marked running before it says it's up: a start that finds it up then
     // never takes it for one that died, and one that dies from here on rolls back.
     let started = Copies::new(data).started();
@@ -236,7 +236,7 @@ async fn serve(
         data: data.clone(),
         stop: tokio::sync::Notify::new(),
         ui,
-        session: ids::token(),
+        session,
         once_codes: Default::default(),
     });
     writer.record(
@@ -310,7 +310,11 @@ async fn serve(
         writer.record_now(event).await;
     }
     writer.close().await;
-    Ok(app.handing_over())
+    Ok(app.handing_over().map(|to| HandOver {
+        token: Some(state.token.clone()),
+        session: Some(state.session.clone()),
+        ..HandOver::new(&app.running, &to)
+    }))
 }
 
 /// At start, before the turns left waiting are taken over: turns cut off by the stop carry on. When
