@@ -187,7 +187,8 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
 - **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
   table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
   link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
-  row sit side by side), a flow as its Flow graph (laid out by what follows what), math as its Math block
+  row sit side by side), a flow as Gathr's own boxes (`room/Flow.tsx`: laid out by what follows what, 120px
+  wide, each growing down to hold its words, centred on its row), math as its Math block
   (`^` and `_` raised and lowered), a diagram in its Diagram frame (mermaid drawn by beautiful-mermaid in the
   window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
   that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, with Open

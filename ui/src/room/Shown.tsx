@@ -7,12 +7,12 @@ import {
   type DataTableFormat,
   type DataTableRow,
 } from '@/components/assistant-ui/elements/data-table';
-import { FlowGraph, type FlowNode } from '@/components/assistant-ui/elements/flow-graph';
 import { MathBlock, Sub, Sup } from '@/components/assistant-ui/elements/math-block';
 import type { Block, Cell } from '../api';
 import { fileName, OpenFile } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { Drawing } from './Drawing';
+import { Flow } from './Flow';
 import { PageFrame } from './PageFrame';
 import './shown.css';
 
@@ -103,33 +103,6 @@ function table(block: Block, t: Table) {
   );
 }
 
-/** Work as boxes: a node's column is one past the furthest it follows, rows in the order given. */
-function flow(nodes: NonNullable<Block['flow']>['nodes']) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const columns = new Map<string, number>();
-  const column = (id: string, seen: Set<string>): number => {
-    const known = columns.get(id);
-    if (known !== undefined) return known;
-    const node = byId.get(id);
-    if (!node || seen.has(id)) return 0;
-    seen.add(id);
-    const after = (node.after ?? []).filter((a) => byId.has(a));
-    const at = after.length ? Math.max(...after.map((a) => column(a, seen))) + 1 : 0;
-    columns.set(id, at);
-    return at;
-  };
-  const filled = new Map<number, number>();
-  const laid: FlowNode[] = nodes.map((n) => {
-    const at = column(n.id, new Set());
-    const row = filled.get(at) ?? 0;
-    filled.set(at, row + 1);
-    return { id: n.id, label: n.label, column: at, row, state: n.state ?? 'pending' };
-  });
-  const edges = nodes.flatMap((n) => (n.after ?? []).map((from) => ({ from, to: n.id })));
-  // As wide as its columns, up to the card's width, past which it scrolls.
-  return <FlowGraph className="w-fit max-w-full" nodes={laid} edges={edges} visibleCount={laid.length} />;
-}
-
 /** `x^2`, `x^{n+1}`, `a_1`, `a_{ij}` as raised and lowered text; anything else as typed. */
 function expression(text: string) {
   const parts: ReactNode[] = [];
@@ -209,7 +182,7 @@ function draw(chat: string, block: Block) {
       />
     );
   }
-  if (block.kind === 'flow' && Array.isArray(f?.nodes) && f.nodes.length > 0) return flow(f.nodes);
+  if (block.kind === 'flow' && Array.isArray(f?.nodes) && f.nodes.length > 0) return <Flow nodes={f.nodes} />;
   if (block.kind === 'math' && Array.isArray(math?.steps)) {
     const steps = math.steps.map((s) => ({ expression: expression(String(s.expression)), note: s.note }));
     return <MathBlock label={math.label} steps={steps} visibleSteps={steps.length} />;
