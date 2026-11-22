@@ -16,6 +16,7 @@ mod person;
 mod react;
 pub mod relay;
 mod server;
+mod show;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
 pub use server::{names, service};

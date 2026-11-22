@@ -85,6 +85,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0075_no_reviewer.sql"),
     include_str!("../migrations/0076_closed_questions.sql"),
     include_str!("../migrations/0077_pc_tools.sql"),
+    include_str!("../migrations/0078_blocks.sql"),
 ];
 
 /// The schema version this build writes.
@@ -165,7 +166,7 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
 mod tests {
     use super::*;
 
-    fn temp_db(name: &str) -> std::path::PathBuf {
+    pub(super) fn temp_db(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("gathr-db-{name}-{}", crate::ids::span_id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("gathr.db")
@@ -870,5 +871,70 @@ mod drop_old_tables_test {
             )
             .unwrap();
         assert_eq!(closed, "1 50, 2 -, 3 -");
+    }
+
+    /// 0078 rebuilds `messages` for a block: every message keeps its rowid and columns, its indexes
+    /// and search come back, a thumbs-up still points at its message, and a block is never indexed.
+    #[test]
+    fn messages_keep_everything_through_the_blocks_rebuild() {
+        let path = super::tests::temp_db("blocks");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..77] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 77;
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts) VALUES ('t', 'c', 'x', 'done', 1);
+             INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, to_agent, copy_of, picks, reply_to)
+             VALUES ('gone', 'c', 't', 1, 'user', 'text', 'tomato deleted', NULL, NULL, NULL, NULL),
+                 ('asked', 'c', 't', 2, 'user', 'text', 'tomato bed', NULL, NULL, '[{\"at\":0}]', NULL),
+                 ('ran', 'c', 't', 3, 'assistant', 'tool', '{\"tool\":\"tomato\"}', NULL, NULL, NULL, NULL),
+                 ('said', 'c', 't', 4, 'assistant', 'text', 'tomato seeds', 'bo', 'asked', NULL, 'asked');
+             DELETE FROM messages WHERE id = 'gone';
+             INSERT INTO reactions (message_id, agent_id, chat_id, created_ts) VALUES ('said', 'person', 'c', 5);",
+        )
+        .unwrap();
+        let rows = |conn: &Connection| -> Vec<String> {
+            let sql = "SELECT rowid || id || chat_id || turn_id || ts || role || kind || body
+                         || coalesce(to_agent, '-') || coalesce(copy_of, '-') || coalesce(picks, '-')
+                         || coalesce(reply_to, '-') FROM messages ORDER BY rowid";
+            let mut stmt = conn.prepare(sql).unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        let schema = |conn: &Connection| -> Vec<String> {
+            let sql = "SELECT name FROM sqlite_schema WHERE tbl_name = 'messages' ORDER BY name";
+            let mut stmt = conn.prepare(sql).unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        let found = |conn: &Connection| -> Vec<i64> {
+            let sql = "SELECT rowid FROM message_search WHERE message_search MATCH 'tomato' ORDER BY rowid";
+            let mut stmt = conn.prepare(sql).unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        let (before, names) = (rows(&conn), schema(&conn));
+        assert_eq!(found(&conn), [2, 4]);
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        assert_eq!(rows(&conn), before);
+        assert_eq!(schema(&conn), names);
+        assert_eq!(found(&conn), [2, 4]);
+        conn.execute_batch(
+            "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES
+                 ('shown', 'c', 't', 6, 'assistant', 'block', '{\"kind\":\"table\",\"title\":\"tomato\"}');
+             INSERT INTO message_search (message_search) VALUES ('integrity-check');",
+        )
+        .unwrap();
+        assert_eq!(found(&conn), [2, 4]);
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(broken, 0);
     }
 }

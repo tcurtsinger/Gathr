@@ -29,15 +29,44 @@ export interface ThinkingBody {
   tokens?: number;
 }
 
+/** A cell of a shown table: what the agent gave, as its column's `as` wants. */
+export type Cell = string | number | boolean | null;
+
+/** A table or a chart an agent showed with `show`, as the service keeps it. A later kind adds one more field. */
+export interface Block {
+  kind: string;
+  title?: string;
+  table?: {
+    columns: {
+      key: string;
+      label: string;
+      as?: 'text' | 'number' | 'money' | 'percent' | 'change' | 'date' | 'link' | 'yes_no';
+      unit?: string;
+      currency?: string;
+      decimals?: number;
+      up_is_good?: boolean;
+    }[];
+    rows: Record<string, Cell>[];
+  };
+  chart?: {
+    label: string;
+    value: string;
+    points: number[];
+    change?: string;
+    style?: 'line' | 'area' | 'bars';
+    up_is_good?: boolean;
+  };
+}
+
 export interface Message {
   id: string;
   turn: string | null;
   time: string;
   /** `gathr`: what Gathr told an agent (a task, a wake-up, a hear-back), never the agent's own words. */
   role: 'user' | 'assistant' | 'gathr';
-  /** `text`: its body is the words. `tool` and `thinking`: its body is an object. */
+  /** `text`: its body is the words. `tool`, `thinking` and `block`: its body is an object. */
   kind: string;
-  body: string | ToolBody | ThinkingBody;
+  body: string | ToolBody | ThinkingBody | Block;
   /** A message an agent sent one member: that member's id. It shows as its own block (0037). */
   to?: string | null;
   /** What Gathr told the member in its turn: the message it carries, already shown as the sender's. */

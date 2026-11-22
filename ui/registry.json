@@ -6,9 +6,19 @@
       "sha256": "a6b9797c48a965d629af628b8e8a9a4102ce9c6d7b2ca2f9ead75676223dcdef"
     },
     {
+      "path": "components/assistant-ui/elements/chart.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/chart.tsx",
+      "sha256": "6e5d7ec1f1ef5bb077f3d28a5639375c877e6ced1c355951724dc354c2a7ba12"
+    },
+    {
       "path": "components/assistant-ui/elements/composer.tsx",
       "url": "https://r.assistant-ui.com/elements-composer.json",
       "sha256": "397fb48354d73ae3eb2e51fc4872601eb8cc863e981520a4a7de65865db65308"
+    },
+    {
+      "path": "components/assistant-ui/elements/data-table.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/data-table.tsx",
+      "sha256": "8b2b3ba77ea50b1daf79355526fdb4669522cee5e38538c4a1e9a10f69fa19fe"
     },
     {
       "path": "components/assistant-ui/elements/receipt-focus.ts",
@@ -19,6 +29,11 @@
       "path": "components/assistant-ui/elements/surfaces.tsx",
       "url": "https://r.assistant-ui.com/elements-surfaces.json",
       "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa"
+    },
+    {
+      "path": "components/assistant-ui/utils/href.ts",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/utils/href.ts",
+      "sha256": "915088cb77476dbe92be4bc635a9b487f602d7e0456baa6ed22d7edb133707af"
     },
     {
       "path": "components/assistant-ui/utils/range.ts",
