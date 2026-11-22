@@ -460,7 +460,7 @@
   margin: 0 8px 0 0;
 }
 .room-thumb:hover .room-tip,
-.room-thumb:focus-within .room-tip {
+.room-thumb:has(:focus-visible) .room-tip {
   display: block;
 }
 /* What a turn waits on the person for, at the foot of its card. */
