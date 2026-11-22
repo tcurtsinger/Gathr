@@ -92,9 +92,11 @@
   font-size: 18px;
   font-weight: 550;
 }
+/* The message box is 12px wider than the chat's column on each side, so a card passing behind it is covered whole
+   and its edge never lines up with the box's. */
 .room-foot {
   position: relative;
-  width: min(760px, calc(100% - 48px));
+  width: min(784px, calc(100% - 24px));
   margin: 8px auto 16px;
 }
 /* The chat runs behind the message box's top edge and round corners, so no blank strip above the box cuts it. Its
