@@ -48,7 +48,13 @@ function rows(table: Table): DataTableRow[] {
 function draw(block: Block) {
   const { table, chart } = block;
   if (block.kind === 'table' && Array.isArray(table?.columns) && Array.isArray(table.rows)) {
-    const columns = table.columns.map((c) => ({ key: c.key, label: c.label, format: format(c) }));
+    // A date is written as words here, which sort by their letters: its column has no sort.
+    const columns = table.columns.map((c) => ({
+      key: c.key,
+      label: c.label,
+      format: format(c),
+      sortable: c.as !== 'date',
+    }));
     return (
       <DataTable
         className="[&_a]:wrap-anywhere [&_td]:wrap-break-word"
