@@ -1,0 +1,11 @@
+Memory's mark (ui/src/components/MemoryMark.tsx)
+
+"Book Bookmark" in the Linear style from the Solar icon set by 480 Design
+(https://github.com/480-Design/Solar-Icon-Set, icons/SVG/Linear/School/Book Bookmark.svg), as SVG Repo has it:
+https://www.svgrepo.com/svg/524325/book-bookmark
+
+Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon, with
+the line width of the icons beside it.
+
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/

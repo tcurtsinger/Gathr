@@ -1,22 +1,23 @@
 /**
- * The Designs mark: "design-pencil" from Iconoir (https://iconoir.com), MIT. Its drawing is unchanged; it takes the
- * colour of the words beside it and the line width each place gives its icons, its file's own (1.5) where a place
- * gives none. The notice is designs/notices/designs-mark.txt.
+ * The Designs mark: "pencil-line" from Phosphor Icons (https://phosphoricons.com), Thin, MIT. Its drawing is unchanged:
+ * a filled outline, so its lines keep their own width whatever a place gives its icons, and it takes the colour of the
+ * words beside it. The notice is designs/notices/designs-mark.txt.
  */
 export function DesignsMark() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" />
-      <path d="M8 21.1679V14L12 7L16 14V21.1679" />
-      <path d="M8 14C8 14 9.12676 15 10 15C10.8732 15 12 14 12 14C12 14 13.1268 15 14 15C14.8732 15 16 14 16 14" />
+    <svg viewBox="0 0 256 256" fill="currentColor" stroke="none" aria-hidden="true">
+      <path d={PENCIL} />
     </svg>
   );
 }
+
+// The file's one path, cut into pieces only to keep these lines short.
+const PENCIL = [
+  'M194.82812,122.82861v-.00049L221.1709,96.48584a11.99858,11.99858,0,0,0,0-16.97119L176.48535,34.82812',
+  'a12.01526,12.01526,0,0,0-16.9707.00049l-120.001,120a11.95868,11.95868,0,0,0-2.69995,4.15235c-.01172.',
+  '02783-.01953.05713-.03052.08545A11.98566,11.98566,0,0,0,36,163.31348V208a12.01343,12.01343,0,0,0,12,',
+  '12H216a4,4,0,0,0,0-8H105.65649l89.17163-89.17139ZM165.1709,40.48584a4.00622,4.00622,0,0,1,5.6582-.00',
+  '049l44.68555,44.68653a3.99913,3.99913,0,0,1,0,5.65673l-23.51489,23.51465L141.65649,64ZM45.65637,160,',
+  '136,69.65625,186.34326,120,96,210.34277ZM44,208V169.65625L86.34351,212H48A4.00427,4.00427,0,0,1,44,2',
+  '08Z',
+].join('');

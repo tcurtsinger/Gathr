@@ -1,16 +1,16 @@
 The Designs mark (ui/src/components/DesignsMark.tsx)
 
-"design-pencil" from Iconoir, https://iconoir.com
-(https://github.com/iconoir-icons/iconoir, icons/regular/design-pencil.svg).
+"pencil-line" in the Thin weight from Phosphor Icons, https://phosphoricons.com
+(https://github.com/phosphor-icons/phosphor-icons), as SVG Repo has it:
+https://www.svgrepo.com/svg/365625/pencil-line-thin
 
-Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon, with
-the line width of the icons beside it.
+Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon.
 
 Licence: MIT.
 
 MIT License
 
-Copyright (c) 2021 Luca Burgio
+Copyright (c) 2020-2021 Phosphor Icons
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
