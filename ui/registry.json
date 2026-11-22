@@ -28,11 +28,6 @@
       "sha256": "54ad55954b266d525df4cbf987978457e5a72ee5d867bb952f43b4368e35c60a"
     },
     {
-      "path": "components/assistant-ui/elements/flow-graph.tsx",
-      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/flow-graph.tsx",
-      "sha256": "5cf6918da703dcc7c87a49e7744d24152d626d8e7794c02363ed5f7a186741e4"
-    },
-    {
       "path": "components/assistant-ui/elements/math-block.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/math-block.tsx",
       "sha256": "6b4784e13df658fef0a0ede10c867aa7e995aa42736d314af6fa9163c06f96e8"
