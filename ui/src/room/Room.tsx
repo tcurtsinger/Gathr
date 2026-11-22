@@ -628,12 +628,12 @@ export function clock(iso?: string | null) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
 }
 
-/** Now, read again every 15 seconds while something runs. */
+/** Now, read again every second while something runs: a turn's first minute counts in seconds. */
 function useNow(running: boolean) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!running) return;
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [running]);
   return running ? Math.max(now, Date.now()) : now;

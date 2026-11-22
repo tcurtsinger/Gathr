@@ -48,7 +48,15 @@ export type LiveEvent =
       /** The kind of Gathr's words that opened it, as history carries it (0080). */
       opened?: string | null;
     }
-  | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
+  | {
+      type: 'approval';
+      chat: string;
+      turn: string;
+      request_id: string;
+      tool: string;
+      input: unknown;
+      why?: string | null;
+    }
   | { type: 'read'; chat: string; turn: string | null; text: string }
   // A chat was made, archived, restored (unarchived) or deleted.
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }

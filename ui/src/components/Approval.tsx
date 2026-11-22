@@ -8,6 +8,8 @@ export interface Approval {
   request: string;
   tool: string;
   input?: unknown;
+  /** Why it is asked, when the service says: Gathr's own asks begin `Gathr asks because`. */
+  why?: string | null;
   /** The person's answer, until the service takes it; with its failure if it was refused. */
   answer?: { allow: boolean; failure?: Failure };
 }
@@ -47,7 +49,7 @@ export function AskApproval({
       command={command}
       data-approval={a.request}
       description={
-        tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the sandbox.' : undefined
+        tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the sandbox.' : gathrsWhy(a.why)
       }
       style={{ overflowWrap: 'anywhere' }}
       subtitle={agent}
@@ -65,7 +67,16 @@ const ADDS: Record<string, [string, 'command' | 'folder']> = {
   mcp__gathr__add_skill: ['adding a skill', 'folder'],
 };
 
-/** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
+/** Why Gathr itself asks, as a short line: `Writes outside the agent's folders.` None for an engine's own ask. */
+function gathrsWhy(why?: string | null) {
+  const own = why?.match(/^Gathr asks because (?:it )?(.+)$/)?.[1];
+  return own ? `${own[0].toUpperCase()}${own.slice(1)}.` : undefined;
+}
+
+/**
+ * What an approval asks to run: the tool as the person knows it, and what it would act on: its command, or the file
+ * a file tool would write.
+ */
 function asked(a: Approval): { tool: string; command?: string } {
   const input = a.input as Record<string, unknown> | null | undefined;
   const adds = ADDS[a.tool];
@@ -76,6 +87,7 @@ function asked(a: Approval): { tool: string; command?: string } {
   // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
   const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
   const tool = typeof claudeCheck === 'string' ? 'wait check' : a.tool;
-  const command = tool === a.tool ? input?.command : claudeCheck;
+  const file = input?.file_path ?? input?.notebook_path ?? input?.path;
+  const command = tool === a.tool ? (input?.command ?? file) : claudeCheck;
   return { tool, command: typeof command === 'string' ? command : undefined };
 }
