@@ -146,6 +146,21 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
   return [...main, ...asked, ...lines].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
+/** A note the turn kept in Memory: what `note` answered, "Noted about you:" then the note. */
+export interface Noted {
+  label: string;
+  text: string;
+}
+
+/** The notes the turn's `note` calls kept, in the order they came: the step keeps each answer. */
+export function notedOf(steps: Step[]): Noted[] {
+  return steps.flatMap((s): Noted[] => {
+    if ('note' in s || s.tool !== 'mcp__gathr__note' || s.status !== 'ok' || !s.result) return [];
+    const [label, ...text] = s.result.text.split('\n');
+    return label.endsWith(':') && text.length ? [{ label: label.slice(0, -1), text: text.join(' ') }] : [];
+  });
+}
+
 /** Whether a card's turn is still under way. */
 export const working = (c: Card) => open(c.turn);
 

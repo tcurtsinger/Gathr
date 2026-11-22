@@ -1,9 +1,10 @@
 //! The agent folder (0034): one folder, set in Settings > General, that holds every project's work:
 //! `<root>/<Project>/Shared` for the team's kept files and `<root>/<Project>/<Agent>` for each
 //! agent's worktrees and its engines' temporary files, `<root>/Skills` for every agent's skills
-//! (`skills`), and `<root>/Designs/<Project>` for the designs a project's agents draw for the
-//! person. Agents write in their own folders, Shared and their project's Designs without asking;
-//! Gathr's data folder (logins, the database, engine copies) is never one of them. Gathr records
+//! (`skills`), `<root>/Memory` for the notes agents keep across chats (`memory`), and
+//! `<root>/Designs/<Project>` for the designs a project's agents draw for the person. Agents write
+//! in their own folders, Shared and their project's Designs without asking; Gathr's data folder
+//! (logins, the database, engine copies) is never one of them. Gathr records
 //! each folder it makes before making it, and only ever removes what it recorded: Shared and
 //! Designs are never recorded, so they stay when a chat or project goes.
 
@@ -21,7 +22,12 @@ pub const SHARED: &str = "Shared";
 /// Beside Skills: a part per project, named as the project's own folder is.
 pub const DESIGNS: &str = "Designs";
 /// What a project's folder is never named: the agent folder's other parts.
-const NOT_A_PROJECT: [&str; 3] = [NO_PROJECT, crate::skills::FOLDER, DESIGNS];
+const NOT_A_PROJECT: [&str; 4] = [
+    NO_PROJECT,
+    crate::skills::FOLDER,
+    DESIGNS,
+    crate::memory::FOLDER,
+];
 /// Longer names make deep worktree paths, which Windows tools still trip on past 260 characters.
 const LONGEST: usize = 40;
 
@@ -220,6 +226,24 @@ fn part_of(conn: &Connection, data: &Path, chat: &str) -> Result<(PathBuf, Strin
 pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<PathBuf, Error> {
     let root = real(&root(conn, data)?);
     Ok(root.join(named(conn, "projects", project, &root, &NOT_A_PROJECT)?))
+}
+
+/// The folder name of `project` in the agent folder `root`, named the first time: its Memory file's
+/// name too.
+pub fn project_name(conn: &Connection, root: &Path, project: &str) -> Result<String, Error> {
+    named(conn, "projects", project, root, &NOT_A_PROJECT)
+}
+
+/// The folder name of `agent`, named the first time: its Memory file's name too.
+pub fn agent_name(conn: &Connection, root: &Path, agent: &str) -> Result<String, Error> {
+    let under = root.join(crate::memory::FOLDER).join(crate::memory::AGENTS);
+    named(
+        conn,
+        "agents",
+        agent,
+        &under,
+        &[SHARED, crate::skills::FOLDER],
+    )
 }
 
 /// The Shared folder of `chat`'s project, the one folder all its agents read on both engines.

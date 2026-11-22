@@ -31,6 +31,8 @@ pub(super) struct Workspace {
     pub read: Vec<PathBuf>,
     /// The Skills folder, every agent's to read, once it's made; never one in the data folder.
     pub skills: Option<PathBuf>,
+    /// The Memory folder, every agent's to read and none's to write (`note` writes it), once it's made.
+    pub memory: Option<PathBuf>,
     /// `cwd` is where Gathr put the agent's work before the agent folder, in the data folder.
     pub from_before: bool,
     /// Where its temporary files go (TEMP, TMP, TMPDIR).
@@ -106,6 +108,7 @@ impl Task {
                 beside: Vec::new(),
                 read: Vec::new(),
                 skills: None,
+                memory: None,
                 from_before: true,
                 scratch: None,
             });
@@ -157,8 +160,10 @@ impl Task {
                 .collect(),
             None => Vec::new(),
         };
-        let skills = Some(found.place.root.join(gathr::skills::FOLDER))
-            .filter(|dir| dir.is_dir() && !refused(dir, false));
+        let given = |name: &str| {
+            Some(found.place.root.join(name)).filter(|dir| dir.is_dir() && !refused(dir, false))
+        };
+        let (skills, memory) = (given(gathr::skills::FOLDER), given(gathr::memory::FOLDER));
         let kind = match found.project {
             Some(_) => "worktree",
             None => "folder",
@@ -188,6 +193,7 @@ impl Task {
             beside,
             read,
             skills,
+            memory,
             from_before,
             scratch: Some(scratch),
         })

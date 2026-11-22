@@ -65,6 +65,7 @@ impl Tools {
             + Tools::person_router()
             + Tools::react_router()
             + Tools::board_router()
+            + Tools::note_router()
             + Tools::github_router()
     }
 }

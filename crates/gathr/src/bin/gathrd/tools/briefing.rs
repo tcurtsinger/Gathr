@@ -9,6 +9,8 @@ use gathr::claude::command::DENIED_TOOLS;
 use gathr::team::{self, Role};
 use rusqlite::{Connection, OptionalExtension};
 
+mod memory;
+
 /// What the briefing says about the chat: its title, the agent's name and role, the other agents
 /// (the chat's team, or with none, those who have run turns in it), and the agent's worktree.
 pub struct Facts {
@@ -36,15 +38,18 @@ pub struct Facts {
     agents: Vec<String>,
     /// The Skills folder and its enabled skills that can be read, by name and description.
     skills: Option<(PathBuf, Vec<(String, String)>)>,
+    /// What it knows from Memory, each place with notes: its file and its notes.
+    known: Vec<(gathr::memory::Place, PathBuf, Vec<gathr::memory::Note>)>,
 }
 
-/// The agent's worktree, its own folder and Shared, its Designs, what it may read, and the Skills
-/// folder.
+/// The agent's worktree, its own folder and Shared, its Designs, what it may read, the Skills folder
+/// and the Memory folder.
 type Folders = (
     Option<(PathBuf, String)>,
     Option<(PathBuf, PathBuf)>,
     Option<PathBuf>,
     Vec<PathBuf>,
+    Option<PathBuf>,
     Option<PathBuf>,
 );
 
@@ -52,7 +57,7 @@ pub fn facts(
     conn: &Connection,
     chat: &str,
     agent: Option<&str>,
-    (worktree, own, designs, read, skills): Folders,
+    (worktree, own, designs, read, skills, memory): Folders,
 ) -> Result<Facts, gathr::Error> {
     let title: String = conn
         .query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
@@ -119,6 +124,10 @@ pub fn facts(
             .filter_map(|s| Some((s.name, s.description?)));
         (dir, usable.collect::<Vec<_>>())
     });
+    let known = match memory.as_deref().and_then(std::path::Path::parent) {
+        Some(root) => gathr::memory::known(conn, root, chat, agent)?,
+        None => Vec::new(),
+    };
     Ok(Facts {
         title,
         name,
@@ -134,6 +143,7 @@ pub fn facts(
         assistant: plain && agent.is_some() && assistant.as_deref() == agent,
         agents,
         skills: skills.filter(|(_, listed)| !listed.is_empty()),
+        known,
     })
 }
 
@@ -309,6 +319,8 @@ pub fn text(facts: &Facts) -> String {
     if let Some((dir, listed)) = &facts.skills {
         lines.push(skills(dir, listed));
     }
+    lines.extend(memory::known(&facts.known, facts.person.as_deref()));
+    lines.push(memory::ASK.to_string());
     lines.extend([
         "Follow the project's AGENTS.md and CLAUDE.md when present.".to_string(),
         "Check facts in code, current documentation or a live run. Say what you could not verify."

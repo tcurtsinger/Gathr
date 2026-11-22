@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Design, type DesignPart, type Failure } from '../api';
 import { useCard } from '../components/Corner';
 import { DesignsMark } from '../components/DesignsMark';
+import { ago } from '../components/marks';
 import { PageFrame, PagePreview } from '../room/PageFrame';
 import { Screen } from '../Screen';
 import './designs.css';
@@ -15,19 +16,6 @@ const letter = (i: number) => String.fromCharCode(65 + i);
 function facts(d: Design, now = Date.now()) {
   const pages = d.pages.length === 1 ? '1 page' : `${d.pages.length} options`;
   return `${pages} · ${ago(d.modified, now)}`;
-}
-
-/** A short time since: 40m, 2h today, then Yesterday, 3d this week, else the date. */
-function ago(time: number, now: number) {
-  const minutes = Math.floor((now - time) / 60_000);
-  const day = (t: number) => new Date(new Date(t).toDateString()).getTime();
-  const days = Math.round((day(now) - day(time)) / 86_400_000);
-  if (minutes < 1) return 'Now';
-  if (minutes < 60) return `${minutes}m`;
-  if (days <= 0) return `${Math.floor(minutes / 60)}h`;
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days}d`;
-  return new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
 
 /**

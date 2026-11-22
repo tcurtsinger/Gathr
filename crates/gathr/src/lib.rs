@@ -33,6 +33,7 @@ pub mod http;
 pub mod ids;
 pub mod launch;
 pub mod likes;
+pub mod memory;
 pub mod notice;
 pub mod open_check;
 pub mod pauses;
