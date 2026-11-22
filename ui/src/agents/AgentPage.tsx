@@ -46,8 +46,8 @@ const modes: [Approvals, string, string][] = [
 ];
 
 /**
- * An agent's page, or Add's: its picture behind its box, then Name, Description, Account (it implies the engine),
- * the account's models and their efforts, and Approvals, saved together with Save.
+ * An agent's page, or Add's: its picture behind its box, then Name (Add's only), Description, Account (it implies
+ * the engine), the account's models and their efforts, and Approvals, saved together with Save.
  */
 export function AgentPage(props: Props) {
   const { agent, accounts, assistant, saved, onBack, onSaved, onDeleted } = props;
@@ -107,7 +107,6 @@ export function AgentPage(props: Props) {
     !agent ||
     Object.keys(face).length > 0 ||
     !!described ||
-    draft.name !== agent.name ||
     draft.account !== agent.account ||
     draft.model !== agent.model ||
     draft.effort !== agent.effort ||
@@ -189,18 +188,21 @@ export function AgentPage(props: Props) {
         />
       )}
       <div className="agent-rows">
-        <Row name="Name" id={`${id}name`}>
-          <input
-            id={`${id}name`}
-            value={name}
-            maxLength={80}
-            autoComplete="off"
-            spellCheck={false}
-            // biome-ignore lint/a11y/noAutofocus: the page opens from Add, to type the name
-            autoFocus={!agent}
-            onChange={(e) => edit({ name: e.target.value })}
-          />
-        </Row>
+        {/* An agent keeps the name it was added with: its folders carry it. */}
+        {!agent && (
+          <Row name="Name" id={`${id}name`}>
+            <input
+              id={`${id}name`}
+              value={name}
+              maxLength={80}
+              autoComplete="off"
+              spellCheck={false}
+              // biome-ignore lint/a11y/noAutofocus: the page opens from Add, to type the name
+              autoFocus
+              onChange={(e) => edit({ name: e.target.value })}
+            />
+          </Row>
+        )}
         <Row name="Description" id={`${id}about`}>
           <input
             id={`${id}about`}

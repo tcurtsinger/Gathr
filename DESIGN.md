@@ -375,8 +375,9 @@ Current work stays where it is.
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. An account's row has Sign in or Sign out, and its More menu has Rename and Remove. A new Gathr has no
 accounts and does not reuse external logins. Agents is a screen of its own, as Plugins is:
-every agent in its sidebar, the list with the Assistant dropdown and Add, and one page per agent with Name,
-Description, Account, Model, Effort and Approvals as rows, each with one line under its name and no ? Help. The
+every agent in its sidebar, the list with the Assistant dropdown and Add, and one page per agent with
+Description, Account, Model, Effort and Approvals as rows, each with one line under its name and no ? Help; Add's
+page has Name first, and an agent keeps the name it was added with. The
 page's 56px picture sits in a 64px box with a pencil on its corner; the box opens Shuffle, which picks a new shape,
 eyes and colour, then Shape, Eyes and Colour. Shape and Eyes are the twelve choices each,
 drawn alone in 40px boxes in the agent's colour, the one shown ringed; Colour is twelve 26px swatches, names for
