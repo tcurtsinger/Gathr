@@ -97,9 +97,10 @@ function Link({ node: _, ...props }: ComponentProps<'a'> & { node?: unknown }) {
 }
 const components = { a: Link };
 
-// Code blocks keep Streamdown's language label, Copy and Download, as in the prototype; tables have none.
+// A code block has one button, Copy, in its top right corner, and no bar, language label, Download or line numbers
+// (the owner's pick, 2026-11-22; markdown.css hides the bar); tables have no buttons.
 // Shiki colours a block once its language loads; until then it shows plain.
-const controls = { table: false };
+const controls = { table: false, code: { download: false } };
 const plugins = { code };
 
 /** Streamdown draws a code block's body through React.lazy, and React holds a revealed Suspense fallback
@@ -135,6 +136,7 @@ export function Markdown({ text, className, names }: { text: string; className?:
       components={components}
       linkSafety={{ enabled: false }}
       controls={controls}
+      lineNumbers={false}
       tableMaxHeight={Number.POSITIVE_INFINITY}
       plugins={plugins}
     >
