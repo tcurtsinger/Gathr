@@ -38,8 +38,8 @@ pub struct Facts {
     agents: Vec<String>,
     /// The Skills folder and its enabled skills that can be read, by name and description.
     skills: Option<(PathBuf, Vec<(String, String)>)>,
-    /// What it knows from Memory, each place with notes: its file and its notes.
-    known: Vec<(gathr::memory::Place, PathBuf, Vec<gathr::memory::Note>)>,
+    /// What it knows from Memory, each place with notes: its name, its file and its notes.
+    known: Vec<gathr::memory::Known>,
 }
 
 /// The agent's worktree, its own folder and Shared, its Designs, what it may read, the Skills folder

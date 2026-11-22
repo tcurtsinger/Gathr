@@ -8,7 +8,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::routing::get;
 use axum::{Json, Router};
 use gathr::memory::{self, Place};
-use gathr::{Error, agents, projects};
+use gathr::{Error, agents, projects, web_tools};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -32,6 +32,9 @@ fn listed(conn: &Connection, root: &FilePath) -> Result<Value, Error> {
     for a in agents::list(conn)? {
         places.push((Place::Agent(a.id), a.name, "agent"));
     }
+    for t in web_tools::list(conn)? {
+        places.push((Place::Tool(t.id), t.name, "tool"));
+    }
     let mut shown = Vec::new();
     for (place, name, kind) in places {
         let notes = memory::notes(&memory::file(conn, root, &place)?)?;
@@ -43,11 +46,7 @@ fn listed(conn: &Connection, root: &FilePath) -> Result<Value, Error> {
 /// One place: its name, its file and its notes.
 fn shown(conn: &Connection, root: &FilePath, place: &Place) -> Result<Value, Error> {
     let path = memory::file(conn, root, place)?;
-    let name = match place {
-        Place::You => "About you".to_string(),
-        Place::Project(id) => projects::get(conn, id)?.map(|p| p.name).unwrap_or_default(),
-        Place::Agent(id) => agents::name_of(conn, id)?,
-    };
+    let name = memory::name(conn, place)?;
     let notes = memory::notes(&path)?;
     Ok(json!({ "id": place.id(), "name": name, "path": path, "notes": notes }))
 }

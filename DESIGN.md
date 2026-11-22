@@ -193,10 +193,10 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
   that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, with Open
   at its top right; each but a diagram with its title as a quiet 12.5px line above, a diagram in its frame.
-- **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" (Memory's
-  mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
+- **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" or "Noted
+  about Seed catalogue: …" for a tool's note (Memory's mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
   for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis. A click opens
-  Memory or the tool's or skill's page in Plugins.
+  Memory at the note's place, or the tool's or skill's page in Plugins.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
   ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed
   one in the danger colour. The card of the files a turn changed shows once the turn ends, under its words,

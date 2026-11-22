@@ -1,4 +1,4 @@
-import { Folder, MoreHorizontal, Pencil, Trash2, User } from 'lucide-react';
+import { Folder, MoreHorizontal, Pencil, Plug, Trash2, User } from 'lucide-react';
 import { createContext, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +18,7 @@ import { listen } from '../live';
 import { Screen } from '../Screen';
 import './memory.css';
 
-/** Opens the Memory screen at a place (`you`, `project:<id>`, `agent:<id>`): a noted line in a chat calls it. */
+/** Opens the Memory screen at a place (`you`, `project:<id>`, `agent:<id>`, `tool:<id>`): a noted line in a chat calls it. */
 export const OpenMemory = createContext<((place: string) => void) | undefined>(undefined);
 
 interface Props {
@@ -28,7 +28,7 @@ interface Props {
 }
 
 /**
- * The Memory screen, in place of the chat list and the chat: About you, each project and each agent in its sidebar; a
+ * The Memory screen, in place of the chat list and the chat: About you, each project, agent and tool in its sidebar; a
  * place's notes in the main panel, each with Edit and Remove, and a box to add one.
  */
 export function Memory({ at, onAt }: Props) {
@@ -42,8 +42,7 @@ export function Memory({ at, onAt }: Props) {
   useEffect(() => {
     loadPlaces();
     return listen((e) => {
-      if (e.type === 'memory' || e.type === 'agents' || e.type === 'project' || e.type === 'lagged')
-        loadPlaces();
+      if (['memory', 'agents', 'project', 'tools', 'lagged'].includes(e.type)) loadPlaces();
     });
   }, [loadPlaces]);
   useEffect(() => {
@@ -55,14 +54,15 @@ export function Memory({ at, onAt }: Props) {
       );
     load();
     const stop = listen((e) => {
-      if (e.type === 'memory' || e.type === 'lagged') load();
+      // A tool renamed keeps its notes: its page takes its new name.
+      if (e.type === 'memory' || e.type === 'tools' || e.type === 'lagged') load();
     });
     return () => {
       open = false;
       stop();
     };
   }, [at]);
-  // A project or agent deleted while its page is open: back to About you.
+  // A project, agent or tool removed while its page is open: back to About you.
   useEffect(() => {
     if (places && !places.some((p) => p.id === at)) onAt('you');
   }, [places, at, onAt]);
@@ -85,6 +85,7 @@ export function Memory({ at, onAt }: Props) {
   const of = (k: MemoryPlace['kind']) => places?.filter((p) => p.kind === k) ?? [];
   const projects = of('project');
   const agents = of('agent');
+  const tools = of('tool');
 
   return (
     <>
@@ -107,6 +108,12 @@ export function Memory({ at, onAt }: Props) {
                 {agents.map((p) =>
                   row(p, <Face agent={{ id: p.id.slice('agent:'.length), name: p.name }} size={20} />),
                 )}
+              </section>
+            )}
+            {tools.length > 0 && (
+              <section>
+                <h2>Tools</h2>
+                {tools.map((p) => row(p, <Plug aria-hidden="true" className="memory-nav-icon" />))}
               </section>
             )}
           </div>
@@ -158,6 +165,8 @@ export function Memory({ at, onAt }: Props) {
 function lede(kind: MemoryPlace['kind'] | undefined, name: string) {
   if (kind === 'project') return 'What agents know about this project.';
   if (kind === 'agent') return `What ${name} has learned. It goes with ${name} into every project.`;
+  if (kind === 'tool')
+    return 'What agents have learned about using this tool. Every agent that can use it gets these.';
   return 'What every agent knows about you. Agents add to it as they learn.';
 }
 

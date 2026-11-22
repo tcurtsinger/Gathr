@@ -155,11 +155,12 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
 export type Needs = { what: 'key' | 'sign-in' } | { what: 'value'; names: string };
 
 /**
- * What the turn kept that lasts, from its answer's first lines ("Noted about you:" then the note; "Added the tool:"
- * then its name, id and what it needs; "Wrote the skill:" then its name): a note in Memory, a tool, a skill.
+ * What the turn kept that lasts, from its answer's first lines ("Noted about you:" then the note, and for a tool's
+ * note "place tool:<id>"; "Added the tool:" then its name, id and what it needs; "Wrote the skill:" then its name): a
+ * note in Memory, a tool, a skill.
  */
 export type Kept =
-  | { kind: 'note'; label: string; text: string }
+  | { kind: 'note'; label: string; text: string; place?: string }
   | { kind: 'tool'; label: string; name: string; id: string; needs?: Needs }
   | { kind: 'skill'; label: string; name: string };
 
@@ -178,7 +179,10 @@ export function keptOf(steps: Step[]): Kept[] {
     const [first, name, ...rest] = s.result.text.split('\n');
     if (!first.endsWith(':') || !name) return [];
     const label = first.slice(0, -1);
-    if (s.tool === 'mcp__gathr__note') return [{ kind: 'note', label, text: [name, ...rest].join(' ') }];
+    if (s.tool === 'mcp__gathr__note') {
+      const place = rest[0]?.match(/^place (tool:\S+)$/)?.[1];
+      return [{ kind: 'note', label, text: (place ? [name] : [name, ...rest]).join(' '), place }];
+    }
     if (s.tool === 'mcp__gathr__add_skill') return [{ kind: 'skill', label, name }];
     const id = rest[0]?.match(/^id (\S+)$/)?.[1];
     if (s.tool !== 'mcp__gathr__add_tool' || !id) return [];
