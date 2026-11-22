@@ -1,12 +1,14 @@
 import { File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type FileTree } from '../api';
+import { ChangesMark } from '../components/ChangesMark';
 import { DesignsMark } from '../components/DesignsMark';
 import { pathSteps as steps, onWindows as windows } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
+import { Changes, ChangesTile } from './Changes';
 import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
@@ -15,17 +17,19 @@ import type { OnAnswer } from './Question';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
-/** A chat's open tabs, and the one shown: Home, Files, Design, or a file's or design's path. */
+/** A chat's open tabs, and the one shown: Home, Files, Design, Changes, or a file's or design's path. */
 interface Tabs {
   files: boolean;
   design: boolean;
+  changes: boolean;
   open: Opened[];
   at: string;
 }
 const HOME = 'home';
 const FILES = 'files';
 const DESIGN = 'design';
-const FRESH: Tabs = { files: false, design: false, open: [], at: HOME };
+const CHANGES = 'changes';
+const FRESH: Tabs = { files: false, design: false, changes: false, open: [], at: HOME };
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
 const heard = new Set<() => void>();
@@ -90,7 +94,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: Home first, always there, then Files, Design and each open file or design as tabs. */
+/** The panel beside the chat: Home first, always there, then Files, Design, Changes and each open file or design as tabs. */
 export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
@@ -114,6 +118,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     HOME,
     ...(tabs.files ? [FILES] : []),
     ...(tabs.design ? [DESIGN] : []),
+    ...(tabs.changes ? [CHANGES] : []),
     ...tabs.open.map((f) => f.path),
   ];
   const go = (at: string) => change(chat, { ...tabs, at });
@@ -123,6 +128,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     change(chat, {
       files: tabs.files && key !== FILES,
       design: tabs.design && key !== DESIGN,
+      changes: tabs.changes && key !== CHANGES,
       open: tabs.open.filter((f) => f.path !== key),
       at,
     });
@@ -158,6 +164,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           {tab(HOME, <House aria-hidden="true" />, 'Home', false)}
           {tabs.files && tab(FILES, <Files aria-hidden="true" />, 'Files')}
           {tabs.design && tab(DESIGN, <DesignsMark />, 'Designs')}
+          {tabs.changes && tab(CHANGES, <ChangesMark />, 'Changes')}
           <div className="workspace-files">
             {tabs.open.map((f) =>
               tab(
@@ -196,6 +203,12 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                 <DesignsMark />
                 Designs
               </button>
+              <ChangesTile
+                chat={chat}
+                room={room}
+                open={tabs.at === HOME}
+                onOpen={() => change(chat, { ...tabs, changes: true, at: CHANGES })}
+              />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -224,6 +237,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             onOpen={(d) => show(chat, { path: d.path, crumbs: [d.name], design: true })}
           />,
         )}
+      {tabs.changes && view(CHANGES, <Changes chat={chat} room={room} open={tabs.at === CHANGES} />)}
       {tabs.open.map((f) =>
         view(
           f.path,

@@ -324,14 +324,7 @@ async fn git_files(root: &Path) -> Option<Vec<String>> {
     if !root.join(".git").exists() {
         return None;
     }
-    let env: crate::platform::env::Vars = std::env::vars_os()
-        .filter(|(k, _)| {
-            let k = k.to_string_lossy();
-            !crate::platform::env::LOCAL_GIT_VARS
-                .iter()
-                .any(|v| v.eq_ignore_ascii_case(&k))
-        })
-        .collect();
+    let env = git_env();
     let args = [
         "ls-files",
         "-z",
@@ -351,6 +344,19 @@ async fn git_files(root: &Path) -> Option<Vec<String>> {
     // A file in a merge is listed once per side.
     listed.dedup();
     Some(listed)
+}
+
+/// The service's environment without what would point git at another repository, for git that
+/// only reads.
+pub(crate) fn git_env() -> crate::platform::env::Vars {
+    std::env::vars_os()
+        .filter(|(k, _)| {
+            let k = k.to_string_lossy();
+            !crate::platform::env::LOCAL_GIT_VARS
+                .iter()
+                .any(|v| v.eq_ignore_ascii_case(&k))
+        })
+        .collect()
 }
 
 /// The files under `root`, each as its path from it with `/` between steps, never inside `.git` or

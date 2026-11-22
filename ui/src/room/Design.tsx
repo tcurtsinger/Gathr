@@ -67,7 +67,7 @@ const ENDED = ['done', 'stopped', 'failed'];
  * always counts), and only while `open`: each move is a time to read the folder again. An agent may write a design
  * any way, a shell command too, so any step ending is a time to look; what changed is told by the files.
  */
-function useLook(room: RoomState, open: boolean) {
+export function useLook(room: RoomState, open: boolean) {
   const ended =
     room.messages.filter(
       (m) =>

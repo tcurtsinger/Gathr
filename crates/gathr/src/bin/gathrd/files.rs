@@ -9,7 +9,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::files;
+use gathr::{changes, files};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -26,6 +26,8 @@ pub fn routes() -> Router<Arc<State>> {
         )
         .route("/api/chats/{chat}/file", get(text))
         .route("/api/chats/{chat}/picture", get(picture))
+        .route("/api/chats/{chat}/changes", get(changes))
+        .route("/api/chats/{chat}/change", get(change))
 }
 
 #[derive(Deserialize)]
@@ -212,4 +214,73 @@ async fn text(
         Ok(Err(files::Unshown::NotText)) => (StatusCode::UNSUPPORTED_MEDIA_TYPE, "it isn't text"),
     };
     Err(fail(status, "File failed", why, &t.0))
+}
+
+/// What each agent changed in the chat: per agent with a worktree, its changed files, at most
+/// `changes::MOST_FILES` in all. A chat with no project has none.
+async fn changes(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(chat): Path<String>,
+) -> Answer {
+    let tree = tree_of(&s, &t, &chat, "Changes failed").await?;
+    let Some(project) = tree.project else {
+        return Ok(Json(
+            json!({ "project": false, "agents": [], "more": false }),
+        ));
+    };
+    let (mut agents, mut room, mut more) = (Vec::new(), changes::MOST_FILES, false);
+    for part in tree
+        .agents
+        .into_iter()
+        .filter(|p| p.path.join(".git").exists())
+    {
+        let change = changes::list(&project.path, &part.path, room).await;
+        let change = change.map_err(|e| failed("Changes failed", e, &t))?;
+        room -= change.files.len();
+        more |= change.more;
+        let (id, name) = (part.agent, part.name);
+        agents.push(
+            json!({ "id": id, "name": name, "branch": change.branch, "files": change.files }),
+        );
+    }
+    Ok(Json(
+        json!({ "project": true, "agents": agents, "more": more }),
+    ))
+}
+
+#[derive(Deserialize)]
+struct Changed {
+    agent: String,
+    path: String,
+    from: Option<String>,
+}
+
+/// One file's change in an agent's worktree, as lines to draw.
+async fn change(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(chat): Path<String>,
+    Query(q): Query<Changed>,
+) -> Answer {
+    let tree = tree_of(&s, &t, &chat, "Change failed").await?;
+    let worktree = tree
+        .agents
+        .into_iter()
+        .find(|p| p.agent.as_deref() == Some(&q.agent) && p.path.join(".git").exists());
+    let (Some(project), Some(worktree)) = (tree.project, worktree) else {
+        let why = "that agent has no worktree in this chat";
+        return Err(fail(StatusCode::NOT_FOUND, "Change failed", why, &t.0));
+    };
+    let lines = changes::file(&project.path, &worktree.path, &q.path, q.from.as_deref()).await;
+    let lines = lines.map_err(|e| failed("Change failed", e, &t))?;
+    Ok(Json(json!(lines)))
+}
+
+fn failed(error: &'static str, e: gathr::Error, t: &Trace) -> Fail {
+    let status = match e {
+        gathr::Error::Refused(_) => StatusCode::BAD_REQUEST,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    fail(status, error, &e.to_string(), &t.0)
 }
