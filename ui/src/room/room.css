@@ -93,8 +93,17 @@
   font-weight: 550;
 }
 .room-foot {
+  position: relative;
   width: min(760px, calc(100% - 48px));
   margin: 8px auto 16px;
+}
+/* The chat runs behind the message box's top edge and round corners, so no blank strip above the box cuts it. Its
+   newest message still rests 16px above the box. */
+.room-foot:has(> .composer:first-child) {
+  margin-top: -26px;
+}
+.room-scroll:has(+ .room-foot > .composer:first-child) {
+  padding-bottom: 42px;
 }
 .room-time {
   color: var(--muted-foreground);
