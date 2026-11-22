@@ -1,8 +1,7 @@
 The Designs mark (ui/src/components/DesignsMark.tsx)
 
-"pencil-line" in the Thin weight from Phosphor Icons, https://phosphoricons.com
-(https://github.com/phosphor-icons/phosphor-icons), as SVG Repo has it:
-https://www.svgrepo.com/svg/365625/pencil-line-thin
+"pencil-line" in the Regular weight from Phosphor Icons, https://phosphoricons.com
+(https://github.com/phosphor-icons/core, assets/regular/pencil-line.svg).
 
 Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon.
 
@@ -10,7 +9,7 @@ Licence: MIT.
 
 MIT License
 
-Copyright (c) 2020-2021 Phosphor Icons
+Copyright (c) 2023 Phosphor Icons
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
