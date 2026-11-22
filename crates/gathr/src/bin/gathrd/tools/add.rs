@@ -20,10 +20,9 @@ use super::Caller;
 use super::server::{Tools, caller_of};
 use crate::api::{State, Trace};
 
-/// What every answer ends with: an engine is given tools and skills as it starts, and keeps running
-/// between turns.
-const NEXT_START: &str =
-    "Agents get it when their engine next starts. Yours is running, so you can't use it yet.";
+/// What every answer ends with: an engine is given tools and skills as it starts, and an agent's next
+/// turn starts its engine again once they have changed.
+const NEXT_START: &str = "Agents get it from their next turn. You can't use it in this one.";
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct AddTool {

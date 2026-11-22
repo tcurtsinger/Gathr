@@ -85,6 +85,19 @@ struct Assignment {
     team: Vec<(String, gathr::team::Role)>,
     /// Claude Code with its slash commands, for `/compact` only (K4).
     slash: bool,
+    /// The tools and skills an engine is given as it starts, as they are now: once they change, the
+    /// agent's next turn starts its engine again, so it can use what was added.
+    plugins: String,
+}
+
+/// The enabled tools' entries and the skills an engine's briefing lists, as one text.
+fn plugins(conn: &rusqlite::Connection, data: &std::path::Path) -> Result<String, gathr::Error> {
+    let dir = gathr::skills::folder(conn, data)?;
+    let skills = gathr::skills::list(&dir, &gathr::skills::off(conn)?).into_iter();
+    let usable: Vec<_> = (skills.filter(|s| s.enabled))
+        .filter_map(|s| Some((s.name, s.description?)))
+        .collect();
+    Ok(format!("{}{usable:?}", gathr::web_tools::given(conn)?))
 }
 
 impl Assignment {
@@ -505,7 +518,14 @@ impl Task {
                 .await;
             return Ok(self.hold_back(next, "queued").await);
         }
-        let assigned = self.assignment(next).await?;
+        let mut assigned = self.assignment(next).await?;
+        // Changed tools or skills never close it under its background commands: their end and the
+        // turn it starts would go with it. It starts again once they have ended.
+        if let (Some(now), Some(was)) = (&mut assigned, &self.assigned)
+            && self.background > 0
+        {
+            now.plugins.clone_from(&was.plugins);
+        }
         if self.engine.is_some() && self.assigned != assigned {
             let why = match (&self.assigned, &assigned) {
                 (Some(was), Some(now)) if was.chat != now.chat => {
@@ -519,6 +539,9 @@ impl Task {
                     true => "it compacts its conversation",
                     false => "it compacted its conversation",
                 },
+                (Some(was), Some(now)) if was.plugins != now.plugins => {
+                    "its tools or skills changed"
+                }
                 _ => "the next turn runs with another model, effort or approvals",
             };
             self.close(why).await;
@@ -705,33 +728,39 @@ impl Task {
     /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,
     /// the chats' account and the engine's defaults. `None` while there's no account.
     async fn assignment(&self, next: &Queued) -> Result<Option<Assignment>, String> {
-        let on = |account: gathr::accounts::Account, agent, (model, effort, approvals), team| {
-            Assignment {
-                folder: account.folder(&self.chats.data),
-                account: account.id,
-                engine: account.engine,
-                agent,
-                model,
-                effort,
-                approvals,
-                chat: next.ids.chat.clone(),
-                team,
-                slash: false,
-            }
+        let on = |account: gathr::accounts::Account,
+                  agent,
+                  (model, effort, approvals),
+                  team,
+                  plugins| Assignment {
+            folder: account.folder(&self.chats.data),
+            account: account.id,
+            engine: account.engine,
+            agent,
+            model,
+            effort,
+            approvals,
+            chat: next.ids.chat.clone(),
+            team,
+            slash: false,
+            plugins,
         };
+        let data = self.chats.data.path().to_path_buf();
         let Some(id) = next.ids.agent.clone() else {
             let Some(id) = self.chats.account() else {
                 return Ok(None);
             };
-            return match self
-                .chats
-                .writer
-                .call(move |conn| gathr::accounts::get(conn, &id))
-                .await
-            {
-                Some(Ok(account)) => {
-                    Ok(account.map(|a| on(a, None, (None, None, Default::default()), Vec::new())))
-                }
+            let read = move |conn: &mut rusqlite::Connection| {
+                Ok::<_, gathr::Error>((
+                    gathr::accounts::get(conn, &id)?,
+                    plugins(conn, &data).unwrap_or_default(),
+                ))
+            };
+            return match self.chats.writer.call(read).await {
+                Some(Ok((account, plugins))) => Ok(account.map(|a| {
+                    let given = (None, None, Default::default());
+                    on(a, None, given, Vec::new(), plugins)
+                })),
                 _ => Err("the account wasn't read".into()),
             };
         };
@@ -743,12 +772,13 @@ impl Task {
                 return Ok(None);
             };
             let account = gathr::accounts::get(conn, &agent.account)?;
-            Ok::<_, gathr::Error>(account.map(|account| (agent, account, team)))
+            let plugins = plugins(conn, &data).unwrap_or_default();
+            Ok::<_, gathr::Error>(account.map(|account| (agent, account, team, plugins)))
         };
         match self.chats.writer.call(read).await {
-            Some(Ok(Some((a, account, team)))) => {
+            Some(Ok(Some((a, account, team, plugins)))) => {
                 let given = (a.model, a.effort, a.approvals);
-                let mut assigned = on(account, Some(a.id), given, team);
+                let mut assigned = on(account, Some(a.id), given, team, plugins);
                 assigned.slash =
                     assigned.engine == "claude" && self.compactions.contains(&next.ids.turn);
                 Ok(Some(assigned))

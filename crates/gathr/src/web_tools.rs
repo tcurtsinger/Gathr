@@ -234,6 +234,21 @@ pub fn entries(conn: &Connection) -> Result<Vec<(String, String)>, Error> {
     Ok(entries)
 }
 
+/// What an engine is given of the tools as it starts, as one text: each enabled tool's entry and id,
+/// and what a tool on this PC runs. An engine started with another text starts again to see the change.
+pub fn given(conn: &Connection) -> Result<String, Error> {
+    let mut given = String::new();
+    for (name, id) in entries(conn)? {
+        let runs: (Option<String>, Option<String>, Option<String>) = conn.query_row(
+            "SELECT program, args, folder FROM tools WHERE id = ?1",
+            [&id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        given.push_str(&format!("{name}\t{id}\t{runs:?}\n"));
+    }
+    Ok(given)
+}
+
 /// Lowercase letters and digits, each other run as one `_`.
 fn slug(name: &str) -> String {
     let mut slug = String::new();

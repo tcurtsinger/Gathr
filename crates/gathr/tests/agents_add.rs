@@ -50,10 +50,12 @@ fn skill(folder: &Path, name: &str, description: &str) -> PathBuf {
 fn an_agent_adds_tools_and_skills_and_its_engine_asks_first_as_its_approvals_say() {
     let data = TempDir::new();
     let (args, env) = (data.0.join("args.jsonl"), data.0.join("env.jsonl"));
+    let go = data.0.join("go");
     let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
+            ("GATHR_REPLAY_HOLD", &go),
             ("GATHR_REPLAY_ARGS", &args),
             ("GATHR_REPLAY_ENV", &env),
         ],
@@ -158,4 +160,21 @@ fn an_agent_adds_tools_and_skills_and_its_engine_asks_first_as_its_approvals_say
         Some(1),
         "{skills}"
     );
+
+    // Her next turn starts her engine again, so it has the tool she added.
+    std::fs::write(&go, "").unwrap();
+    service.wait_for(&chat, 10, "the first turn to end", |h| {
+        let last = h["turns"].as_array().and_then(|t| t.last());
+        last.is_some_and(|t| t["status"] == "done")
+    });
+    let message = json!({ "text": "Search my notes", "agent": ann });
+    let sent = service.send("POST", &format!("/api/chats/{chat}/messages"), message);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let again: Vec<String> = until(10, "the engine to start again", || {
+        let text = std::fs::read_to_string(&args).ok()?;
+        serde_json::from_str(text.lines().nth(1)?).ok()
+    });
+    let at = again.iter().position(|a| a == "--mcp-config").unwrap();
+    let entry = format!("/mcp/tools/{notes_id}");
+    assert!(again[at + 1].contains(&entry), "{}", again[at + 1]);
 }
