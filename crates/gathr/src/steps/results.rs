@@ -26,12 +26,16 @@ pub struct StepResult {
 }
 
 /// A file a step changed: its path as the engine gave it, secrets hidden, and its lines added and
-/// removed. Never what the lines hold.
+/// removed; whether the step made it, and the change itself for the Changes tab when it is text:
+/// unified diff hunks, at most `changes::MOST_LINES` lines (`cut` when there were more).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Changed {
     pub path: String,
     pub added: usize,
     pub removed: usize,
+    pub new: bool,
+    pub diff: Option<String>,
+    pub cut: bool,
 }
 
 /// A file changed, its path hidden as a step's input is.
@@ -40,7 +44,61 @@ pub fn changed(path: &str, added: usize, removed: usize) -> Changed {
         path: redact(path),
         added,
         removed,
+        new: false,
+        diff: None,
+        cut: false,
     }
+}
+
+impl Changed {
+    /// With its change, `hunks` (unified diff from its first `@@`), and whether the step made the
+    /// file. Not text (a NUL), it keeps none.
+    pub fn with(mut self, hunks: &str, new: bool) -> Changed {
+        self.new = new;
+        let hunks = &hunks[hunks.find("@@").unwrap_or(hunks.len())..];
+        if hunks.is_empty() || hunks.contains('\0') {
+            return self;
+        }
+        let (mut kept, mut given) = (String::new(), 0);
+        for line in hunks.lines() {
+            let head = line.starts_with("@@");
+            let over = kept.len() + line.len() >= crate::files::SHOWN as usize;
+            if (!head && given == crate::changes::MOST_LINES) || over {
+                self.cut = true;
+                break;
+            }
+            given += usize::from(!head);
+            kept.push_str(line);
+            kept.push('\n');
+        }
+        // Hidden as a step's input is: a secret the agent wrote reads as its mark.
+        self.diff = Some(redact(&kept));
+        self
+    }
+}
+
+/// A step's body as the window gets it: without the lines of the files it changed, which only the
+/// Changes routes give.
+pub fn unlined(body: &mut serde_json::Value) {
+    let files = body.get_mut("changed").and_then(|c| c.as_array_mut());
+    for file in files.into_iter().flatten() {
+        if let Some(file) = file.as_object_mut() {
+            file.remove("diff");
+        }
+    }
+}
+
+/// A whole text as one hunk, each of its lines `mark`ed (`+` added, `-` removed).
+pub fn whole(text: &str, mark: char) -> String {
+    let n = text.lines().count();
+    let range = |on: bool| if on { format!("1,{n}") } else { "0,0".into() };
+    let mut out = format!("@@ -{} +{} @@\n", range(mark == '-'), range(mark == '+'));
+    for line in text.lines() {
+        out.push(mark);
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 /// The first lines of what came back: a tool's answer, an error.

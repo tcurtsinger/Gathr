@@ -97,7 +97,9 @@ A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes ti
 each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
 PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today
 (`"csp": null` in `crates/gathr-app/tauri.conf.json`). Changes shows what each agent changed in its
-worktree that isn't on the project's main line yet (`changes.rs`). `ui/src/registry` keeps the assistant-ui and
+worktree that isn't on the project's main line yet, and what it wrote in other checkouts (`changes.rs`, through git);
+a file in no checkout shows from the lines its steps kept (a file step's stored body keeps its unified diff, which the
+window's messages and live events leave out). `ui/src/registry` keeps the assistant-ui and
 shadcn files as published ([0030](archive/decisions/0030-ui-foundation.md)).
 The signed window updater and service handover are built.
 [0032](archive/decisions/0032-service-updates.md).

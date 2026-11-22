@@ -39,17 +39,18 @@ fn kind(done: &Value, said: &str) -> Option<Option<StepResult>> {
     if let Some(n) = done["file"]["numLines"].as_i64() {
         return Some(Some(steps::said(counted(n, "line", "lines"))));
     }
-    // An edit or a new file: lines added and removed, and the file they're in. A new file's patch is
-    // empty: each of its lines is added.
+    // An edit or a new file: lines added and removed, the file they're in, and the change itself. A
+    // new file's patch is empty: each of its lines is added.
     if let Some(patch) = done["structuredPatch"].as_array() {
-        let (added, removed) = match (patch.is_empty(), done["content"].as_str()) {
-            (true, Some(made)) => (made.lines().count(), 0),
-            _ => patch_counts(patch),
+        let ((added, removed), hunks) = match (patch.is_empty(), done["content"].as_str()) {
+            (true, Some(made)) => ((made.lines().count(), 0), steps::whole(made, '+')),
+            _ => (patch_counts(patch), hunks(patch)),
         };
         let mut said = steps::said(format!("+{added} −{removed}"));
         let file = done["filePath"].as_str().filter(|p| !p.is_empty());
+        let new = done["type"] == "create";
         said.changed = file
-            .map(|path| steps::changed(path, added, removed))
+            .map(|path| steps::changed(path, added, removed).with(&hunks, new))
             .into_iter()
             .collect();
         return Some(Some(said));
@@ -93,6 +94,22 @@ fn content(content: &Value) -> String {
             .join("\n"),
         _ => String::new(),
     }
+}
+
+/// Claude Code's patch as unified diff hunks: each its `@@` line, then its lines as given.
+fn hunks(patch: &[Value]) -> String {
+    let mut out = String::new();
+    for hunk in patch {
+        let n = |key: &str| hunk[key].as_u64().unwrap_or_default();
+        let (old, new) = (n("oldStart"), n("newStart"));
+        let head = format!("@@ -{old},{} +{new},{} @@\n", n("oldLines"), n("newLines"));
+        out.push_str(&head);
+        for line in hunk["lines"].as_array().into_iter().flatten() {
+            out.push_str(line.as_str().unwrap_or_default());
+            out.push('\n');
+        }
+    }
+    out
 }
 
 fn patch_counts(patch: &[Value]) -> (usize, usize) {

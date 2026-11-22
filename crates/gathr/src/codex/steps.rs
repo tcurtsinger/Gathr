@@ -38,24 +38,28 @@ pub(super) fn result(item: &Value) -> Option<StepResult> {
         }
         Some("fileChange") => {
             let changes = item["changes"].as_array()?;
-            let counted: Vec<(&str, usize, usize)> = changes
+            let counted: Vec<(&Value, &str, usize, usize)> = changes
                 .iter()
                 .map(|change| {
                     let (added, removed) = change_counts(change);
-                    (change["path"].as_str().unwrap_or_default(), added, removed)
+                    let path = change["path"].as_str().unwrap_or_default();
+                    (change, path, added, removed)
                 })
                 .collect();
             let lines: Vec<String> = counted
                 .iter()
-                .map(|(path, added, removed)| format!("+{added} −{removed} {path}"))
+                .map(|(_, path, added, removed)| format!("+{added} −{removed} {path}"))
                 .collect();
             let mut said = steps::first_lines(&lines.join("\n"))?;
             // Only a change that went through changed a file: not a failed or declined one.
             if item["status"] == "completed" {
                 said.changed = counted
                     .into_iter()
-                    .filter(|(path, ..)| !path.is_empty())
-                    .map(|(path, added, removed)| steps::changed(path, added, removed))
+                    .filter(|(_, path, ..)| !path.is_empty())
+                    .map(|(change, path, added, removed)| {
+                        let (hunks, new) = change_hunks(change);
+                        steps::changed(path, added, removed).with(&hunks, new)
+                    })
                     .collect();
             }
             Some(said)
@@ -90,6 +94,17 @@ fn change_counts(change: &Value) -> (usize, usize) {
         Some("add") => (diff.lines().count(), 0),
         Some("delete") => (0, diff.lines().count()),
         _ => diff_counts(diff),
+    }
+}
+
+/// One file's change as unified diff hunks, read as `change_counts` reads it, and whether it made
+/// the file.
+fn change_hunks(change: &Value) -> (String, bool) {
+    let diff = change["diff"].as_str().unwrap_or_default();
+    match change["kind"]["type"].as_str() {
+        Some("add") => (steps::whole(diff, '+'), true),
+        Some("delete") => (steps::whole(diff, '-'), false),
+        _ => (diff.to_string(), false),
     }
 }
 
@@ -360,11 +375,26 @@ exit 1";
                 _ => None,
             })
             .flatten()
-            .map(|c| (c.path, c.added, c.removed))
+            .map(|c| (c.path, c.added, c.removed, c.new, c.diff))
             .collect();
+        // Each file of one change keeps its lines: an update its diff, a new file one hunk.
+        let edit = "@@ -1 +1 @@\n-made-up before\n+made-up after\n".to_string();
+        let made = "@@ -0,0 +1,1 @@\n+made-up file content\n".to_string();
         let expected = [
-            ("C:\\work\\demo\\src\\lib.rs".to_string(), 1, 1),
-            ("C:\\work\\demo\\notes\\plan.md".to_string(), 1, 0),
+            (
+                "C:\\work\\demo\\src\\lib.rs".to_string(),
+                1,
+                1,
+                false,
+                Some(edit),
+            ),
+            (
+                "C:\\work\\demo\\notes\\plan.md".to_string(),
+                1,
+                0,
+                true,
+                Some(made),
+            ),
         ];
         assert_eq!(changed, expected);
         let failed = serde_json::json!({ "type": "fileChange", "id": "f", "status": "failed",

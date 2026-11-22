@@ -216,39 +216,51 @@ async fn text(
     Err(fail(status, "File failed", why, &t.0))
 }
 
-/// The chat's tree, its members as (id, name), and the checkouts outside its worktrees its agents
-/// wrote in (`changes::outside`).
+/// The chat's tree, its members as (id, name), the checkouts outside its worktrees its agents
+/// wrote in (`changes::outside`), and the files they changed in no checkout (`changes::loose`).
 async fn wrote(s: &State, t: &Trace, chat: &str, error: &'static str) -> Result<Written, Fail> {
     let tree = tree_of(s, t, chat, error).await?;
     let id = chat.to_string();
     let Json(found) = db(s, t, error, move |conn| {
         let members = gathr::team::members(conn, &id)?;
         let members: Vec<_> = members.into_iter().map(|m| (m.agent, m.name)).collect();
-        Ok(json!({ "members": members, "written": changes::written(conn, &id)? }))
+        Ok(
+            json!({ "members": members, "written": changes::written(conn, &id)?,
+            "kept": changes::kept(conn, &id)? }),
+        )
     })
     .await?;
     let members = serde_json::from_value(found["members"].clone()).unwrap_or_default();
     let steps: Vec<(String, String)> =
         serde_json::from_value(found["written"].clone()).unwrap_or_default();
+    let kept: Vec<changes::Step> =
+        serde_json::from_value(found["kept"].clone()).unwrap_or_default();
     let own: Vec<_> = tree.agents.iter().map(|p| p.path.clone()).collect();
     let data = s.data.path().to_path_buf();
-    let outside = match steps.is_empty() {
+    let (outside, loose) = match steps.is_empty() && kept.is_empty() {
         true => Default::default(),
-        false => tokio::task::spawn_blocking(move || changes::outside(&steps, &own, &data))
-            .await
-            .unwrap_or_default(),
+        false => tokio::task::spawn_blocking(move || {
+            let outside = changes::outside(&steps, &own, &data);
+            (outside, changes::loose(kept, &data))
+        })
+        .await
+        .unwrap_or_default(),
     };
     Ok(Written {
         tree,
         members,
         outside,
+        loose,
     })
 }
+
+type Loose = std::collections::BTreeMap<(String, Option<std::path::PathBuf>), Vec<changes::Loose>>;
 
 struct Written {
     tree: files::Tree,
     members: Vec<(String, String)>,
     outside: std::collections::BTreeMap<(String, std::path::PathBuf), Vec<String>>,
+    loose: Loose,
 }
 
 /// What each agent changed in the chat: per agent, its worktree's changed files with its branch,
@@ -264,6 +276,7 @@ async fn changes(
         tree,
         members,
         outside,
+        mut loose,
     } = wrote(&s, &t, &chat, "Changes failed").await?;
     let mut reads = tokio::task::JoinSet::new();
     if let Some(project) = tree.project {
@@ -298,24 +311,46 @@ async fn changes(
     }
     elsewhere.sort_by(|a, b| a.1.cmp(&b.1));
     let (mut room, mut more) = (changes::MOST_FILES, false);
-    let mut take = |change: changes::Change| {
-        let mut files = change.files;
-        more |= change.more || files.len() > room;
+    let mut take = |mut files: Vec<changes::File>, over: bool| {
+        more |= over || files.len() > room;
         files.truncate(room);
         room -= files.len();
         files
+    };
+    // A file in no checkout comes from the agent's steps: in its engine's folder with its own
+    // files, any other under its folder.
+    let steps_of = |loose: &mut Loose, agent: &str, folder: Option<std::path::PathBuf>| {
+        let files = loose
+            .remove(&(agent.to_string(), folder))
+            .unwrap_or_default();
+        files.into_iter().map(|l| l.file).collect::<Vec<_>>()
     };
     let mut agents = Vec::new();
     for (id, name) in members {
         let worktree = own.remove(&id);
         let branch = worktree.as_ref().map(|w| w.branch.clone());
-        let files = worktree.map(&mut take);
-        let checkouts: Vec<_> = elsewhere
+        let mut files = worktree.map(|w| take(w.files, w.more));
+        let mine = steps_of(&mut loose, &id, None);
+        if !mine.is_empty() {
+            files.get_or_insert_default().extend(take(mine, false));
+        }
+        let mut checkouts: Vec<_> = elsewhere
             .extract_if(.., |(agent, _, _)| *agent == id)
-            .filter_map(|(_, folder, change)| {
-                let files = take(change);
-                (!files.is_empty()).then(|| json!({ "folder": folder, "files": files }))
-            })
+            .map(|(_, folder, change)| (folder, take(change.files, change.more)))
+            .collect();
+        let folders: Vec<_> = loose
+            .keys()
+            .filter(|(agent, folder)| *agent == id && folder.is_some())
+            .map(|(_, folder)| folder.clone())
+            .collect();
+        for folder in folders {
+            let files = steps_of(&mut loose, &id, folder.clone());
+            checkouts.extend(folder.map(|folder| (folder, take(files, false))));
+        }
+        let checkouts: Vec<_> = checkouts
+            .into_iter()
+            .filter(|(_, files)| !files.is_empty())
+            .map(|(folder, files)| json!({ "folder": folder, "files": files }))
             .collect();
         if files.is_none() && checkouts.is_empty() {
             continue;
@@ -338,7 +373,8 @@ struct Changed {
     folder: Option<String>,
 }
 
-/// One file's change in an agent's worktree, or in a checkout it wrote in, as lines to draw.
+/// One file's change in an agent's worktree, or in a checkout it wrote in, as lines to draw; a file
+/// in no checkout, from the agent's steps only.
 async fn change(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -346,15 +382,16 @@ async fn change(
     Query(q): Query<Changed>,
 ) -> Answer {
     if let Some(folder) = q.folder {
-        let Written { outside, .. } = wrote(&s, &t, &chat, "Change failed").await?;
+        let written = wrote(&s, &t, &chat, "Change failed").await?;
         let key = (q.agent, std::path::PathBuf::from(folder));
         // Only a file the agent wrote there is read.
-        if !outside
+        if !written
+            .outside
             .get(&key)
             .is_some_and(|paths| paths.contains(&q.path))
         {
-            let why = "that agent didn't write that file in this chat";
-            return Err(fail(StatusCode::NOT_FOUND, "Change failed", why, &t.0));
+            let (agent, folder) = key;
+            return from_steps(written.loose, (agent, Some(folder)), &q.path, &t);
         }
         let lines = changes::uncommitted_file(&key.1, &q.path).await;
         let lines = lines.map_err(|e| failed("Change failed", e, &t))?;
@@ -366,12 +403,28 @@ async fn change(
         .into_iter()
         .find(|p| p.agent.as_deref() == Some(&q.agent) && p.path.join(".git").exists());
     let (Some(project), Some(worktree)) = (tree.project, worktree) else {
-        let why = "that agent has no worktree in this chat";
-        return Err(fail(StatusCode::NOT_FOUND, "Change failed", why, &t.0));
+        let Written { loose, .. } = wrote(&s, &t, &chat, "Change failed").await?;
+        return from_steps(loose, (q.agent, None), &q.path, &t);
     };
     let lines = changes::file(&project.path, &worktree.path, &q.path, q.from.as_deref()).await;
     let lines = lines.map_err(|e| failed("Change failed", e, &t))?;
     Ok(Json(json!(lines)))
+}
+
+/// The lines the agent's steps kept of a file in no checkout it changed: refused for any other.
+/// Built from the database alone: nothing is read from the disk, nothing goes to git.
+fn from_steps(
+    loose: Loose,
+    key: (String, Option<std::path::PathBuf>),
+    path: &str,
+    t: &Trace,
+) -> Answer {
+    let files = loose.get(&key).into_iter().flatten();
+    let Some(file) = files.into_iter().find(|f| f.file.path == path) else {
+        let why = "that agent didn't write that file in this chat";
+        return Err(fail(StatusCode::NOT_FOUND, "Change failed", why, &t.0));
+    };
+    Ok(Json(json!(changes::loose_lines(file))))
 }
 
 fn failed(error: &'static str, e: gathr::Error, t: &Trace) -> Fail {

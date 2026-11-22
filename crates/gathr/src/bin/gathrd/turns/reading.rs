@@ -46,6 +46,12 @@ fn changed(files: &[Changed], cwd: Option<&Path>) -> Value {
         if full != path {
             file["full"] = full.into();
         }
+        // Its lines, for the Changes tab only: `unlined` takes them out of what the window gets.
+        if let Some(diff) = &c.diff {
+            file["diff"] = diff.as_str().into();
+            file["new"] = c.new.into();
+            file["cut"] = c.cut.into();
+        }
         file
     });
     Value::Array(each.collect())
@@ -537,6 +543,7 @@ impl Task {
             .writer
             .call(move |conn| store::set_message_body(conn, &mid, &body_text))
             .await;
+        gathr::steps::unlined(&mut body);
         let update = json!({ "type": "tool", "message": message_id, "body": body });
         self.publish(&ids.chat, update);
         let mut event = Event::point(&format!("execute_tool {name}"))

@@ -290,8 +290,9 @@ export interface ChangedFile {
   binary: boolean;
 }
 /**
- * What each agent changed in the chat: in its worktree (with its branch), and in each other git checkout it wrote in
- * (`outside`, by the checkout's folder); `more` when there were more files than are listed.
+ * What each agent changed in the chat: in its worktree (with its branch) or, in no checkout, the folder its engine runs
+ * in; and in each other git checkout or folder it wrote in (`outside`, by that folder); `more` when there were more
+ * files than are listed.
  */
 export interface Changes {
   agents: {

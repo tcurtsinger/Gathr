@@ -15,7 +15,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use rusqlite::Connection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::worktree::{git, git_printed};
@@ -220,6 +220,156 @@ pub fn outside(
         let paths = out.entry((agent.clone(), top)).or_default();
         if !paths.contains(&rest) {
             paths.push(rest);
+        }
+    }
+    out
+}
+
+/// A file a step changed with its lines kept, as `kept` reads it: the agent, its path as the step
+/// names it and the whole path when that is another (`full`, the step's path then being from the
+/// folder the engine runs in), and what the step kept of its change.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Step {
+    pub agent: String,
+    pub path: String,
+    pub full: Option<String>,
+    pub added: u64,
+    pub removed: u64,
+    pub new: bool,
+    pub diff: String,
+    pub cut: bool,
+}
+
+/// The files a chat's agents changed whose lines their steps kept, oldest first. Read from the
+/// database only.
+pub fn kept(conn: &Connection, chat: &str) -> Result<Vec<Step>, Error> {
+    let mut statement = conn.prepare(
+        "SELECT t.agent_id, m.body FROM messages m JOIN turns t ON t.id = m.turn_id
+         WHERE m.chat_id = ?1 AND m.kind = 'tool' AND t.agent_id IS NOT NULL
+           AND CASE WHEN json_valid(m.body) THEN json_extract(m.body, '$.changed') END IS NOT NULL
+         ORDER BY m.ts, m.rowid",
+    )?;
+    let rows = statement.query_map([chat], |r| Ok((r.get(0)?, r.get::<_, String>(1)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (agent, body): (String, String) = row?;
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+        for file in body["changed"].as_array().into_iter().flatten() {
+            let (Some(path), Some(diff)) = (file["path"].as_str(), file["diff"].as_str()) else {
+                continue;
+            };
+            out.push(Step {
+                agent: agent.clone(),
+                path: path.into(),
+                full: file["full"].as_str().map(String::from),
+                added: file["added"].as_u64().unwrap_or_default(),
+                removed: file["removed"].as_u64().unwrap_or_default(),
+                new: file["new"] == true,
+                diff: diff.into(),
+                cut: file["cut"] == true,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// A file in no git checkout, as its steps changed it: its counts summed, and each step's lines.
+#[derive(Debug)]
+pub struct Loose {
+    pub file: File,
+    pub diffs: Vec<String>,
+    pub cut: bool,
+}
+
+/// The files of `kept` that are in no git checkout, never inside the data folder `data`: by agent
+/// and folder, each file by its path, oldest step first. A file in the folder its engine runs in
+/// has no folder and its path from there; any other, its own folder and its name. Nothing is read
+/// from the files: only whether a folder above holds a `.git` (`approvals::cover`).
+pub fn loose(kept: Vec<Step>, data: &Path) -> BTreeMap<(String, Option<PathBuf>), Vec<Loose>> {
+    let data = crate::folders::real(data);
+    let mut out: BTreeMap<(String, Option<PathBuf>), Vec<Loose>> = BTreeMap::new();
+    for step in kept {
+        let whole = Path::new(step.full.as_deref().unwrap_or(&step.path));
+        if !whole.is_absolute() {
+            continue;
+        }
+        let Some(crate::approvals::Cover::Files(folder)) = crate::approvals::cover(whole) else {
+            continue;
+        };
+        if folder.starts_with(&data) {
+            continue;
+        }
+        let own = step.full.is_some() && Path::new(&step.path).is_relative();
+        let (folder, named) = match own {
+            true => (None, Path::new(&step.path)),
+            false => (
+                Some(folder),
+                Path::new(whole.file_name().unwrap_or_default()),
+            ),
+        };
+        let steps: Vec<_> = named
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect();
+        let path = steps.join("/");
+        if plain(&path).is_err() {
+            continue;
+        }
+        let files = out.entry((step.agent, folder)).or_default();
+        let at = match files.iter().position(|f| f.file.path == path) {
+            Some(at) => at,
+            None => {
+                let kind = if step.new { Kind::New } else { Kind::Changed };
+                let file = File {
+                    path,
+                    from: None,
+                    added: 0,
+                    removed: 0,
+                    kind,
+                    binary: false,
+                };
+                files.push(Loose {
+                    file,
+                    diffs: Vec::new(),
+                    cut: false,
+                });
+                files.len() - 1
+            }
+        };
+        let loose = &mut files[at];
+        loose.file.added += step.added;
+        loose.file.removed += step.removed;
+        loose.diffs.push(step.diff);
+        loose.cut |= step.cut;
+    }
+    for files in out.values_mut() {
+        files.sort_by(|a, b| a.file.path.cmp(&b.file.path));
+    }
+    out
+}
+
+/// A loose file's change as lines to draw: each step's hunks one after another, the first step
+/// first, at most `MOST_LINES` in all.
+pub fn loose_lines(loose: &Loose) -> Lines {
+    let mut out = Lines {
+        cut: loose.cut,
+        ..Lines::default()
+    };
+    let mut room = MOST_LINES;
+    for diff in &loose.diffs {
+        let lines = parse(diff);
+        out.cut |= lines.cut;
+        for mut hunk in lines.hunks {
+            if room == 0 {
+                out.cut = true;
+                return out;
+            }
+            if hunk.lines.len() > room {
+                hunk.lines.truncate(room);
+                out.cut = true;
+            }
+            room -= hunk.lines.len();
+            out.hunks.push(hunk);
         }
     }
     out
