@@ -31,10 +31,28 @@ impl Ran {
             .find(|l| l.starts_with("fatal:") || l.starts_with("error:"));
         found.or(lines.last()).copied().unwrap_or("")
     }
+
+    fn trimmed(mut self) -> Self {
+        self.out = self.out.trim().to_string();
+        self
+    }
 }
 
 /// Runs `program` in `dir` with exactly `env`: how it ended, or why it didn't start or finish.
 pub async fn run(
+    program: &Path,
+    args: &[&str],
+    dir: &Path,
+    env: &Vars,
+    limit: Duration,
+) -> Result<Ran, String> {
+    started(program, args, dir, env, limit, false)
+        .await
+        .map(Ran::trimmed)
+}
+
+/// `run`, with what the program printed kept as it printed it: a diff's last line can be blank.
+pub async fn printed(
     program: &Path,
     args: &[&str],
     dir: &Path,
@@ -88,7 +106,9 @@ pub async fn script(
 ) -> Result<Ran, String> {
     let name = shell.file_stem().unwrap_or_default().to_string_lossy();
     let args = ["-c", HOLD, &name, script];
-    started(shell, &args, dir, env, limit, true).await
+    started(shell, &args, dir, env, limit, true)
+        .await
+        .map(Ran::trimmed)
 }
 
 /// The script runs in a subshell, so its own `exit` can't end the shell, which then waits for the
@@ -153,7 +173,7 @@ async fn started(
     running.done = true;
     Ok(Ran {
         code: status.code(),
-        out: String::from_utf8_lossy(&out).trim().to_string(),
+        out: String::from_utf8_lossy(&out).into_owned(),
         err: String::from_utf8_lossy(&err).to_string(),
     })
 }
