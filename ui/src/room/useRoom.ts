@@ -54,6 +54,7 @@ export function fromHistory(h: History): RoomState {
       request: a.request_id,
       tool: a.tool,
       input: a.input,
+      why: a.why,
     })),
     questions: h.questions ?? [],
     background: h.background ?? [],
@@ -107,7 +108,7 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
       return { ...s, turns: { ...s.turns, [e.turn]: turn }, approvals };
     }
     case 'approval': {
-      const asked = { turn: e.turn, request: e.request_id, tool: e.tool, input: e.input };
+      const asked = { turn: e.turn, request: e.request_id, tool: e.tool, input: e.input, why: e.why };
       // The history may hold it already.
       return { ...s, approvals: [...s.approvals.filter((a) => a.request !== e.request_id), asked] };
     }
