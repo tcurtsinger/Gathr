@@ -54,6 +54,8 @@ interface Props {
   onFiles?: (files: File[]) => void;
   /** Where a dropped file is taken, besides the box: the chat's column. */
   dropOn?: RefObject<HTMLElement | null>;
+  /** Takes nothing: there is nobody to send to. */
+  off?: boolean;
 }
 
 const NOBODY: readonly Person[] = [];
@@ -66,7 +68,7 @@ const NONE: readonly Picked[] = [];
  */
 export function Composer(props: Props) {
   const { draft, picks = NONE, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to } = props;
-  const { label: name = 'Message', onClose, files = NO_FILES, onFiles } = props;
+  const { label: name = 'Message', onClose, files = NO_FILES, onFiles, off } = props;
   const canSend = draft.trim().length > 0 || files.length > 0;
   // Why the last files added weren't all taken, until the next are.
   const [note, setNote] = useState('');
@@ -87,7 +89,7 @@ export function Composer(props: Props) {
     setNote('');
     onSend();
   };
-  const dragging = useDrop(onFiles ? props.dropOn : undefined, add);
+  const dragging = useDrop(onFiles && !off ? props.dropOn : undefined, add);
   const picker = useRef<HTMLInputElement>(null);
   const stopping = !!onStop && !canSend;
   // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
@@ -195,6 +197,7 @@ export function Composer(props: Props) {
             aria-activedescendant={open ? `mention-${matches[at].id}` : undefined}
             placeholder={hint}
             rows={1}
+            disabled={off}
             value={draft}
             onChange={(e) => {
               const now = { text: e.target.value, caret: e.target.selectionStart };
@@ -220,6 +223,7 @@ export function Composer(props: Props) {
                 <IconButton
                   aria-label="Add files"
                   className="composer-attach"
+                  disabled={off}
                   onClick={() => picker.current?.click()}
                 >
                   <Paperclip aria-hidden="true" />
@@ -258,7 +262,7 @@ export function Composer(props: Props) {
               aria-label={label}
               streaming={stopping}
               idle={!canSend}
-              disabled={!canSend && !stopping}
+              disabled={!stopping && (off || !canSend)}
               onClick={stopping ? onStop : send}
             />
           </ComposerActions>

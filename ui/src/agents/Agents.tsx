@@ -13,7 +13,6 @@ import { chosen } from './models';
 import './agents.css';
 
 const NEW = 'new';
-const NONE = 'none';
 
 interface Props {
   /** The assistant was changed here: a new chat's greeting names it. */
@@ -58,8 +57,7 @@ export function Agents({ onAssistant }: Props) {
     setOpen(id);
     setSaved(null);
   };
-  const pickAssistant = (value: string) => {
-    const next = value === NONE ? null : value;
+  const pickAssistant = (next: string) => {
     setAssistant(next);
     setFailure(null);
     newest(api.saveSettings({ assistant: next })).then(
@@ -137,16 +135,13 @@ export function Agents({ onAssistant }: Props) {
                 <Dropdown
                   id="agents-assistant"
                   className="agent-assistant"
-                  value={assistant ?? NONE}
+                  value={assistant ?? ''}
                   onChange={pickAssistant}
-                  choices={[
-                    ...agents.map((a) => ({
-                      value: a.id,
-                      label: a.name,
-                      icon: <Face agent={a} size={20} />,
-                    })),
-                    { value: NONE, label: 'None' },
-                  ]}
+                  choices={agents.map((a) => ({
+                    value: a.id,
+                    label: a.name,
+                    icon: <Face agent={a} size={20} />,
+                  }))}
                 />
               </>
             )}
