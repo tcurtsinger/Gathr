@@ -27,3 +27,52 @@
 .shown-row > .shown-block {
   max-width: 24rem;
 }
+/* A diagram keeps its picture's own size, the frame as wide as it up to the card's width; wider, or zoomed past it,
+   it scrolls in its frame. Gathr sizes the picture for the zoom, so the frame's own scaling is off. */
+.shown-diagram {
+  width: fit-content;
+  min-width: 18rem;
+  max-width: 100%;
+}
+.shown-diagram > :last-child {
+  overflow: auto;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.shown-diagram > :last-child > div {
+  margin: auto;
+  /* biome-ignore lint/complexity/noImportantStyles: the frame scales its content in a style attribute */
+  transform: none !important;
+}
+.shown-diagram img {
+  display: block;
+  max-width: none;
+}
+/* Mermaid that doesn't draw: its source, quietly. */
+.shown-source {
+  max-height: 20rem;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--muted-foreground);
+  font: 12px / 1.5 var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  white-space: pre-wrap;
+}
+/* An agent's page at the card's width, its frame drawn only near the screen. */
+.shown-page {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: 16px;
+  background: #fff;
+}
+.shown-page-open {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--popover);
+  color: var(--muted-foreground);
+}

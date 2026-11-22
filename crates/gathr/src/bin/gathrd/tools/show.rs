@@ -1,7 +1,8 @@
-//! `show`: an agent puts a table, a chart, a flow or math steps in the chat, under its words. A step
-//! keeps only a line of a tool's input, so the block is a message of its own in the caller's turn, of
-//! kind `block` (0078), its body `{kind, title?, table | chart | flow | math}`: in the chat's history,
-//! live in an open window, never searched.
+//! `show`: an agent puts a table, a chart, a flow, math steps, a diagram or a page in the chat, under
+//! its words. A step keeps only a line of a tool's input, so the block is a message of its own in the
+//! caller's turn, of kind `block` (0078), its body `{kind, title?, <the kind's field>}`: in the chat's
+//! history, live in an open window, never searched. A diagram's picture or a page is a file the
+//! window already shows from the chat's folders: anything else is refused.
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -22,6 +23,10 @@ const TABLE: &str = "table is {columns: [{key, label, as?}], rows: [{<key>: valu
 const CHART: &str = "chart is {label, value, points: [numbers], change?, style?}";
 const FLOW: &str = "flow is {nodes: [{id, label, after?: [ids], state?}]}";
 const MATH: &str = "math is {label?, steps: [{expression, note?}]}";
+const DIAGRAM: &str =
+    "diagram is {mermaid} or {file}: a png, jpg, gif, webp or svg in the chat's folders";
+const PAGE: &str = "page is {file: an .html in the chat's folders, height?: 160 to 720}";
+const PICTURES: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
 
 #[derive(Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -30,6 +35,8 @@ pub enum Kind {
     Chart,
     Flow,
     Math,
+    Diagram,
+    Page,
 }
 
 #[derive(Serialize, Deserialize, schemars::JsonSchema)]
@@ -47,6 +54,30 @@ pub struct Show {
     flow: Option<Flow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     math: Option<Math>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagram: Option<Diagram>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<Page>,
+}
+
+/// One of the two.
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Diagram {
+    /// Mermaid source, at most 20,000 characters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mermaid: Option<String>,
+    /// A picture's full path: png, jpg, gif, webp or svg.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Page {
+    /// An .html file's full path; it runs sealed.
+    file: String,
+    /// 160 to 720 pixels; 360 unless set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    height: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, schemars::JsonSchema)]
@@ -163,8 +194,8 @@ pub struct Step {
 #[tool_router(router = show_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Show the person a table, a chart, a flow of work or math steps in the chat, under your words, \
-                       when it reads better drawn than written."
+        description = "Show the person a table, a chart, a flow of work, math steps, a diagram or a page you made \
+                       in the chat, under your words, when it reads better drawn than written."
     )]
     async fn show(
         &self,
@@ -173,15 +204,20 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let chat = caller.chat.clone();
+        let (chat, data) = (caller.chat.clone(), self.chats.data.path().to_path_buf());
         let shown = match (block(ask), caller.on()) {
             (Err(why), _) => Err(why),
             (_, None) => Err("you have no turn running in this chat".into()),
-            (Ok(body), Some(on)) => self
+            (Ok((body, file)), Some(on)) => self
                 .chats
                 .writer
                 .call(move |c| {
                     gathr::archive::refuse_archived(c, &chat)?;
+                    // Only a file the window already shows from the chat's folders.
+                    if let Some(file) = &file {
+                        let roots = gathr::files::tree(c, &data, &chat)?.roots();
+                        gathr::files::attached(&roots, std::slice::from_ref(file))?;
+                    }
                     gathr::store::add_message(c, &chat, &on.turn, "assistant", "block", &body)
                 })
                 .await
@@ -197,14 +233,16 @@ impl Tools {
     }
 }
 
-/// The block's body as stored, or what is wrong with it in a line or two.
-fn block(mut ask: Show) -> Result<String, String> {
+/// The block's body as stored with the file it shows, if any, or what is wrong with it in a line or two.
+fn block(mut ask: Show) -> Result<(String, Option<String>), String> {
     if ask.title.as_ref().is_some_and(|t| t.chars().count() > 80) {
         return Err("title is at most 80 characters.".into());
     }
     // Only the kind's own field is kept.
     let (table, chart) = (ask.table.take(), ask.chart.take());
     let (flow, math) = (ask.flow.take(), ask.math.take());
+    let (diagram, page) = (ask.diagram.take(), ask.page.take());
+    let mut file = None;
     match ask.kind {
         Kind::Table => {
             let table = table.ok_or(format!("kind table needs table: {TABLE}."))?;
@@ -226,12 +264,57 @@ fn block(mut ask: Show) -> Result<String, String> {
             check_math(&math).map_err(|why| format!("{why}\nA {MATH}."))?;
             ask.math = Some(math);
         }
+        Kind::Diagram => {
+            let diagram = diagram.ok_or(format!("kind diagram needs diagram: {DIAGRAM}."))?;
+            file = check_diagram(&diagram).map_err(|why| format!("{why}\nA {DIAGRAM}."))?;
+            ask.diagram = Some(diagram);
+        }
+        Kind::Page => {
+            let page = page.ok_or(format!("kind page needs page: {PAGE}."))?;
+            check_page(&page).map_err(|why| format!("{why}\nA {PAGE}."))?;
+            file = Some(page.file.clone());
+            ask.page = Some(page);
+        }
     }
     let body = serde_json::to_string(&ask).map_err(|e| e.to_string())?;
     if body.len() > MOST_BYTES {
         return Err(format!("It is {} KB; at most 100 KB.", body.len() / 1000));
     }
-    Ok(body)
+    Ok((body, file))
+}
+
+/// `path`'s extension, lowercased.
+fn extension(path: &str) -> String {
+    let ext = std::path::Path::new(path).extension().unwrap_or_default();
+    ext.to_string_lossy().to_lowercase()
+}
+
+/// The picture file it shows, if it shows one.
+fn check_diagram(diagram: &Diagram) -> Result<Option<String>, String> {
+    match (&diagram.mermaid, &diagram.file) {
+        (Some(source), None) => {
+            let n = source.chars().count();
+            if source.trim().is_empty() || n > 20_000 {
+                return Err(format!("mermaid is {n} characters: give 1 to 20,000."));
+            }
+            Ok(None)
+        }
+        (None, Some(file)) if PICTURES.contains(&extension(file).as_str()) => {
+            Ok(Some(file.clone()))
+        }
+        (None, Some(file)) => Err(format!("{file} isn't a png, jpg, gif, webp or svg.")),
+        _ => Err("Give one of mermaid and file.".into()),
+    }
+}
+
+fn check_page(page: &Page) -> Result<(), String> {
+    if !matches!(extension(&page.file).as_str(), "html" | "htm") {
+        return Err(format!("{} isn't an .html file.", page.file));
+    }
+    if page.height.is_some_and(|h| !(160..=720).contains(&h)) {
+        return Err("height is 160 to 720.".into());
+    }
+    Ok(())
 }
 
 fn check_table(table: &Table) -> Result<(), String> {
@@ -436,10 +519,19 @@ fn check_math(math: &Math) -> Result<(), String> {
 }
 
 /// A block as `read_chat` gives it: "[table: Beds, 12 rows]", "[chart: Rain, 30 points]",
-/// "[flow: Planting, 7 steps]", "[math: Compost, 4 steps]".
+/// "[flow: Planting, 7 steps]", "[math: Compost, 4 steps]", "[diagram: Beds]", "[page: beds.html]".
 pub(super) fn line(body: &str) -> String {
     let block: Value = serde_json::from_str(body).unwrap_or_default();
     let kind = block["kind"].as_str().unwrap_or("block");
+    if kind == "diagram" || kind == "page" {
+        let file = block["page"]["file"].as_str().unwrap_or_default();
+        let name = file.rsplit(['/', '\\']).next().unwrap_or_default();
+        return match block["title"].as_str().filter(|t| !t.is_empty()) {
+            Some(title) => format!("[{kind}: {title}]"),
+            None if kind == "page" => format!("[page: {name}]"),
+            None => "[diagram]".into(),
+        };
+    }
     let count = |list: &Value| list.as_array().map_or(0, Vec::len);
     let (count, noun) = match kind {
         "table" => (count(&block["table"]["rows"]), "row"),

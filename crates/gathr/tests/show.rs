@@ -1,10 +1,10 @@
-//! `show`: an agent puts a table, a chart, a flow or math in the chat, through a real service and
-//! the replay engine. Its engine may call it without asking, a good block is kept in the chat's
-//! history, and a bad one is refused with nothing kept.
+//! `show`: an agent puts a table, a chart, a flow, math, a diagram or a page in the chat, through a
+//! real service and the replay engine. Its engine may call it without asking, a good block is kept in
+//! the chat's history, and a bad one, or a file the chat doesn't show, is refused with nothing kept.
 
 mod common;
 
-use std::path::Path;
+use std::path::{Component, Path};
 
 use common::{TempDir, TestService, call_tool, held_recording, sign_in_account, text, until};
 use serde_json::{Value, json};
@@ -148,5 +148,72 @@ fn an_agent_shows_a_table_and_a_chart_and_a_bad_one_keeps_nothing() {
     assert!(read.contains("[chart: Rain, 3 points]"), "{read}");
     assert!(read.contains("[flow: Planting, 3 steps]"), "{read}");
     assert!(read.contains("[math: Compost, 2 steps]"), "{read}");
+
+    // A diagram's picture and a page are files the window already shows from the chat's folders.
+    let mermaid = json!({ "kind": "diagram", "title": "Beds", "diagram": { "mermaid": "graph TD\n  A --> B" } });
+    assert_eq!(text(&call_tool(port, &token, "show", mermaid)), "Shown.");
+    let saved = |name: &str| {
+        let auth = format!("Bearer {}", service.info.token);
+        let path = format!("/api/chats/{chat}/files?name={name}");
+        let saved =
+            gathr::http::post(port, &path, &[("Authorization", &auth)], "<p>A</p>").unwrap();
+        assert_eq!(saved.status, 200, "{}", saved.body);
+        let saved: Value = serde_json::from_str(&saved.body).unwrap();
+        saved["path"].as_str().unwrap().to_string()
+    };
+    let (picture, page) = (saved("beds.svg"), saved("beds.html"));
+    let drawn = json!({ "kind": "diagram", "diagram": { "file": picture } });
+    assert_eq!(text(&call_tool(port, &token, "show", drawn)), "Shown.");
+    let shown = json!({ "kind": "page", "page": { "file": page, "height": 200 } });
+    assert_eq!(text(&call_tool(port, &token, "show", shown)), "Shown.");
+    let kept = blocks(&service, &chat);
+    assert_eq!(kept.len(), 7, "{kept:?}");
+    assert_eq!(kept[4]["body"]["diagram"]["mermaid"], "graph TD\n  A --> B");
+    assert_eq!(kept[6]["body"]["page"]["height"], 200);
+
+    let both = json!({ "mermaid": "graph TD\n  A --> B", "file": picture });
+    refuses(
+        json!({ "kind": "diagram", "diagram": both }),
+        "one of mermaid and file",
+    );
+    refuses(
+        json!({ "kind": "diagram", "diagram": {} }),
+        "one of mermaid and file",
+    );
+    // A file in the data folder, or one reached by climbing out of the chat's folders, is not shown.
+    let (secret, secret_page) = (data.0.join("secret.png"), data.0.join("secret.html"));
+    std::fs::write(&secret, "x").unwrap();
+    std::fs::write(&secret_page, "<p>B</p>").unwrap();
+    let folder = Path::new(&picture).parent().unwrap();
+    let climb = |to: &Path| {
+        let mut path = folder.to_path_buf();
+        path.extend(folder.components().map(|_| ".."));
+        let rest = to
+            .components()
+            .filter(|c| matches!(c, Component::Normal(_)));
+        path.extend(rest);
+        path.to_string_lossy().to_string()
+    };
+    for file in [secret.to_string_lossy().to_string(), climb(&secret)] {
+        let ask = json!({ "kind": "diagram", "diagram": { "file": file } });
+        refuses(ask, "isn't a file in this chat's folders");
+    }
+    for file in [
+        secret_page.to_string_lossy().to_string(),
+        climb(&secret_page),
+    ] {
+        let ask = json!({ "kind": "page", "page": { "file": file } });
+        refuses(ask, "isn't a file in this chat's folders");
+    }
+    let markdown = saved("notes.md");
+    refuses(
+        json!({ "kind": "page", "page": { "file": markdown } }),
+        "isn't an .html file",
+    );
+    assert_eq!(blocks(&service, &chat).len(), 7);
+
+    let read = text(&call_tool(port, &token, "read_chat", json!({})));
+    assert!(read.contains("[diagram: Beds]"), "{read}");
+    assert!(read.contains("[page: beds.html]"), "{read}");
     std::fs::write(&go, "").unwrap();
 }

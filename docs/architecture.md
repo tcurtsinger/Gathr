@@ -95,7 +95,8 @@ Local Theme and panel widths persist in the client. Vite builds the UI; Biome, T
 The window has a rail (Home, Agents, Plugins, Designs, Memory, Settings), the chat list and the chat.
 A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes tiles, and the board), and a tab for
 each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
-PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). Changes shows what each agent changed in its
+PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today
+(`"csp": null` in `crates/gathr-app/tauri.conf.json`). Changes shows what each agent changed in its
 worktree that isn't on the project's main line yet (`changes.rs`). `ui/src/registry` keeps the assistant-ui and
 shadcn files as published ([0030](archive/decisions/0030-ui-foundation.md)).
 The signed window updater and service handover are built.

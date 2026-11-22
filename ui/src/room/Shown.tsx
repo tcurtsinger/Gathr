@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { SquareArrowOutUpRight } from 'lucide-react';
+import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Chart } from '@/components/assistant-ui/elements/chart';
 import {
   DataTable,
@@ -9,6 +10,10 @@ import {
 import { FlowGraph, type FlowNode } from '@/components/assistant-ui/elements/flow-graph';
 import { MathBlock, Sub, Sup } from '@/components/assistant-ui/elements/math-block';
 import type { Block, Cell } from '../api';
+import { fileName, OpenFile } from '../components/files';
+import { IconButton } from '../components/IconButton';
+import { Drawing } from './Drawing';
+import { PageFrame } from './PageFrame';
 import './shown.css';
 
 type Table = NonNullable<Block['table']>;
@@ -160,9 +165,36 @@ function expression(text: string) {
   return parts;
 }
 
+/**
+ * An agent's page in its sealed frame (`PageFrame`), drawn only while it is on or near the screen, so a long chat with
+ * many pages stays light; Open shows it as a tab in the chat's panel.
+ */
+function Page({ chat, page, title }: { chat: string; page: NonNullable<Block['page']>; title?: string }) {
+  const open = useContext(OpenFile);
+  const box = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const at = box.current;
+    if (!at) return;
+    const seen = new IntersectionObserver(([e]) => setNear(e.isIntersecting), { rootMargin: '50% 0px' });
+    seen.observe(at);
+    return () => seen.disconnect();
+  }, []);
+  return (
+    <div ref={box} className="shown-page" style={{ height: page.height ?? 360 }}>
+      {near && <PageFrame chat={chat} path={page.file} name={title || fileName(page.file)} />}
+      {open && (
+        <IconButton aria-label="Open" className="shown-page-open" onClick={() => open(page.file)}>
+          <SquareArrowOutUpRight aria-hidden="true" />
+        </IconButton>
+      )}
+    </div>
+  );
+}
+
 /** One block as its kind draws it; a kind this window doesn't know draws nothing. */
-function draw(block: Block) {
-  const { table: t, chart, flow: f, math } = block;
+function draw(chat: string, block: Block) {
+  const { table: t, chart, flow: f, math, diagram, page } = block;
   if (block.kind === 'table' && Array.isArray(t?.columns) && Array.isArray(t.rows)) return table(block, t);
   if (block.kind === 'chart' && Array.isArray(chart?.points) && chart.points.length > 0) {
     return (
@@ -182,6 +214,14 @@ function draw(block: Block) {
     const steps = math.steps.map((s) => ({ expression: expression(String(s.expression)), note: s.note }));
     return <MathBlock label={math.label} steps={steps} visibleSteps={steps.length} />;
   }
+  if (
+    block.kind === 'diagram' &&
+    (typeof diagram?.mermaid === 'string' || typeof diagram?.file === 'string')
+  ) {
+    return <Drawing chat={chat} diagram={diagram} title={block.title} />;
+  }
+  if (block.kind === 'page' && typeof page?.file === 'string')
+    return <Page chat={chat} page={page} title={block.title} />;
   return null;
 }
 
@@ -189,10 +229,10 @@ function draw(block: Block) {
  * What an agent showed in its turn, under its words, each with its title as a quiet line above.
  * Charts that follow one another sit side by side in one wrapping row.
  */
-export function Shown({ blocks }: { blocks: Block[] }) {
+export function Shown({ chat, blocks }: { chat: string; blocks: Block[] }) {
   const runs: { chart: boolean; items: [number, Block, ReactNode][] }[] = [];
   blocks.forEach((b, i) => {
-    const drawn = draw(b);
+    const drawn = draw(chat, b);
     if (!drawn) return;
     const chart = b.kind === 'chart';
     const last = runs.at(-1);
@@ -202,7 +242,7 @@ export function Shown({ blocks }: { blocks: Block[] }) {
   if (!runs.length) return null;
   const item = ([i, b, d]: [number, Block, ReactNode]) => (
     <div key={i} className="shown-block">
-      {b.title && <div className="shown-title">{b.title}</div>}
+      {b.title && b.kind !== 'diagram' && <div className="shown-title">{b.title}</div>}
       {d}
     </div>
   );

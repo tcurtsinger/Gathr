@@ -23,6 +23,11 @@
       "why": "The owner asked that a date column sort by date and an empty cell stay blank and sort last: the date's title attribute is gone (Gathr shows no hover text) and an empty value draws nothing."
     },
     {
+      "path": "components/assistant-ui/elements/diagram.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/diagram.tsx",
+      "sha256": "54ad55954b266d525df4cbf987978457e5a72ee5d867bb952f43b4368e35c60a"
+    },
+    {
       "path": "components/assistant-ui/elements/flow-graph.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/flow-graph.tsx",
       "sha256": "5cf6918da703dcc7c87a49e7744d24152d626d8e7794c02363ed5f7a186741e4"

@@ -37,7 +37,7 @@ export interface ThinkingBody {
 /** A cell of a shown table: what the agent gave, as its column's `as` wants. */
 export type Cell = string | number | boolean | null;
 
-/** A table, chart, flow or math an agent showed with `show`, as the service keeps it. A later kind adds one more field. */
+/** A table, chart, flow, math, diagram or page an agent showed with `show`, as the service keeps it. A later kind adds one more field. */
 export interface Block {
   kind: string;
   title?: string;
@@ -68,6 +68,10 @@ export interface Block {
     label?: string;
     steps: { expression: string; note?: string }[];
   };
+  /** Mermaid source or a picture's full path: one of the two. */
+  diagram?: { mermaid?: string; file?: string };
+  /** An HTML page's full path, shown sealed at `height` (360 unless set). */
+  page?: { file: string; height?: number };
 }
 
 export interface Message {
