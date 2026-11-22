@@ -26,7 +26,7 @@ import { usePauses } from './pauses';
 import { OpenPlugin, type PluginAt, Plugins } from './plugins/Plugins';
 import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
-import { ProposalActs, type Proposing } from './room/Proposal';
+import { type AgentsAt, ProposalActs, type Proposing } from './room/Proposal';
 import { waits } from './room/Question';
 import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
@@ -101,6 +101,16 @@ export function App() {
     setPluginAt(at);
     setOpened('plugins');
   }, []);
+  // Where Agents opens from an agent the assistant proposed: its page, or Change's form. Agents reads it as it opens,
+  // and it is let go as Agents closes, so the rail or Back opens the list.
+  const [agentsAt, setAgentsAt] = useState<AgentsAt>();
+  const toAgents = useCallback((at: AgentsAt) => {
+    setAgentsAt(at);
+    setOpened('agents');
+  }, []);
+  useEffect(() => {
+    if (opened !== 'agents') setAgentsAt(undefined);
+  }, [opened]);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[]; files?: File[] }>());
   const [unsent, setUnsent] = useState<Record<string, Unsent[]>>({});
@@ -414,7 +424,7 @@ export function App() {
           onUpdate: appUpdate.update,
         }}
       />
-      {opened === 'agents' && <Agents onAssistant={loadYou} />}
+      {opened === 'agents' && <Agents at={agentsAt} onAssistant={loadYou} />}
       {opened === 'plugins' && <Plugins at={pluginAt} />}
       {opened === 'memory' && <Memory at={remembered} onAt={setRemembered} />}
       {opened === 'scheduled' && (
@@ -480,7 +490,7 @@ export function App() {
         <OpenMemory.Provider value={openMemory}>
           <OpenPlugin.Provider value={openPlugin}>
             <OpenScheduled.Provider value={openScheduled}>
-              <ProposalActs.Provider value={{ agents, change: setProposing, open: openChat }}>
+              <ProposalActs.Provider value={{ agents, change: setProposing, open: openChat, toAgents }}>
                 <RoomView
                   key={screen.chat.id || 'new'}
                   {...screen}

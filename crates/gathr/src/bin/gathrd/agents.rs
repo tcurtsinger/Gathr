@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use gathr::agents::{self, Agent, Approvals, Change, Refused};
 use gathr::event::Event;
@@ -24,12 +24,13 @@ pub fn routes() -> Router<Arc<State>> {
             "/api/agents/{agent}",
             get(one).patch(change).delete(crate::deletes::agent),
         )
+        .route("/api/proposals/{message}/add", post(add_proposed))
 }
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
 /// falls back to the engine's own default, or a picture's shape, eyes or colour, which the id then
 /// picks, or its description.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct Body {
     name: Option<String>,
     account: Option<String>,
@@ -176,6 +177,81 @@ pub async fn change_as(
     save(s, t, ("change", ERROR), agent, Some((change, by))).await
 }
 
+/// Add agent, from the card of an agent the assistant proposed (`propose_agent`): as proposed, or with what the Agents
+/// screen's form for a new agent says. Added as `add` adds one, and the proposal marked added with it; once only.
+async fn add_proposed(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(message): Path<String>,
+    body: Option<Json<Body>>,
+) -> Answer {
+    const ERROR: &str = "Add failed";
+    let id = message.clone();
+    let found = s
+        .writer
+        .call(move |c| gathr::proposals::find_agent(c, &id))
+        .await;
+    let Some(p) = crate::team::written(&t, found, ERROR)? else {
+        return Err(fail(StatusCode::NOT_FOUND, ERROR, "no such proposal", &t.0));
+    };
+    if p.added.is_some() {
+        let why = "This agent was added already.";
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let change = body.map(|Json(b)| b.change()).unwrap_or_default();
+    let agent = p.agent().changed(change);
+    engine_offers(&s, &t, ERROR, &agent).await?;
+    let chats = s.chats.clone();
+    let added = s
+        .writer
+        .call(move |c| {
+            let removing = chats.being_removed();
+            gathr::proposals::add_agent(c, &message, &agent, &removing)
+        })
+        .await;
+    if let Some(Err(gathr::Error::Refused(why))) = &added {
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let added = crate::team::written(&t, added, ERROR)?
+        .map_err(|why| fail(status(&why), ERROR, why.why(), &t.0))?;
+    record(&s, &t, "add", &added.agent, None);
+    s.chats
+        .publish(json!({ "type": "message", "chat": added.proposed_in, "message": added.block }));
+    Ok(Json(
+        json!({ "agent": added.agent, "message": added.block }),
+    ))
+}
+
+/// The status a refused save answers with.
+fn status(why: &Refused) -> StatusCode {
+    match why {
+        Refused::Taken | Refused::Removing | Refused::Moved => StatusCode::CONFLICT,
+        Refused::Unknown => StatusCode::NOT_FOUND,
+        _ => StatusCode::BAD_REQUEST,
+    }
+}
+
+/// Refused unless the account's engine lists the agent's model with its effort (none set, nothing to check).
+async fn engine_offers(
+    s: &State,
+    t: &Trace,
+    error: &'static str,
+    agent: &Agent,
+) -> Result<(), Fail> {
+    if agent.model.is_none() && agent.effort.is_none() {
+        return Ok(());
+    }
+    let refused = |why: &str| Err(fail(StatusCode::BAD_REQUEST, error, why, &t.0));
+    let Ok(account) = find_account(s, t, &agent.account, error).await else {
+        return refused(Refused::NoAccount.why());
+    };
+    let offered = models::list(s, &t.0, &account)
+        .await
+        .map_err(|why| format!("Models weren't listed: {why}"))
+        .and_then(|list| models::offered(&list, agent.model.as_deref(), agent.effort.as_deref()));
+    offered.or_else(|why| refused(&why))
+}
+
 /// Checks the model and effort against the account's engine, then writes the agent: a new one, or
 /// `edit`'s change and who made it, applied to the agent as saved at the write.
 async fn save(
@@ -187,21 +263,7 @@ async fn save(
 ) -> Answer {
     let by = edit.as_ref().and_then(|(_, by)| by.clone());
     let refused = |status, why: &str| Err(fail(status, error, why, &t.0));
-    if agent.model.is_some() || agent.effort.is_some() {
-        let account = match find_account(s, t, &agent.account, error).await {
-            Ok(account) => account,
-            Err(_) => return refused(StatusCode::BAD_REQUEST, Refused::NoAccount.why()),
-        };
-        let offered = models::list(s, &t.0, &account)
-            .await
-            .map_err(|why| format!("Models weren't listed: {why}"))
-            .and_then(|list| {
-                models::offered(&list, agent.model.as_deref(), agent.effort.as_deref())
-            });
-        if let Err(why) = offered {
-            return refused(StatusCode::BAD_REQUEST, &why);
-        }
-    }
+    engine_offers(s, t, error, &agent).await?;
     let chats = s.chats.clone();
     let saved = s
         .writer
@@ -216,11 +278,7 @@ async fn save(
         .await;
     let agent = match saved {
         Some(Ok(Ok(agent))) => agent,
-        Some(Ok(Err(why @ Refused::Taken))) => return refused(StatusCode::CONFLICT, why.why()),
-        Some(Ok(Err(why @ Refused::Removing))) => return refused(StatusCode::CONFLICT, why.why()),
-        Some(Ok(Err(why @ Refused::Moved))) => return refused(StatusCode::CONFLICT, why.why()),
-        Some(Ok(Err(why @ Refused::Unknown))) => return refused(StatusCode::NOT_FOUND, why.why()),
-        Some(Ok(Err(why))) => return refused(StatusCode::BAD_REQUEST, why.why()),
+        Some(Ok(Err(why))) => return refused(status(&why), why.why()),
         Some(Err(e)) => return refused(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         None => {
             return refused(

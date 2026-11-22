@@ -37,6 +37,34 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A proposed agent: its face, name and what it is for, then its account and model. */
+.proposal-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.proposal-who > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.proposal-who b {
+  font-size: 15px;
+  font-weight: 650;
+}
+.proposal-set {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 4px 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.proposal-set > span {
+  color: var(--muted-foreground);
+}
 .proposal-foot {
   display: flex;
   align-items: center;

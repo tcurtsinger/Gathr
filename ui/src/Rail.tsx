@@ -74,7 +74,7 @@ const cloud = SHAPES.find((s) => s.key === 'cloud')?.d;
 const ovals = EYES.find((e) => e.key === 'ovals')?.d ?? [];
 
 /** Agents' own mark: an agent's picture, the Cloud with the Ovals eyes, scaled to the icon set's grid and line. */
-function AgentsMark() {
+export function AgentsMark() {
   return (
     <svg
       viewBox="0 0 24 24"

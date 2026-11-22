@@ -61,7 +61,7 @@ Agents use Gathr's MCP server at `/mcp`, each engine with a token of its own, to
 set a board line, ask the person, keep a note in Memory (`note`), put a table or a chart in the chat (`show`), add a
 tool or a skill when the person asks (`add_tool`, `add_skill`), schedule work in the chat (`schedule`,
 `unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`) and, the assistant in its own chat,
-send an agent it brought in back out (`send_out`) or propose a project (`propose_project`).
+send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 The assistant's chat (`assistant.rs`): one chat that never ends, its id the `assistant_chat` setting until it is archived or
 deleted. The assistant leads it; an agent its words or the person's name joins as a guest and leaves by `send_out`,

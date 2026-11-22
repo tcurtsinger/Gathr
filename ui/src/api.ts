@@ -1,6 +1,7 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
 import type { Deletable, DeleteCounts } from './deleting';
+import type { ProposedAgent, ProposedProject } from './room/Proposal';
 import type { Schedule, ScheduleShown } from './scheduled/schedule';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
@@ -75,19 +76,10 @@ export interface Block {
   page?: { file: string; height?: number };
   /** A project the assistant proposed with `propose_project`; once made, what was made. */
   project?: ProposedProject;
+  /** An agent the assistant proposed with `propose_agent`; once added, the agent as it was added. */
+  agent?: ProposedAgent;
   /** The message that holds it: not kept in the body, set as the chat reads. */
   message?: string;
-}
-
-export interface ProposedProject {
-  name: string;
-  folder: string;
-  /** The lead first. */
-  team: { agent: string; lead?: boolean }[];
-  /** The first chat's name. */
-  chat: string;
-  brief: string;
-  made?: { project: string; chat: string; message: string };
 }
 
 export interface Message {
@@ -856,6 +848,9 @@ export const api = {
   /** The agents, and the removed ones apart, for their old messages (0069). */
   agents: () => call<{ agents: Agent[]; removed: Named[] }>('GET', '/api/agents'),
   addAgent: (agent: AgentDraft) => call<Agent>('POST', '/api/agents', agent),
+  /** Add agent, from the card of an agent the assistant proposed: as proposed, or as the Agents screen's form says. */
+  addProposedAgent: (message: string, agent?: AgentDraft) =>
+    call<{ agent: Agent; message: Message }>('POST', `/api/proposals/${message}/add`, agent ?? {}),
   saveAgent: ({ id, ...agent }: AgentDraft & { id: string }) =>
     call<Agent>('PATCH', `/api/agents/${id}`, agent),
   /** What deleting the project or agent would do, for the confirm's words. */

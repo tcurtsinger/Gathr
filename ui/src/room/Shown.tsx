@@ -14,7 +14,7 @@ import { IconButton } from '../components/IconButton';
 import { Drawing } from './Drawing';
 import { Flow } from './Flow';
 import { PageFrame } from './PageFrame';
-import { Proposal } from './Proposal';
+import { AgentProposal, Proposal } from './Proposal';
 import './shown.css';
 
 type Table = NonNullable<Block['table']>;
@@ -198,6 +198,8 @@ function draw(chat: string, block: Block) {
     return <Page chat={chat} page={page} title={block.title} />;
   if (block.kind === 'project' && block.message && Array.isArray(block.project?.team))
     return <Proposal message={block.message} project={block.project} />;
+  if (block.kind === 'agent' && block.message && typeof block.agent?.name === 'string')
+    return <AgentProposal message={block.message} agent={block.agent} />;
   return null;
 }
 
