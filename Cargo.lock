@@ -3277,6 +3277,7 @@ dependencies = [
  "indexmap 2.14.2",
  "nix",
  "tokio",
+ "tracing",
  "windows",
 ]
 
@@ -3544,6 +3545,7 @@ dependencies = [
  "oauth2",
  "pastey",
  "pin-project-lite",
+ "process-wrap",
  "rand 0.10.3",
  "reqwest",
  "rmcp-macros",

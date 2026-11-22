@@ -181,7 +181,7 @@ impl Task {
             .await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
-        // Each enabled tool on the web, as it is at this engine's start.
+        // Each enabled tool, on the web or on this PC, as it is at this engine's start.
         let outside = self
             .chats
             .writer

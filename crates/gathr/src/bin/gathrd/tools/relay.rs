@@ -1,8 +1,9 @@
-//! The gateway to the tools on the web (`gathr::web_tools`): each enabled tool is an MCP server of
-//! its own at `/mcp/tools/<id>`, admitted with a running engine's token as `/mcp` is. Gathr relays
-//! the tool's list of actions and each call, adding the tool's key on the way out; the engine never
-//! sees the key or the link. Nothing else of MCP is relayed: no resources, prompts or completions,
-//! and nothing the tool would ask the engine (sampling, elicitation, roots).
+//! The gateway to the tools on the web (`gathr::web_tools`) and on this PC (`gathr::pc_tools`): each
+//! enabled tool is an MCP server of its own at `/mcp/tools/<id>`, admitted with a running engine's
+//! token as `/mcp` is. Gathr relays the tool's list of actions and each call, adding the tool's key
+//! on the way out, or to the running copy of a tool on this PC; the engine never sees the key, the
+//! link, the program or its variables. Nothing else of MCP is relayed: no resources, prompts or
+//! completions, and nothing the tool would ask the engine (sampling, elicitation, roots).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -38,8 +39,14 @@ pub fn service(state: Arc<State>) -> StreamableHttpService<Relay, LocalSessionMa
     StreamableHttpService::new(relay, Default::default(), config)
 }
 
-/// Drops the tool's connection: it reconnects with what's saved at its next use.
+/// Drops the tool's connection, or stops the copy of one on this PC: it reconnects, or starts, with
+/// what's saved at its next use.
 pub fn forget(id: &str) {
+    disconnect(id);
+    crate::pc_tools::stop(id);
+}
+
+fn disconnect(id: &str) {
     let mut remotes = REMOTES.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(remotes) = remotes.as_mut() {
         remotes.remove(id);
@@ -78,6 +85,9 @@ impl Relay {
         if !tool.enabled {
             return Err(ErrorData::invalid_request("This tool is disabled", None));
         }
+        if tool.kind == "pc" {
+            return crate::pc_tools::remote(&self.0, &id).await;
+        }
         let connected = match &access {
             Ok(access) => web_tools::connect(&tool.link, access, web_tools::CONNECT).await,
             Err(_) if tool.signed_in => Err(Problem::SignIn),
@@ -96,7 +106,8 @@ impl Relay {
     }
 }
 
-/// A failure drops the connection, so the next call starts a new one.
+/// A failure drops a web tool's connection, so the next call makes a new one. A tool on this PC keeps
+/// running: its copy is started again only once it has ended.
 fn kept<T>(
     context: &RequestContext<RoleServer>,
     done: Result<T, ErrorData>,
@@ -104,7 +115,7 @@ fn kept<T>(
     if done.is_err() {
         let parts = context.extensions.get::<Parts>();
         let path = parts.map(|p| p.uri.path()).unwrap_or_default();
-        forget(path.rsplit('/').next().unwrap_or_default());
+        disconnect(path.rsplit('/').next().unwrap_or_default());
     }
     done
 }

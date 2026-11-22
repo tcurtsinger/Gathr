@@ -1,10 +1,11 @@
 import { ChevronLeft, Plug } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Failure, type ToolAction, type WebTool } from '../api';
+import { api, type Failure, type PcRuns, type ToolAction, type WebTool } from '../api';
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
 import { ChangeClientId, given } from './ClientId';
+import { Runs } from './Runs';
 import { ToolSignInWaiting, useToolSignIn } from './ToolSignIn';
 import { stateOf } from './tool';
 
@@ -16,16 +17,32 @@ interface Props {
   onEnable: (tool: WebTool, on: boolean) => void;
   onChangeKey: (tool: WebTool, opener: HTMLElement | null) => void;
   onRemove: (tool: WebTool, opener: HTMLElement | null) => void;
+  /** Change, for a tool on this PC: what it runs, as a JSON block with each variable empty. */
+  onChangeRuns: (tool: WebTool, text: string) => void;
+}
+
+type Asked = WebTool & { actions: ToolAction[] | null; redirect?: string } & Partial<PcRuns> & {
+    printed?: string | null;
+  };
+
+/** What a tool on this PC runs, as the JSON block its instructions would give, each variable with no value. */
+function asJson(name: string, runs: PcRuns): string {
+  const entry: Record<string, unknown> = { command: runs.typed };
+  if (runs.args.length) entry.args = runs.args;
+  if (runs.folder) entry.cwd = runs.folder;
+  if (runs.variables.length) entry.env = Object.fromEntries(runs.variables.map((v) => [v, '']));
+  return JSON.stringify({ mcpServers: { [name]: entry } }, null, 2);
 }
 
 /**
  * A tool's page: its link and state, Change key (Sign in again for one signed in through the browser) and Remove,
- * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now.
+ * Enabled, its Client ID with Change for one that signs in with one, and its actions asked of it now. A tool on this
+ * PC has what Gathr runs with Change, Try again when it didn't start, and then what it printed.
  */
-export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove }: Props) {
-  const [asked, setAsked] = useState<(WebTool & { actions: ToolAction[] | null; redirect?: string }) | null>(
-    null,
-  );
+export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRemove, onChangeRuns }: Props) {
+  const [asked, setAsked] = useState<Asked | null>(null);
+  const [trying, setTrying] = useState(false);
+  const pc = tool.kind === 'pc';
   const changeKey = useRef<HTMLButtonElement>(null);
   const changeClient = useRef<HTMLButtonElement>(null);
   const remove = useRef<HTMLButtonElement>(null);
@@ -44,6 +61,14 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
   const shown = asked ? { ...tool, state: asked.state } : tool;
   const state = stateOf({ ...shown, enabled: true });
   const actions = asked?.state === 'connected' ? asked.actions : null;
+  const runs: PcRuns | null = pc && asked?.typed !== undefined ? (asked as PcRuns) : null;
+  const tryAgain = () => {
+    setTrying(true);
+    api
+      .startTool(tool.id)
+      .then(() => api.tool(tool.id).then(setAsked), onFailure)
+      .finally(() => setTrying(false));
+  };
   return (
     <article className="skill-page">
       <button type="button" className="screen-back" onClick={onBack}>
@@ -57,8 +82,8 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
         <div className="screen-title">
           <h1>{tool.name}</h1>
           <p className="tool-line">
-            <code>{tool.link}</code>
-            {asked && (
+            {pc ? <span className="muted">On this PC</span> : <code>{tool.link}</code>}
+            {asked && (!pc || asked.state) && (
               <span className="tool-state" data-tone={state.tone}>
                 <i className="plugins-dot" data-tone={state.tone ?? 'ok'} aria-hidden="true" />
                 {state.words}
@@ -67,7 +92,13 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           </p>
         </div>
         <div className="screen-actions">
-          {tool.signed_in ? (
+          {pc ? (
+            asked?.state === 'not_started' && (
+              <Button type="button" size="sm" variant="outline" disabled={trying} onClick={tryAgain}>
+                Try again
+              </Button>
+            )
+          ) : tool.signed_in ? (
             <Button
               type="button"
               size="sm"
@@ -109,7 +140,9 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
         <span className="skill-enabled-words">
           <span id="tool-enabled">Enabled</span>
           <span className="muted" id="tool-enabled-why">
-            When it’s disabled, no agent can use it. It stays installed.
+            {pc
+              ? 'While it’s enabled, Gathr keeps it running for every agent. Disabled, it’s stopped.'
+              : 'When it’s disabled, no agent can use it. It stays installed.'}
           </span>
         </span>
         <Switch
@@ -139,6 +172,22 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
           </Button>
         </div>
       )}
+      {runs && (
+        <section className="tool-block">
+          <div className="tool-block-head">
+            <h2>What Gathr runs</h2>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onChangeRuns(tool, asJson(tool.name, runs))}
+            >
+              Change
+            </Button>
+          </div>
+          <Runs runs={runs} />
+        </section>
+      )}
       {actions && (
         <section className="tool-actions">
           <h2>
@@ -155,6 +204,14 @@ export function ToolPage({ tool, onBack, onFailure, onEnable, onChangeKey, onRem
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      {asked?.state === 'not_started' && asked.printed && (
+        <section className="tool-block">
+          <div className="tool-block-head">
+            <h2>What it printed</h2>
+          </div>
+          <pre className="tool-printed">{asked.printed}</pre>
         </section>
       )}
       {changing && (

@@ -304,3 +304,72 @@
   font-family: var(--font-mono, monospace);
   font-size: 12.5px;
 }
+
+/* A tool on this PC: the command box, what Gathr will run (or runs), and what it printed. */
+.tool-form textarea.tool-command {
+  /* As tall as what's pasted, where the webview can. */
+  field-sizing: content;
+  min-height: 84px;
+  max-height: 24rem;
+  font: 13px / 1.55 var(--font-mono, monospace);
+  white-space: pre;
+}
+.tool-will-run {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tool-will-run h2,
+.tool-block-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tool-runs {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+  font-size: 13px;
+}
+.tool-runs dt {
+  color: var(--muted-foreground);
+}
+.tool-runs dd {
+  min-width: 0;
+  margin: 0;
+}
+.tool-runs code {
+  font: 12.5px / 1.6 var(--font-mono, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.tool-runs [data-tone="attention"],
+.tool-will-run p[data-tone="attention"] {
+  color: var(--attention);
+}
+.tool-block {
+  margin-top: 20px;
+}
+.tool-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.tool-printed {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--canvas);
+  color: var(--muted-foreground);
+  font: 12.5px / 1.6 var(--font-mono, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

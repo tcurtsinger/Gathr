@@ -50,6 +50,8 @@ pub struct Tool {
     /// secret. Never its Client secret.
     pub client_id: Option<String>,
     pub added_ts: i64,
+    /// `web`, or `pc` for a program Gathr runs on this PC (`pc_tools`), whose link is empty.
+    pub kind: &'static str,
 }
 
 /// One thing a tool lets an agent do: its name and the first line of its description.
@@ -72,8 +74,7 @@ pub enum Problem {
     NotReachable,
 }
 
-const COLUMNS: &str =
-    "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, client_id, added_ts";
+const COLUMNS: &str = "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, client_id, added_ts, program IS NOT NULL";
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
     Ok(Tool {
@@ -85,6 +86,7 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
         signed_in: r.get(5)?,
         client_id: r.get(6)?,
         added_ts: r.get(7)?,
+        kind: if r.get(8)? { "pc" } else { "web" },
     })
 }
 
@@ -202,11 +204,12 @@ pub fn set_enabled(conn: &Connection, id: &str, on: bool) -> Result<(), Error> {
     Ok(())
 }
 
-/// Removes the tool, its key and its sign-in, with its Client ID and secret.
+/// Removes the tool, its key and its sign-in, with its Client ID and secret, or its variables.
 pub fn remove(conn: &Connection, id: &str) -> Result<(), Error> {
     get(conn, id)?;
     conn.execute("DELETE FROM tools WHERE id = ?1", [id])?;
     seal::forget(id);
+    seal::forget(&crate::pc_tools::sealed_as(id));
     seal::forget(&tool_sign_in::sealed_as(id));
     tool_sign_in::forget(id);
     Ok(())

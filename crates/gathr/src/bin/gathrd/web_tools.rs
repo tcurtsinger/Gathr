@@ -1,6 +1,7 @@
 //! Tools on the web for the Plugins screen (`gathr::web_tools`). Each one's state and actions are
 //! asked from it when shown; nothing of it is kept but its row. No answer carries a key or a sign-in:
-//! at most whether one is set. Each change is sent live as `tools`.
+//! at most whether one is set. Each change is sent live as `tools`. A tool on this PC is answered by
+//! `pc_tools` where it differs.
 
 use std::sync::Arc;
 
@@ -83,9 +84,14 @@ async fn saved(s: &State, t: &Trace) -> Result<Vec<(Tool, Key)>, crate::routes::
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     let mut asked = tokio::task::JoinSet::new();
     for (i, (tool, key)) in saved(&s, &t).await?.into_iter().enumerate() {
+        let s = s.clone();
         asked.spawn(async move {
             let state = match (tool.enabled, key) {
                 (false, _) => None,
+                (true, _) if tool.kind == "pc" => {
+                    let copy = crate::pc_tools::copy(&s, &tool.id);
+                    Some(crate::pc_tools::state(&copy.phase(web_tools::STATE).await))
+                }
                 (true, Err(())) => Some(state(&Err(unread(&tool)))),
                 (true, Ok(key)) => Some(state(
                     &web_tools::connect(&tool.link, &key, web_tools::STATE).await,
@@ -121,6 +127,9 @@ async fn one(
             &t.0,
         ));
     };
+    if tool.kind == "pc" {
+        return crate::pc_tools::one(&s, &t, tool).await;
+    }
     let connected = match key {
         Ok(key) => web_tools::connect(&tool.link, &key, web_tools::CONNECT).await,
         Err(()) => Err(unread(&tool)),
@@ -142,22 +151,27 @@ async fn one(
     Ok(Json(shown))
 }
 
+/// A tool on the web by its `link`, or one on this PC by the `text` pasted from its instructions.
 #[derive(Deserialize)]
 struct New {
-    link: String,
+    link: Option<String>,
+    text: Option<String>,
     name: Option<String>,
     key: Option<String>,
 }
 
 /// Connects to the link, then saves it if it works. A tool that wants a key, or signs in through the
-/// browser, is answered with what it needs and nothing is saved.
+/// browser, is answered with what it needs and nothing is saved. Pasted text adds a tool on this PC.
 async fn add(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Json(new): Json<New>,
 ) -> Answer {
+    if let Some(text) = &new.text {
+        return crate::pc_tools::add(&s, &t, text, new.name).await;
+    }
     let refused = |why: &str| Err(fail(StatusCode::CONFLICT, "Add failed", why, &t.0));
-    let link = new.link.trim().to_string();
+    let link = new.link.unwrap_or_default().trim().to_string();
     let host = match web_tools::checked(&link) {
         Ok(host) => host,
         Err(e) => return refused(&e.to_string()),
@@ -203,15 +217,22 @@ async fn add(
 struct Change {
     enabled: Option<bool>,
     key: Option<String>,
+    /// For a tool on this PC: what it runs, pasted again, and its name.
+    text: Option<String>,
+    name: Option<String>,
 }
 
-/// Enables or disables it, or gives it a new key, saved only when the tool takes it.
+/// Enables or disables it, or gives it a new key, saved only when the tool takes it. A tool on this
+/// PC takes what it runs, pasted again, and a name.
 async fn change(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Path(id): Path<String>,
     Json(change): Json<Change>,
 ) -> Answer {
+    if change.text.is_some() || change.name.is_some() {
+        return crate::pc_tools::change(&s, &t, id, change.text, change.name).await;
+    }
     let key = change.key.map(|k| k.trim().to_string());
     if let Some(key) = &key {
         let found = saved(&s, &t)
@@ -266,7 +287,7 @@ async fn remove(
 }
 
 /// An open window is told when a change was saved.
-fn told(s: &State, answer: Answer) -> Answer {
+pub fn told(s: &State, answer: Answer) -> Answer {
     if answer.is_ok() {
         let _ = s.chats.live.send(json!({ "type": "tools" }));
     }
