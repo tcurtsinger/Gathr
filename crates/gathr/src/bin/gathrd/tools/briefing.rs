@@ -190,7 +190,10 @@ a teammate: they get your words when your turn ends. Name only who needs to act.
 - When your words comment on a teammate's message, start them with REPLY on a line of its own, and they are \
 filed under that message. Never start your answer to the person with REPLY.
 - One of you is the lead. A message from the person that names nobody goes to it, and its plan or answer is \
-checked by the teammates who took no part, before the person relies on it.";
+checked by the teammates who took no part, before the person relies on it.
+- Before you ask the person to pick between ways or designs, have a teammate look first: end your turn with \
+@Name, the question you will ask and where its pages are, and call ask_person once they have answered. A small \
+yes or no needs no look.";
 
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.
 const ROOM: &str = "- Only your last words in a turn are posted as your message; what you write before them stays \
