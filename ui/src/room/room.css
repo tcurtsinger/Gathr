@@ -152,7 +152,7 @@
 .room-note-part {
   font-weight: 500;
 }
-/* The person's files: their tiles under the words in the bubble; alone, at the right with the time under them. */
+/* The person's files: their tiles under the words in the bubble; alone, at the right. */
 .room-you .file-tiles {
   margin: 8px 0 2px;
 }
@@ -213,7 +213,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 46px;
+  min-height: 40px;
   padding: 0 18px;
 }
 .room-head b {
@@ -251,6 +251,10 @@
   padding: 0 18px 10px;
   color: color-mix(in oklab, var(--foreground) 86%, var(--background));
   font-size: 15px;
+}
+/* The card ends right after its words. */
+.room-card > .room-body:last-child {
+  padding-bottom: 13px;
 }
 /* Words said while the turn still runs read as a remark until it ends. */
 .room-card[data-live] > .room-body,
@@ -363,34 +367,80 @@
   white-space: nowrap;
 }
 
-/* Thumbs-ups: a small row under the words. */
-.room-reactions {
-  display: flex;
-  gap: 8px;
-  padding: 0 14px 10px 18px;
-}
-.room-reply .room-reactions {
-  padding: 4px 0 0;
-}
-/* An agent's foot: its thumbs-ups, and the person's own at the right end. */
-.room-foot-row {
+/* The thin row under a message: its time, Copy, then the thumbs-up with its number last. Text and icons are one
+   size. Under an agent's card it starts at the left; under the person's bubble it ends at the right. */
+.room-bar {
   display: flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 10px 8px 18px;
-}
-.room-foot-row .room-reactions {
-  padding: 0;
-}
-.room-reply .room-foot-row {
-  padding: 2px 0 0;
-}
-.room-like {
-  margin-left: auto;
+  align-self: flex-start;
+  gap: 1px;
+  margin: 3px 0 0 10px;
   color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
-.room-like[aria-pressed="true"] {
+.room-you + .room-bar,
+.room-you-files + .room-bar {
+  align-self: flex-end;
+  margin: 3px 2px 0 0;
+}
+/* In a thread the time is beside the name: the bar starts with Copy, its icon under the words' left edge. */
+.room-reply .room-bar {
+  margin: 1px 0 0 -5px;
+}
+.room-bar .room-time {
+  margin-right: 5px;
+  font-size: inherit;
+}
+.room-bar button {
+  color: inherit;
+}
+.room-bar-icon {
+  width: 13px;
+  height: 13px;
+}
+.room-thumb {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+/* The thumb on the person's own message is no button: it takes a button's room. */
+.room-thumb-still {
+  margin: 0 5.5px;
+}
+.room-thumb b {
+  margin-left: 1px;
+  font-weight: 500;
+}
+.room-thumb[data-mine] {
   color: var(--attention);
+}
+.room-thumb[data-mine] svg {
+  fill: currentColor;
+}
+.room-thumb[data-mine] svg path:last-child {
+  stroke: var(--background);
+}
+/* Who gave a thumbs-up, while the pointer or the keyboard is on the thumb. */
+.room-tip {
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 12px;
+  display: none;
+  margin-top: 3px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.room-thumb:hover .room-tip,
+.room-thumb:focus-within .room-tip {
+  display: block;
 }
 /* What a turn waits on the person for, at the foot of its card. */
 .room-asks {
@@ -398,16 +448,6 @@
 }
 .room-reply .room-asks {
   padding: 6px 0 0;
-}
-.room-react {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: color-mix(in oklab, var(--foreground) 86%, var(--background));
-  font-size: 12.5px;
 }
 
 /* Replies, tucked under the message they answer, behind one line. */
