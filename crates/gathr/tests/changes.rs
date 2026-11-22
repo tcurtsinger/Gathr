@@ -53,7 +53,7 @@ fn an_agents_writes_in_a_checkout_elsewhere_show_and_nothing_else_does() {
     let made = service.send(
         "POST",
         "/api/agents",
-        json!({ "name": "Ziggy", "account": account }),
+        json!({ "name": "Rook", "account": account }),
     );
     assert_eq!(made.status, 200, "{}", made.body);
     let agent = made.json()["id"].as_str().unwrap().to_string();
@@ -101,13 +101,13 @@ fn an_agents_writes_in_a_checkout_elsewhere_show_and_nothing_else_does() {
     let got = service.call("GET", &changes);
     assert_eq!(got.status, 200, "{}", got.body);
     let got = got.json();
-    let ziggy = &got["agents"][0];
+    let rook = &got["agents"][0];
     assert_eq!(got["agents"].as_array().unwrap().len(), 1, "{got}");
     assert_eq!(
-        (&ziggy["id"], &ziggy["branch"]),
+        (&rook["id"], &rook["branch"]),
         (&json!(agent), &Value::Null)
     );
-    let outside = ziggy["outside"].as_array().unwrap();
+    let outside = rook["outside"].as_array().unwrap();
     assert_eq!(
         outside.len(),
         1,
