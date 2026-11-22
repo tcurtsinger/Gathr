@@ -128,7 +128,7 @@ export function App() {
   }, []);
 
   // The person's name and assistant, for a new chat's greeting: read again as Settings closes, as Agents changes the
-  // assistant, and when agents change (deleting the assistant clears it).
+  // assistant, and when agents change (the first agent added, or the assistant deleted, moves it).
   const [you, setYou] = useState<Pick<Settings, 'person_name' | 'assistant'>>({});
   const loadYou = useCallback(() => api.settings().then(setYou, quiet), []);
   useEffect(() => {
@@ -326,6 +326,7 @@ export function App() {
     onProject: (project: string) => setFresh({ project }),
     onStart: start,
     onNewProject: () => setNewProject(true),
+    onAgents: () => setOpened('agents'),
     pauses: pauses.pauses,
     onPause: pauses.act,
     onArchive: (opener: HTMLElement | null) => setAsking({ verb: 'Archive', chat, opener }),

@@ -38,9 +38,16 @@ struct Change {
     /// What agents call the person, or `null` for nothing; left out, unchanged.
     #[serde(default, deserialize_with = "present")]
     person_name: Option<Option<String>>,
-    /// The assistant's agent id, or `null` for none; left out, unchanged.
-    #[serde(default, deserialize_with = "present")]
-    assistant: Option<Option<String>>,
+    /// The assistant's agent id, never `null`; left out, unchanged.
+    #[serde(default, deserialize_with = "not_null")]
+    assistant: Option<String>,
+}
+
+/// A field that, when there, has a value: `null` is refused as a wrong type.
+fn not_null<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }
 
 /// A field that's there, `null` included, apart from one that's left out.
@@ -83,7 +90,7 @@ async fn change_settings(
             saved = assistant::set_person_name(c, name.as_deref());
         }
         if let (Ok(()), Some(agent)) = (&saved, &body.assistant) {
-            saved = assistant::set_assistant(c, agent.as_deref());
+            saved = assistant::set_assistant(c, agent);
         }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;

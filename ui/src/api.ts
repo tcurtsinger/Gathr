@@ -269,7 +269,7 @@ export interface Settings {
   auto_compact: number | null;
   /** What agents call the person; null until set. */
   person_name?: string | null;
-  /** The agent a new chat's message that names nobody goes to; null for none. */
+  /** The agent a new chat's message that names nobody goes to: the one picked, else the first; null with no agents. */
   assistant?: string | null;
 }
 

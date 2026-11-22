@@ -167,8 +167,9 @@ pub fn alone(conn: &Connection, chat: &str) -> Result<bool, Error> {
 
 /// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
 /// chat with no project, its first agent leads it, and the picked agents from outside it join it
-/// (F8b) as members; with no agents yet, a message that names nobody goes to the assistant. In a
-/// project's chat a pick outside its team refuses the send. Reads only: `join` writes it.
+/// (F8b) as members; with no agents in it yet, a message that names nobody goes to the assistant,
+/// which is nobody only when there are no agents at all. In a project's chat a pick outside its team
+/// refuses the send. Reads only: `join` writes it.
 pub fn plan(
     conn: &Connection,
     chat: &str,

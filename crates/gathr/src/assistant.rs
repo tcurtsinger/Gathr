@@ -1,5 +1,6 @@
 //! The person's name, which agents call them by, and their assistant: the agent a message that names
-//! nobody goes to in a chat with no project and no agents yet. Both are in Settings.
+//! nobody goes to in a chat with no project and no agents yet. There is one whenever there is an
+//! agent: the one picked on the Agents screen, else the first.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -43,22 +44,22 @@ pub fn set_person_name(conn: &Connection, name: Option<&str>) -> Result<(), Erro
     put(conn, NAME, name)
 }
 
-/// The assistant's agent id, if one is set.
+/// The assistant's agent id: the one set, else the first agent. None only when there are no agents.
 pub fn assistant(conn: &Connection) -> Result<Option<String>, Error> {
-    get(conn, ASSISTANT)
+    let sql = "SELECT id FROM agents WHERE removed_ts IS NULL
+               ORDER BY id IS (SELECT value FROM settings WHERE key = ?1) DESC, created_ts, id LIMIT 1";
+    Ok(conn.query_row(sql, [ASSISTANT], |r| r.get(0)).optional()?)
 }
 
-/// Sets the assistant to an agent that exists, or none.
-pub fn set_assistant(conn: &Connection, agent: Option<&str>) -> Result<(), Error> {
-    if let Some(agent) = agent
-        && crate::agents::get(conn, agent)?.is_none()
-    {
+/// Sets the assistant to an agent that exists.
+pub fn set_assistant(conn: &Connection, agent: &str) -> Result<(), Error> {
+    if crate::agents::get(conn, agent)?.is_none() {
         return Err(Error::Refused("no such agent".into()));
     }
-    put(conn, ASSISTANT, agent)
+    put(conn, ASSISTANT, Some(agent))
 }
 
-/// A removed agent is nobody's assistant.
+/// A removed agent is nobody's assistant: the first agent left is.
 pub fn forget(conn: &Connection, agent: &str) -> Result<(), Error> {
     let sql = "DELETE FROM settings WHERE key = ?1 AND value = ?2";
     conn.execute(sql, params![ASSISTANT, agent])?;

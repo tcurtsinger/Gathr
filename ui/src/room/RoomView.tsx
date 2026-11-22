@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -72,6 +73,8 @@ interface Props {
   /** Whether the sidebar is open, as the person left it in this chat; unset, it opens with more than one agent. */
   sidebar?: boolean;
   onSidebar: (open: boolean) => void;
+  /** Opens the Agents screen. */
+  onAgents: () => void;
 }
 
 /** A chat: the middle of the window, and its sidebar. */
@@ -98,6 +101,8 @@ export function RoomView(props: Props) {
   const ahead = fresh ? recipients([], who, members, state, assistant)[0] : undefined;
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   const sidebar = !fresh && (props.sidebar ?? state.members.length > 1);
+  // The assistant is null only with no agents at all (unset until read): the box is off.
+  const none = props.you.assistant === null;
 
   const send = (
     text: string,
@@ -210,6 +215,12 @@ export function RoomView(props: Props) {
                     ? `What should we build in ${project}?`
                     : greeting(new Date().getHours(), props.you.person_name)}
                 </p>
+                {none && (
+                  <Button variant="outline" onClick={props.onAgents}>
+                    <Plus aria-hidden="true" />
+                    Add an agent
+                  </Button>
+                )}
               </div>
             )
           }
@@ -251,7 +262,8 @@ export function RoomView(props: Props) {
                 dropOn={column}
                 onSend={sendDraft}
                 onStop={running ? stop : undefined}
-                hint={ahead ? `Message ${ahead.name}` : 'Message the team'}
+                off={none}
+                hint={none ? 'No agents yet' : ahead ? `Message ${ahead.name}` : 'Message the team'}
                 people={who}
                 to={to}
               />
