@@ -90,7 +90,8 @@ async fn change_settings(
         }
     }
     let data = s.data.path().to_path_buf();
-    db(&s, &t, "Save failed", move |c| {
+    let picked = body.assistant.is_some();
+    let answer = db(&s, &t, "Save failed", move |c| {
         let mut saved = Ok(());
         if let Some(limit) = body.handoff_limit {
             saved = gathr::handoffs::set_limit(c, limit);
@@ -130,7 +131,12 @@ async fn change_settings(
         saved?;
         shown(c, &data)
     })
-    .await
+    .await?;
+    // The new assistant takes its chat over now.
+    if picked {
+        crate::team::take_over(&s, &t).await;
+    }
+    Ok(answer)
 }
 
 fn shown(

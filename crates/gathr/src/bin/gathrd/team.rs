@@ -27,6 +27,9 @@ pub struct NewChat {
     /// The project it's made in: its folder and team are copied (F8b).
     project: Option<String>,
     members: Option<Vec<Seat>>,
+    /// The assistant's own chat, made by its first message; the one there is, if there is.
+    #[serde(default)]
+    assistant: bool,
 }
 
 pub async fn create(
@@ -35,6 +38,16 @@ pub async fn create(
     Json(body): Json<NewChat>,
 ) -> Answer {
     const ERROR: &str = "New chat failed";
+    if body.assistant {
+        let made = s.writer.call(gathr::assistant::make_chat).await;
+        if let Some(Err(gathr::Error::Refused(why))) = &made {
+            return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+        }
+        let chat = written(&t, made, ERROR)?;
+        s.chats
+            .publish(json!({ "type": "chat", "chat": chat["id"], "change": "created" }));
+        return Ok(Json(chat));
+    }
     let in_project = match body.project {
         Some(id) => Some(crate::projects::find(&s, &t, &id, ERROR).await?),
         None => None,
@@ -167,6 +180,29 @@ async fn rename(s: &State, t: &Trace, chat: &str, title: &str) -> Answer {
 pub fn changed(s: &State, t: &Trace, chat: &str, members: Vec<team::Member>) {
     let seats: Vec<(String, Role)> = members.iter().map(|m| (m.agent.clone(), m.role)).collect();
     changed_to(s, t, chat, &seats, &members);
+}
+
+/// The assistant's chat's new lines, live: an agent joined or left.
+pub fn stayed(chats: &crate::chats::Chats, chat: &str, stays: Vec<Value>) {
+    for stay in stays {
+        chats.publish(json!({ "type": "stay", "chat": chat, "stay": stay }));
+    }
+}
+
+/// The assistant takes its chat over, after the assistant changed: told live as any team change.
+pub async fn take_over(s: &State, t: &Trace) {
+    match s.writer.call(gathr::assistant::take_over).await {
+        Some(Ok(Some(taken))) => {
+            changed(s, t, &taken.chat, taken.members);
+            stayed(&s.chats, &taken.chat, taken.stays);
+        }
+        Some(Err(e)) => {
+            let event = Event::point("gathr.chat.members").trace(&t.0);
+            s.writer
+                .record(event.error("sqlite").attr("why", e.to_string()));
+        }
+        _ => {}
+    }
 }
 
 fn changed_to(

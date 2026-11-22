@@ -72,6 +72,16 @@
   font-size: 13px;
   text-align: center;
 }
+/* An agent joined or left the assistant's chat: its small face and its name before the words. */
+.room-quiet .face {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+.room-quiet b {
+  color: var(--foreground);
+  font-weight: 600;
+}
 /* A new chat: the face of who a message goes to and the greeting, in the middle of the column; while the "@" list
    is open, at its top, so the list never covers them. */
 .room-col:has(> .room-greeting) {

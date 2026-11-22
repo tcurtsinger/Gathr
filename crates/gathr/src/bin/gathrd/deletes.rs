@@ -101,6 +101,11 @@ pub async fn agent(
     for (chat, members) in removed.chats {
         crate::team::changed(&s, &t, &chat, members);
     }
+    if let Some((chat, line)) = removed.left {
+        crate::team::stayed(&s.chats, &chat, vec![line]);
+    }
+    // The next assistant takes the assistant's chat over.
+    crate::team::take_over(&s, &t).await;
     for project in &removed.projects {
         s.chats
             .publish(json!({ "type": "project", "project": project, "change": "changed" }));

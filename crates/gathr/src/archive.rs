@@ -46,6 +46,7 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
         params![chat, now],
     )?;
     let ended = end_work(&tx, chat, now)?;
+    crate::assistant::let_go(&tx, chat)?;
     let folders = crate::folders::due(&tx, chat, false)?;
     Event::point("gathr.chat.archive")
         .trace(trace)
@@ -121,6 +122,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Erro
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         "DELETE FROM open_checks WHERE chat_id = ?1".into(),
+        "DELETE FROM stays WHERE chat_id = ?1".into(),
         "DELETE FROM chat_members WHERE chat_id = ?1".into(),
         "DELETE FROM engine_sessions WHERE chat_id = ?1".into(),
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1".into(),

@@ -153,6 +153,20 @@
 .sidebar .chatrow:is(:hover, :focus-within, :has(.row-icon[data-state="open"])) .chat-link {
   padding-right: 4px;
 }
+/* The assistant's row, under Search: its face, its name, its chat's mark; lit while its chat is open. */
+.assistant-row span:not(.face) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sidebar .assistant-row[aria-current] {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.assistant-row[aria-current] .chat-mark {
+  --behind: color-mix(in oklab, var(--foreground) 6%, var(--frame));
+}
 .sidebar-empty {
   margin: 0;
   padding: 8px;

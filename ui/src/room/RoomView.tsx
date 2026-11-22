@@ -93,17 +93,26 @@ export function RoomView(props: Props) {
   // A new chat in a project asks what to build there, under its lead's face; with no project, the greeting.
   const project = props.projects.find((p) => p.id === chat.project)?.name;
   const members = fresh ? (props.projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
-  const team = useMemo(() => peopleOf(members, known), [members, known]);
+  // The assistant's own chat: no lead in words, its face and name for a title, no Rename.
+  const own = !!chat.assistant;
+  const team = useMemo(() => {
+    const people = peopleOf(members, known);
+    return own ? { ...people, lead: () => false } : people;
+  }, [members, known, own]);
   // A new chat with no project: a message that names nobody goes to the assistant.
   const assistant = fresh && !chat.project ? agents.find((a) => a.id === props.you.assistant) : undefined;
-  const who = nameable(members, agents, !chat.project, assistant);
+  const who = nameable(members, agents, !chat.project, assistant, !own);
   const to = recipients(picks, who, members, state, assistant);
   // Who a new chat's message goes to, by itself: the assistant, or the project's lead.
   const ahead = fresh ? recipients([], who, members, state, assistant)[0] : undefined;
   const running = Object.values(state.turns).some((t) => t.status === 'running');
-  const sidebar = !fresh && (props.sidebar ?? state.members.length > 1);
+  // Closed by itself in the assistant's chat, where a guest stays for one subject.
+  const sidebar = !fresh && (props.sidebar ?? (!own && state.members.length > 1));
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
+  const mine = own ? agents.find((a) => a.id === props.you.assistant) : undefined;
+  // In the assistant's chat the box names everyone in it.
+  const everyone = new Intl.ListFormat('en').format(members.map((m) => m.name));
 
   const send = (
     text: string,
@@ -165,7 +174,8 @@ export function RoomView(props: Props) {
     <OpenFile.Provider value={openFile}>
       <TopLine>
         <div className="room-title">
-          <h1>{chat.title}</h1>
+          {mine && <Face agent={mine} size={20} />}
+          <h1>{mine?.name ?? chat.title}</h1>
           {!fresh && (
             <ChatMenu
               pause={{
@@ -175,7 +185,7 @@ export function RoomView(props: Props) {
                 onResume: resume,
               }}
               archived={!!chat.archived}
-              onRename={props.onRename}
+              onRename={own ? undefined : props.onRename}
               onArchive={props.onArchive}
               onRestore={props.onRestore}
               onDelete={props.onDelete}
@@ -244,7 +254,7 @@ export function RoomView(props: Props) {
             </p>
           ) : (
             <>
-              {fresh && (
+              {fresh && !own && (
                 <ProjectPick
                   project={chat.project}
                   projects={props.projects}
@@ -270,7 +280,15 @@ export function RoomView(props: Props) {
                 onSend={sendDraft}
                 onStop={running ? stop : undefined}
                 off={none}
-                hint={none ? 'No agents yet' : ahead ? `Message ${ahead.name}` : 'Message the team'}
+                hint={
+                  none
+                    ? 'No agents yet'
+                    : ahead
+                      ? `Message ${ahead.name}`
+                      : own && members.length
+                        ? `Message ${everyone}`
+                        : 'Message the team'
+                }
                 people={who}
                 to={to}
               />
@@ -322,13 +340,19 @@ function NotSent({ unsent: u, onRetry }: { unsent: Unsent; onRetry: () => void }
  * Who "@" lists: the chat's team, then, in a chat with no project, every other agent, who joins by it; the assistant
  * first, marked, in a new chat with no project.
  */
-function nameable(members: Member[], agents: Agent[], open: boolean, assistant?: Agent): Person[] {
+function nameable(
+  members: Member[],
+  agents: Agent[],
+  open: boolean,
+  assistant?: Agent,
+  lead = true,
+): Person[] {
   const about = (id: string) => agents.find((a) => a.id === id)?.description ?? undefined;
   const team = members.map((m) => ({
     id: m.agent,
     name: m.name,
     about: about(m.agent),
-    meta: m.role === 'supervisor' ? 'Lead' : undefined,
+    meta: lead && m.role === 'supervisor' ? 'Lead' : undefined,
   }));
   if (!open) return team;
   const others = agents.filter((a) => !members.some((m) => m.agent === a.id));

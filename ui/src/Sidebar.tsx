@@ -1,7 +1,8 @@
 import { Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import type { Chat, Project } from './api';
+import type { Chat, ChatMark, Project } from './api';
 import { ChatMenu } from './components/ChatMenu';
+import { Face, type FaceOf } from './components/Face';
 import { FROM_SERVICE, WORD } from './components/marks';
 import { ResizeHandle } from './components/ResizeHandle';
 import { StateMark } from './components/StateMark';
@@ -21,6 +22,8 @@ interface Props {
   onDeleteProject: (project: Project, opener: HTMLElement | null) => void;
   /** Under New: the Tasks flyout. */
   actions?: ReactNode;
+  /** Under Search: the assistant's row, lit while its chat is open, with its chat's mark. */
+  assistant?: { agent: FaceOf; open: boolean; mark?: ChatMark | null; onOpen: () => void };
   onRename: (chat: Chat, opener: HTMLElement | null) => void;
   onArchive: (chat: Chat, opener: HTMLElement | null) => void;
   onDelete: (chat: Chat, opener: HTMLElement | null) => void;
@@ -28,7 +31,9 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { chats, archived, projects, selected, onSelect, onNew, actions } = props;
+  const { archived, projects, selected, onSelect, onNew, actions, assistant } = props;
+  // The assistant's chat is its row, in no list.
+  const chats = props.chats.filter((c) => !c.assistant);
   // Projects start open, Archived folded; the person's fold of one holds while the window is open.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -74,6 +79,26 @@ export function Sidebar(props: Props) {
           New
         </button>
         {actions}
+        {assistant && (
+          <button
+            type="button"
+            className="navbutton assistant-row"
+            aria-current={assistant.open ? 'page' : undefined}
+            onClick={assistant.onOpen}
+          >
+            <Face agent={assistant.agent} size={16} />
+            <span>{assistant.agent.name}</span>
+            {assistant.mark && (
+              <i className="chat-mark" role="img" aria-label={WORD[FROM_SERVICE[assistant.mark]]}>
+                <StateMark
+                  state={FROM_SERVICE[assistant.mark]}
+                  size={9}
+                  spin={assistant.mark === 'working'}
+                />
+              </i>
+            )}
+          </button>
+        )}
       </div>
       <div className="chatlist">
         {projects.map((p) => {

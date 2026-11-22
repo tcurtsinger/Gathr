@@ -120,7 +120,8 @@ export function Room({ chat, project, state, people, acts, found, header, after,
             if (item.kind === 'line')
               return (
                 <p key={item.id} className="room-quiet">
-                  {item.text}
+                  {item.agent && <Face agent={people.face(item.agent)} size={16} />}
+                  {item.agent && <b>{people.name(item.agent)}</b>} {item.text}
                 </p>
               );
             return (

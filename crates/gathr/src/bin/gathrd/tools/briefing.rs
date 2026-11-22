@@ -34,12 +34,21 @@ pub struct Facts {
     person: Option<String>,
     /// Whether this agent is the person's assistant.
     assistant: bool,
+    /// In the assistant's own chat: the assistant, or a guest it brought in.
+    standing: Option<Standing>,
     /// In a chat with no project, the person's other agents, each with its description.
     agents: Vec<String>,
     /// The Skills folder and its enabled skills that can be read, by name and description.
     skills: Option<(PathBuf, Vec<(String, String)>)>,
     /// What it knows from Memory, each place with notes: its name, its file and its notes.
     known: Vec<gathr::memory::Known>,
+}
+
+/// Who an agent is in the assistant's own chat.
+enum Standing {
+    Assistant,
+    /// A guest, with the assistant's name.
+    Guest(String),
 }
 
 /// The agent's worktree, its own folder and Shared, its Designs, what it may read, the Skills folder
@@ -81,16 +90,19 @@ pub fn facts(
         true => Vec::new(),
         false => team::members(conn, chat)?,
     };
+    // The assistant's own chat has no lead in words: the assistant and its guests.
+    let standing_chat = gathr::assistant::is_chat(conn, chat)?;
     let role = members
         .iter()
         .find(|m| Some(m.agent.as_str()) == agent)
-        .map(|m| m.role);
+        .map(|m| m.role)
+        .filter(|_| !standing_chat);
     let others = match members.is_empty() {
         true => worked_here(conn, chat, agent)?,
         false => members
             .iter()
             .filter(|m| Some(m.agent.as_str()) != agent)
-            .map(|m| match title_of(m.role) {
+            .map(|m| match title_of(m.role).filter(|_| !standing_chat) {
                 Some(role) => format!("{} ({role})", m.name),
                 None => m.name.clone(),
             })
@@ -116,6 +128,17 @@ pub fn facts(
         false => Vec::new(),
     };
     let assistant = gathr::assistant::assistant(conn)?;
+    let standing = match (standing_chat, agent) {
+        (true, Some(a)) if assistant.as_deref() == Some(a) => Some(Standing::Assistant),
+        (true, Some(_)) => {
+            let sql = "SELECT name FROM agents WHERE id = ?1";
+            let name = conn.query_row(sql, [&assistant], |r| r.get(0)).optional()?;
+            Some(Standing::Guest(
+                name.unwrap_or_else(|| "The assistant".into()),
+            ))
+        }
+        _ => None,
+    };
     let off = gathr::skills::off(conn)?;
     let skills = skills.map(|dir| {
         let listed = gathr::skills::list(&dir, &off).into_iter();
@@ -141,6 +164,7 @@ pub fn facts(
         read,
         person: gathr::assistant::person_name(conn)?,
         assistant: plain && agent.is_some() && assistant.as_deref() == agent,
+        standing,
         agents,
         skills: skills.filter(|(_, listed)| !listed.is_empty()),
         known,
@@ -206,8 +230,10 @@ const ROOM_TEAM: &str = "How this room works:
 - You get a turn when the person writes to you, or when a teammate names you with @Name. Write @Name to wake \
 a teammate: they get your words when your turn ends. Name only who needs to act.
 - When your words comment on a teammate's message, start them with REPLY on a line of its own, and they are \
-filed under that message. Never start your answer to the person with REPLY.
-- One of you is the lead. A message from the person that names nobody goes to it, and its plan or answer is \
+filed under that message. Never start your answer to the person with REPLY.";
+
+/// A team chat's lead and its checks, which the assistant's own chat has neither of.
+const ROOM_LEAD: &str = "- One of you is the lead. A message from the person that names nobody goes to it, and its plan or answer is \
 checked by the teammates who took no part, before the person relies on it.
 - Before you ask the person to pick between ways or designs, have a teammate look first: end your turn with \
 @Name, the question you will ask and where its pages are, and call ask_person once they have answered. A small \
@@ -258,6 +284,19 @@ pub fn text(facts: &Facts) -> String {
              things yourself."
                 .to_string(),
         );
+    }
+    match &facts.standing {
+        Some(Standing::Assistant) => lines.push(
+            "This is your own standing chat with the person, and it does not end. When a subject \
+             is another agent's, bring them in with @Name; when that subject is done, send them out \
+             with send_out."
+                .to_string(),
+        ),
+        Some(Standing::Guest(assistant)) => lines.push(format!(
+            "{assistant}, the person's assistant, brought you into this chat for one subject. \
+             Answer the person directly; {assistant} sends you out when it is done."
+        )),
+        None => {}
     }
     if !facts.agents.is_empty() {
         lines.push(format!(
@@ -332,6 +371,9 @@ pub fn text(facts: &Facts) -> String {
     );
     if facts.team && !facts.others.is_empty() {
         lines.push(ROOM_TEAM.to_string());
+        if facts.standing.is_none() {
+            lines.push(ROOM_LEAD.to_string());
+        }
     }
     lines.extend([ROOM.to_string(), unavailable]);
     lines.join("\n")

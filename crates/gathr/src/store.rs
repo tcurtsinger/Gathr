@@ -112,13 +112,14 @@ impl ChatState {
 }
 
 /// The chats in the list, newest first, each with whether it's `working`, has a turn `queued`,
-/// `needs` the person and its `mark`; with `archived`, the archived ones, last archived first,
-/// which carry none of them.
+/// `needs` the person, its `mark` and whether it is the `assistant`'s chat; with `archived`, the
+/// archived ones, last archived first, which carry none of them.
 pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}, {QUEUED}
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}, {QUEUED},
+                c.id IS (SELECT value FROM settings WHERE key = 'assistant_chat')
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
          ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
     ))?;
@@ -140,6 +141,8 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
             chat["queued"] = r.get::<_, bool>(12)?.into();
             chat["needs"] = state.needs.into();
             chat["mark"] = state.mark.into();
+            // The assistant's chat, which the sidebar shows as the assistant's row, in no list.
+            chat["assistant"] = r.get::<_, bool>(13)?.into();
         }
         Ok(chat)
     })?;

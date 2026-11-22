@@ -73,6 +73,7 @@ impl Tools {
             + Tools::add_router()
             + Tools::show_router()
             + Tools::schedule_router()
+            + Tools::send_out_router()
     }
 }
 

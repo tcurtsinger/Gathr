@@ -8,6 +8,7 @@ import {
   type Message,
   type Question,
   type Reaction,
+  type Stay,
   type Turn,
 } from '../api';
 import type { Approval } from '../components/Approval';
@@ -27,6 +28,8 @@ export interface RoomState {
   questions: Question[];
   /** What its agents' engines still run in the background. */
   background: Background[];
+  /** In the assistant's chat, who joined and left, and when. */
+  stays: Stay[];
 }
 
 export const emptyRoom: RoomState = {
@@ -39,6 +42,7 @@ export const emptyRoom: RoomState = {
   approvals: [],
   questions: [],
   background: [],
+  stays: [],
 };
 
 export function fromHistory(h: History): RoomState {
@@ -58,6 +62,7 @@ export function fromHistory(h: History): RoomState {
     })),
     questions: h.questions ?? [],
     background: h.background ?? [],
+    stays: h.stays ?? [],
   };
 }
 
@@ -131,6 +136,11 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
       };
     case 'background':
       return { ...s, background: e.background };
+    case 'stay':
+      // One that came while the history loaded is in the history too.
+      return s.stays.some((st) => st.agent === e.stay.agent && st.time === e.stay.time)
+        ? s
+        : { ...s, stays: [...s.stays, e.stay] };
     default:
       return s;
   }

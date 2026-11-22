@@ -108,7 +108,7 @@ function Block(props: {
       <div className="agents-head">
         <Face agent={people.face(member.agent)} size={24} />
         <b>{member.name}</b>
-        {member.role === 'supervisor' && <span className="room-tag">Lead</span>}
+        {people.lead(member.agent) && <span className="room-tag">Lead</span>}
         <span className="room-grow" />
         {used !== null && (
           <Compact chat={chat} agent={member.agent} turns={props.turns} onAsked={props.onAsked} />

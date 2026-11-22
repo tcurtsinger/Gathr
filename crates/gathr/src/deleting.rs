@@ -59,7 +59,8 @@ pub fn project_plan(conn: &Connection, project: &str) -> Result<Plan, Error> {
 
 /// An agent's delete: the projects and chats it is the only agent of (a chat with no members by its
 /// turns), and who leads after it. A chat with no project and the agent alone on
-/// its list where another agent spoke stays, as it did before such a chat kept a list (0028).
+/// its list where another agent spoke stays, as it did before such a chat kept a list (0028). The
+/// assistant's chat stays: the next assistant takes it over.
 pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
     let projects = strings(
         conn,
@@ -75,14 +76,14 @@ pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
     }
     let alone = strings(
         conn,
-        "SELECT c.id FROM chats c WHERE
+        "SELECT c.id FROM chats c WHERE c.id IS NOT (SELECT value FROM settings WHERE key = 'assistant_chat') AND (
              (EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id AND m.agent_id = ?1)
               AND NOT EXISTS (SELECT 1 FROM chat_members o WHERE o.chat_id = c.id AND o.agent_id != ?1)
               AND NOT (c.project IS NULL
                   AND EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id != ?1)))
           OR (NOT EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id)
               AND EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id = ?1)
-              AND NOT EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id != ?1))
+              AND NOT EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id != ?1)))
          ORDER BY c.created_ts, c.id",
         agent,
     )?;
@@ -92,7 +93,10 @@ pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
         }
     }
     let mut leads = Vec::new();
-    for (_, team) in teams(conn, agent, &projects, &chats)? {
+    for (seat, team) in teams(conn, agent, &projects, &chats)? {
+        if handed_over(conn, &seat)? {
+            continue;
+        }
         if let Some(next) = next_lead(&team, agent).filter(|m| !leads.contains(&m.name)) {
             leads.push(next.name.clone());
         }
@@ -138,6 +142,14 @@ fn teams(
     Ok(found)
 }
 
+/// The assistant's chat: the next assistant leads it, not the next in its order.
+fn handed_over(conn: &Connection, seat: &Seat) -> Result<bool, Error> {
+    match seat {
+        Seat::Chat(chat) => crate::assistant::is_chat(conn, chat),
+        Seat::Project(_) => Ok(false),
+    }
+}
+
 /// Who leads once `agent` leaves `team`: the first agent left in the team's order, when it led
 /// (the rule Settings > Projects has, ProjectTeam.tsx).
 fn next_lead<'a>(team: &'a [Member], agent: &str) -> Option<&'a Member> {
@@ -155,6 +167,8 @@ pub struct Removed {
     pub plan: Plan,
     pub chats: Vec<(String, Vec<Member>)>,
     pub projects: Vec<String>,
+    /// Its line in the assistant's chat, when it was there: that chat and the line.
+    pub left: Option<(String, serde_json::Value)>,
 }
 
 /// Removes `agent` in one transaction (0069): its queued turns stopped and its schedules deleted; it
@@ -167,7 +181,14 @@ pub fn remove_agent(conn: &mut Connection, agent: &str) -> Result<Removed, Error
     let now = crate::ids::now_us();
     let mut removed = Removed::default();
     for (seat, team) in teams(&tx, agent, &plan.projects, &plan.chats)? {
-        let next = next_lead(&team, agent).map(|m| m.agent.clone());
+        let next = match handed_over(&tx, &seat)? {
+            true => None,
+            false => next_lead(&team, agent).map(|m| m.agent.clone()),
+        };
+        if let Seat::Chat(chat) = &seat {
+            let line = crate::assistant::stay_in(&tx, chat, agent, "left")?;
+            removed.left = line.map(|line| (chat.clone(), line)).or(removed.left);
+        }
         let (table, key, id) = match &seat {
             Seat::Project(id) => ("project_members", "project_id", id),
             Seat::Chat(id) => ("chat_members", "chat_id", id),
