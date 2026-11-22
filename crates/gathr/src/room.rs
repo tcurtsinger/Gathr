@@ -219,7 +219,8 @@ fn lines(
     // asked). Its asker hears the answer as its turn's ask instead.
     let sql = format!(
         "{MINE}SELECT 'question ' || q.id AS id, 'gathr', coalesce(a.name, 'An agent')
-             || ' asked the person \"' || q.question || '\". ' || CASE WHEN q.answered_ts IS NULL
+             || ' asked the person \"' || q.question || '\". ' || CASE WHEN q.closed_ts IS NOT NULL
+             THEN 'Closed unanswered when the chat was archived.' WHEN q.answered_ts IS NULL
              THEN 'Not answered yet.' ELSE 'They answered: '
              || concat_ws('. ', 'Picked: ' || q.pick, 'Their words: ' || q.words) END,
              NULL, NULL, coalesce(q.answered_ts, q.asked_ts) AS ts

@@ -8,6 +8,7 @@ import {
   type Named,
   type PickedName,
   type Project,
+  type Question,
   type Settings,
 } from './api';
 import { Confirm } from './components/Confirm';
@@ -23,6 +24,7 @@ import { usePauses } from './pauses';
 import { Plugins } from './plugins/Plugins';
 import { type Opened, Rail } from './Rail';
 import { report, timeToPaint } from './report';
+import { waits } from './room/Question';
 import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
 import { openDesign } from './room/Sidebar';
@@ -42,6 +44,20 @@ export function App() {
     chat: Chat;
     opener: HTMLElement | null;
   } | null>(null);
+  // Archive says which open questions it closes unanswered, read from the chat as it asks.
+  const [closing, setClosing] = useState<{ body?: string; failure?: Failure } | null>(null);
+  useEffect(() => {
+    setClosing(null);
+    if (asking?.verb !== 'Archive') return;
+    let shown = true;
+    api.history(asking.chat.id).then(
+      (h) => shown && setClosing({ body: closes((h.questions ?? []).filter(waits)) }),
+      (failure: Failure) => shown && setClosing({ failure }),
+    );
+    return () => {
+      shown = false;
+    };
+  }, [asking]);
   // Restore asks nothing.
   const [restoreFailure, setRestoreFailure] = useState<Failure | null>(null);
   // A project's Delete, from its More (0069).
@@ -426,6 +442,9 @@ export function App() {
           key={`confirm-${asking.chat.id}`}
           question={`${asking.verb} ${asking.chat.title}?`}
           verb={asking.verb}
+          body={closing?.body}
+          waiting={asking.verb === 'Archive' && !closing}
+          loadFailure={closing?.failure ?? null}
           danger={asking.verb === 'Delete'}
           opener={asking.opener}
           onCancel={() => setAsking(null)}
@@ -467,6 +486,13 @@ const quiet = () => {};
 /** The screens' places in Back and Forward are their names: never a chat's id. */
 const away = (key: string): key is Exclude<Opened, 'home'> =>
   key === 'agents' || key === 'plugins' || key === 'designs';
+
+/** What Archive's question says of the open questions it closes. */
+function closes(open: Question[]) {
+  if (open.length === 0) return undefined;
+  if (open.length === 1) return `${open[0].name}’s question closes unanswered.`;
+  return `${open.length} open questions close unanswered.`;
+}
 
 /** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */
 function neighbour(chat: Chat, list: Chat[]): Chat | undefined {

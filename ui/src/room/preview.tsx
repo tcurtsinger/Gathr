@@ -144,6 +144,7 @@ const questions: Question[] = [
     words: 'And the order id first.',
     asked: at(8),
     answered: at(9),
+    closed: null,
   },
   {
     id: 2,
@@ -160,6 +161,7 @@ const questions: Question[] = [
     words: null,
     asked: at(21.5),
     answered: null,
+    closed: null,
   },
 ];
 

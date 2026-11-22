@@ -329,7 +329,10 @@ export interface History {
   background?: Background[];
 }
 
-/** An agent's question to the person in a room chat: open until `answered`, then with their pick, words or both. */
+/**
+ * An agent's question to the person in a room chat: open until `answered`, then with their pick, words or both, or
+ * until `closed` unanswered when the chat was archived.
+ */
 export interface Question {
   id: number;
   chat: string;
@@ -341,6 +344,7 @@ export interface Question {
   words: string | null;
   asked: string;
   answered: string | null;
+  closed: string | null;
 }
 
 /**

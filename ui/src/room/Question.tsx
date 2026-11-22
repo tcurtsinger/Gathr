@@ -13,6 +13,9 @@ import { StateMark } from '../components/StateMark';
 import { clock, type People, Words } from './Room';
 import '../components/popover-panel.css';
 
+/** Whether the question waits for the person's answer: not answered, nor closed when its chat was archived. */
+export const waits = (q: Question) => !q.answered && !q.closed;
+
 /** Sends the person's answer: it fails with the service's refusal. */
 export type OnAnswer = (
   question: Question,
@@ -23,7 +26,7 @@ export type OnAnswer = (
 
 /**
  * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open,
- * Answer, which opens the questions panel on it. Answered, the answer sits under it.
+ * Answer, which opens the questions panel on it. Answered, the answer sits under it; closed, it says so.
  */
 export function QuestionCard(props: {
   question: Question;
@@ -33,7 +36,7 @@ export function QuestionCard(props: {
   joined?: boolean;
 }) {
   const { question: q, people, onOpen, joined } = props;
-  const open = !q.answered;
+  const open = waits(q);
   const answer = split(q.words ?? '');
   return (
     <div className="room-item room-turn">
@@ -51,6 +54,8 @@ export function QuestionCard(props: {
               <StateMark state="needs" size={12} />
               Needs you
             </span>
+          ) : q.closed ? (
+            <span className="room-state">Closed</span>
           ) : (
             <span className="room-state">
               <Check aria-hidden="true" />
@@ -65,6 +70,8 @@ export function QuestionCard(props: {
               Answer
             </Button>
           </div>
+        ) : q.closed ? (
+          <p className="room-closed">Closed when the chat was archived</p>
         ) : (
           <div className="room-answer">
             <div className="room-line">
@@ -96,7 +103,7 @@ export function Questions(props: {
   onAnswer: OnAnswer;
 }) {
   const { people, at, onOpen, onAnswer } = props;
-  const open = props.questions.filter((q) => !q.answered);
+  const open = props.questions.filter(waits);
   return (
     <Popover.Root open={at !== undefined} onOpenChange={(o) => onOpen(o ? null : undefined)}>
       <Popover.Trigger asChild>

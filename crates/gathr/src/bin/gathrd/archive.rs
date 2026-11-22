@@ -38,6 +38,15 @@ async fn archive_chat(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let Json(ended) = archive_now(&s, &t, &chat, "Archive failed").await?;
+    // Its open questions closed: a window showing the chat shows them closed.
+    let id = chat.clone();
+    let questions = db(&s, &t, "Archive failed", move |c| {
+        gathr::questions::of_chat(c, &id)
+    });
+    if let Ok(Json(questions)) = questions.await {
+        s.chats
+            .publish(json!({ "type": "questions", "chat": chat, "questions": questions }));
+    }
     announce(&s, &chat, "archived");
     // Not in the answer: removing a worktree can take a while, and what's in use waits anyway.
     let (chats, id) = (s.chats.clone(), chat.clone());
