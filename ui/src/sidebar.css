@@ -205,31 +205,3 @@
 .chatlist section + section {
   margin-top: 12px;
 }
-/* Over the projects: their header, with New project's + always shown. */
-.projects-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 5px 2px 8px;
-}
-.chatlist .projects-head h2 {
-  padding: 0;
-}
-.sidebar .projects-add {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  min-height: 0;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--hover-tint);
-  color: var(--muted-foreground);
-}
-.sidebar .projects-add:hover {
-  color: var(--foreground);
-}
-.projects-add svg {
-  width: 14px;
-  height: 14px;
-}

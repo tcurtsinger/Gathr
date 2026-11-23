@@ -24,7 +24,6 @@ async function sidebar(
       onNew={none}
       onProjectSettings={none}
       onDeleteProject={none}
-      onNewProject={none}
       onRename={none}
       onArchive={none}
       onDelete={none}
