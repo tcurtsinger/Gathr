@@ -120,6 +120,7 @@ export function Changes({ chat, changes }: { chat: string; changes?: ChatChanges
       <div className="filetab-none">
         <ChangesMark />
         <strong>No changes</strong>
+        <span>Agents’ edits show here.</span>
       </div>
     );
   const total = sum(all);

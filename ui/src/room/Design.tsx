@@ -184,7 +184,7 @@ export function useDesigns(chat: string, room: RoomState, open: boolean) {
 }
 
 /** "1 page", or the count of options. */
-export const optionsOf = (d: Listed) => (d.pages === 1 ? '1 page' : `${d.pages} options`);
+export const optionsOf = (d: Pick<Listed, 'pages'>) => (d.pages === 1 ? '1 page' : `${d.pages} options`);
 
 /** The Designs tab: the chat's designs, newest first, each opening in its own tab. */
 export function Designs({
@@ -319,13 +319,12 @@ function NoteBox({
 }
 
 /**
- * A design's tab: its name, A, B, C for its options, and the option's page as it looks, drawn again when it or a
+ * A design's tab: who drew it, A, B, C for its options, and the option's page as it looks, drawn again when it or a
  * file it may use changed, seen as a step or turn of the chat ends. While a question asks for a pick in it, its options
  * are the question's choices, each with Pick; else its pages in their files' order. Side by side when the panel is
  * wide enough.
  */
 export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }: Props) {
-  const name = design.crumbs.at(-1) ?? design.path;
   const [pages, setPages] = useState<FileEntry[]>();
   const [side, setSide] = useState(false);
   const [wide, setWide] = useState(false);
@@ -342,6 +341,7 @@ export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }
     return () => seen.disconnect();
   }, []);
   const w = written(room, design.path.replace(/[\\/][^\\/]*$/, '')).get(pathKey(design.path));
+  const by = room.members.find((m) => m.agent === w?.agent);
   const look = useLook(room, open);
   // When the newest file the pages share changed (a style sheet, a file in a folder of the design): a change there
   // draws each page again, a change to one page only that page.
@@ -433,9 +433,11 @@ export function DesignTab({ chat, design, room, open, onShow, onAnswer, onNote }
   return (
     <div className="filetab design-tab" ref={tab}>
       <div className="filetab-path design-bar">
-        <DesignsMark />
-        <span>
-          <strong>{name}</strong>
+        {/* The tab names the design; its bar says who drew it and how many options it has. */}
+        <span className="design-by">
+          {by && <Face agent={{ id: by.agent, name: by.name }} size={16} />}
+          {by && `${by.name} · `}
+          {pages && optionsOf({ pages: options.length })}
         </span>
         {options.length > 1 && (
           <fieldset className="plugins-kind design-options" aria-label="Options">

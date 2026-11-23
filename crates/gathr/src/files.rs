@@ -200,11 +200,12 @@ pub fn tree(conn: &Connection, data: &Path, chat: &str) -> Result<Tree, Error> {
         });
         path.is_dir().then_some(Part { name, path, agent })
     };
-    let own: Option<String> = conn
+    // The project goes by its name, as everywhere else, not its folder's.
+    let own: Option<(String, String)> = conn
         .query_row(
-            "SELECT p.folder FROM chats c JOIN projects p ON p.id = c.project_id WHERE c.id = ?1",
+            "SELECT p.folder, p.name FROM chats c JOIN projects p ON p.id = c.project_id WHERE c.id = ?1",
             [chat],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
     let shared = folders::shared_of(conn, data, chat)?;
@@ -215,7 +216,7 @@ pub fn tree(conn: &Connection, data: &Path, chat: &str) -> Result<Tree, Error> {
         }
     }
     Ok(Tree {
-        project: own.and_then(|own| part(PathBuf::from(own), None, None)),
+        project: own.and_then(|(folder, name)| part(PathBuf::from(folder), Some(name), None)),
         shared: part(shared, Some(folders::SHARED.into()), None),
         designs: part(
             folders::designs_of(conn, data, chat)?,
