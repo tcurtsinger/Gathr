@@ -19,6 +19,7 @@ import {
   ComposerToolbar,
   Composer as Frame,
 } from '@/components/assistant-ui/elements/composer';
+import { Dropdown } from './Dropdown';
 import { Face } from './Face';
 import { FileTiles, LocalTile } from './FileTile';
 import { MAX_FILES, MOST } from './files';
@@ -45,6 +46,12 @@ interface Props {
   people?: readonly Person[];
   /** By Send once something is typed: who gets it, each, and those who join the chat by it (0028). */
   to?: readonly { id: string; name: string; joins?: boolean }[];
+  /**
+   * Who a message that names nobody can go to: with `onPick`, a chip by Send says who gets it before anything is
+   * typed, and opens to pick another. The lead is tagged.
+   */
+  choices?: readonly { id: string; name: string; lead?: boolean }[];
+  onPick?: (agent: string) => void;
   /** What its field is called: "Message" at the chat's foot, "Reply" at a thread's (0076). */
   label?: string;
   /** Placed at a thread's foot: a cross and Escape close it. */
@@ -68,7 +75,9 @@ const NONE: readonly Picked[] = [];
  */
 export function Composer(props: Props) {
   const { draft, picks = NONE, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to } = props;
-  const { label: name = 'Message', onClose, files = NO_FILES, onFiles, off } = props;
+  const { label: name = 'Message', onClose, files = NO_FILES, onFiles, off, choices, onPick } = props;
+  // The chip stands while the message names nobody: names picked with "@" are said as "To Ann and Bo" once typed.
+  const chip = !!onPick && !!choices && choices.length > 1 && to?.length === 1 && picks.length === 0 && to[0];
   const canSend = draft.trim().length > 0 || files.length > 0;
   // Why the last files added weren't all taken, until the next are.
   const [note, setNote] = useState('');
@@ -243,15 +252,38 @@ export function Composer(props: Props) {
             )}
           </ComposerActions>
           <ComposerActions>
-            {!!to?.length && canSend && (
-              <span className="composer-to" role="status">
-                <span className="composer-faces">
-                  {to.map((p) => (
-                    <Face key={p.id} agent={{ id: p.id, name: p.name }} size={20} />
-                  ))}
+            {chip ? (
+              <Dropdown
+                aria-label="To"
+                side="top"
+                className="composer-pick"
+                value={chip.id}
+                onChange={onPick as (agent: string) => void}
+                choices={(choices ?? []).map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  icon: <Face agent={c} size={16} />,
+                }))}
+                shown={
+                  <span className="composer-pick-who">
+                    <Face agent={chip} size={20} />
+                    <b>{chip.name}</b>
+                    {choices?.some((c) => c.id === chip.id && c.lead) && <small>Lead</small>}
+                  </span>
+                }
+              />
+            ) : (
+              !!to?.length &&
+              canSend && (
+                <span className="composer-to" role="status">
+                  <span className="composer-faces">
+                    {to.map((p) => (
+                      <Face key={p.id} agent={{ id: p.id, name: p.name }} size={20} />
+                    ))}
+                  </span>
+                  <span className="composer-who">{sign(to)}</span>
                 </span>
-                <span className="composer-who">{sign(to)}</span>
-              </span>
+              )
             )}
             {onClose && (
               <IconButton aria-label="Close" className="composer-close" onClick={onClose}>

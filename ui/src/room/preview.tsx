@@ -2,7 +2,7 @@ import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { BoardLine, Member, Message, Question, ToolBody, Turn } from '../api';
 import { Composer } from '../components/Composer';
-import type { FaceOf } from '../components/Face';
+import { type FaceOf, KnownFaces } from '../components/Face';
 import type { Picked } from '../components/mention';
 import { WorkspaceToggle } from '../components/workspace';
 import { TopLine } from '../TopLine';
@@ -213,6 +213,7 @@ function Preview() {
   const [state, setState] = useState(room);
   const [asking, setAsking] = useState<number | null>();
   const [sidebar, setSidebar] = useState(true);
+  const [chosen, setChosen] = useState('mira');
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
   const everyone = people(members, agents);
   const answer = async ({ id }: { id: number }, pick?: string, words?: string) =>
@@ -225,6 +226,7 @@ function Preview() {
       ),
     }));
   const acts = {
+    answer,
     approve: (request: string) =>
       setState((s) => ({ ...s, approvals: s.approvals.filter((a) => a.request !== request) })),
     ask: setAsking,
@@ -265,9 +267,11 @@ function Preview() {
             picks={draft.picks}
             onDraft={(text, picks) => setDraft({ text, picks })}
             onSend={() => setDraft({ text: '', picks: [] })}
-            hint="Message the team"
+            hint={`Message ${team.find((t) => t.id === chosen)?.name}`}
             people={team}
-            to={draft.picks.length ? draft.picks : team.slice(0, 1)}
+            to={draft.picks.length ? draft.picks : team.filter((t) => t.id === chosen)}
+            choices={members.map((m) => ({ id: m.agent, name: m.name, lead: m.role === 'supervisor' }))}
+            onPick={setChosen}
           />
         </Room>
       </main>
@@ -279,6 +283,8 @@ function Preview() {
 if (location.hash === '#light') document.documentElement.classList.add('light');
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    <Preview />
+    <KnownFaces.Provider value={new Map(agents.map((a) => [a.id, a]))}>
+      <Preview />
+    </KnownFaces.Provider>
   </StrictMode>,
 );

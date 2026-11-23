@@ -25,17 +25,19 @@ export type OnAnswer = (
 ) => Promise<unknown>;
 
 /**
- * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open,
- * Answer, which opens the questions panel on it. Answered, the answer sits under it; closed, it says so.
+ * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open, its
+ * choices as rows to pick and Answer (or, with no `onAnswer`, Answer, which opens the questions panel on it).
+ * Answered, the answer sits under it; closed, it says so.
  */
 export function QuestionCard(props: {
   question: Question;
   people: People;
   onOpen: (id: number) => void;
+  onAnswer?: OnAnswer;
   /** Whether a line runs down from its picture to the next card. */
   joined?: boolean;
 }) {
-  const { question: q, people, onOpen, joined } = props;
+  const { question: q, people, onOpen, onAnswer, joined } = props;
   const open = waits(q);
   const answer = split(q.words ?? '');
   return (
@@ -64,7 +66,9 @@ export function QuestionCard(props: {
           )}
         </header>
         <Words className="room-body" text={q.question} chat={q.chat} names={people.names} agent={q.agent} />
-        {open ? (
+        {open && onAnswer ? (
+          <Choose question={q} onAnswer={onAnswer} />
+        ) : open ? (
           <div className="room-asks">
             <Button type="button" variant="outline" size="sm" data-answer={q.id} onClick={() => onOpen(q.id)}>
               Answer
@@ -86,6 +90,81 @@ export function QuestionCard(props: {
           </div>
         )}
       </article>
+    </div>
+  );
+}
+
+/** The words the person writes instead of a choice: the last row, "Something else…". */
+const OWN = '\u0000own';
+
+/**
+ * A question's answer on its card: a row per choice and "Something else…", then Answer. Something else opens a box
+ * for the person's own words, which sends them. A question with no choices has the box alone.
+ */
+function Choose({ question: q, onAnswer }: { question: Question; onAnswer: OnAnswer }) {
+  const [picked, setPicked] = useState<string>(q.choices.length ? '' : OWN);
+  const [words, setWords] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const [refused, setRefused] = useState<Failure>();
+  useCard(refused);
+  const send = () => {
+    if (sending) return;
+    setSending(true);
+    const own = picked === OWN;
+    onAnswer(q, own ? undefined : picked, own ? words : undefined, own ? files : undefined).then(
+      () => setRefused(undefined),
+      (f: Failure) => {
+        setRefused(f);
+        setSending(false);
+      },
+    );
+  };
+  const rows = [...q.choices, ...(q.choices.length ? [{ label: OWN, detail: null }] : [])];
+  return (
+    <div className="room-choose">
+      {rows.length > 0 && (
+        <div className="room-rows">
+          {rows.map((c) => (
+            <button
+              key={c.label}
+              type="button"
+              aria-pressed={picked === c.label}
+              className="room-row"
+              data-own={c.label === OWN || undefined}
+              disabled={sending}
+              onClick={() => setPicked(c.label)}
+            >
+              <i aria-hidden="true" />
+              <span>{c.label === OWN ? 'Something else…' : c.label}</span>
+              {c.detail && <small>{c.detail}</small>}
+            </button>
+          ))}
+        </div>
+      )}
+      {picked === OWN ? (
+        <Composer
+          draft={words}
+          onDraft={(text) => setWords(text)}
+          files={files}
+          onFiles={setFiles}
+          onSend={send}
+          hint="Your answer"
+          label="Answer"
+        />
+      ) : (
+        <div className="room-choose-foot">
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-full"
+            disabled={!picked || sending}
+            onClick={send}
+          >
+            Answer
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
