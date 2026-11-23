@@ -29,6 +29,7 @@ pub mod fetch;
 pub mod files;
 pub mod folders;
 pub mod friction;
+pub mod from_app;
 pub mod handoffs;
 pub mod http;
 pub mod ids;

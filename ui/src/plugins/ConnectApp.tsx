@@ -42,7 +42,7 @@ export function ConnectApp({ connect }: { connect: Connect | null }) {
         {app === 'other'
           ? 'Give the app this program and its arguments as an MCP server.'
           : 'Run this line in a terminal on this PC.'}{' '}
-        The app can then add skills, tools, agents and projects.
+        The app can then send work to your team and add skills, tools, agents and projects.
       </p>
       <fieldset className="plugins-kind connect-apps" aria-label="App">
         {apps.map((a) => (

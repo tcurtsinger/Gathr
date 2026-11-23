@@ -1,8 +1,8 @@
 //! Gathr's tools for an AI app outside Gathr on this PC, at `/api/mcp`: the app runs `gathr connect`, which passes its
 //! MCP messages here with the service's token, so this endpoint is guarded as `/api` is, never by an engine's token.
 //! Each tool does what the window or an agent does, through the same code, with no approval in Gathr: the app's own
-//! permission prompt is the gate. What it adds says which app added it (`gathr::added_by`), by the name `gathr connect`
-//! sends in `x-gathr-app`.
+//! permission prompt is the gate. What it adds says which app added it (`gathr::added_by`), and what it sends which app
+//! sent it (`gathr::from_app`), by the name `gathr connect` sends in `x-gathr-app`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -22,6 +22,7 @@ use serde_json::{Value, json};
 
 use super::add;
 use super::propose::{drafted, listed_model, project_name, team};
+use super::work::{self, ReadChat, SendTo};
 use crate::api::{State, Trace};
 
 pub const PATH: &str = "/api/mcp";
@@ -202,6 +203,37 @@ impl Outside {
             .respond(&parts, "add_project", (&trace, started), made)
             .await)
     }
+
+    #[tool(
+        description = "Send words to the person's team as the person would: to their assistant, to a project's lead in a \
+                       new chat, or on in a chat. Waits a while for the answer."
+    )]
+    async fn send(
+        &self,
+        Parameters(ask): Parameters<SendTo>,
+        Extension(parts): Extension<Parts>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let (started, trace) = (Instant::now(), gathr::ids::trace_id());
+        let sent = work::send(&self.state, &trace, ask, &app_of(&parts)).await;
+        Ok(self.respond(&parts, "send", (&trace, started), sent).await)
+    }
+
+    #[tool(
+        description = "How a chat stands and what its agents said since your last message there. With no chat, the \
+                       person's chats."
+    )]
+    async fn read(
+        &self,
+        Parameters(ask): Parameters<ReadChat>,
+        Extension(parts): Extension<Parts>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let (started, trace) = (Instant::now(), gathr::ids::trace_id());
+        let read = match ask.chat {
+            Some(chat) => work::read(&self.state, chat.trim(), &app_of(&parts)).await,
+            None => work::chats(&self.state).await,
+        };
+        Ok(self.respond(&parts, "read", (&trace, started), read).await)
+    }
 }
 
 impl Outside {
@@ -251,7 +283,7 @@ impl ServerHandler for Outside {
 }
 
 /// Runs `work` on the database.
-async fn db<T: Send + 'static>(
+pub(super) async fn db<T: Send + 'static>(
     s: &State,
     work: impl FnOnce(&mut rusqlite::Connection) -> Result<T, gathr::Error> + Send + 'static,
 ) -> Result<T, String> {

@@ -19,7 +19,7 @@ impl Task {
         chat: String,
         (text, picks, target): (String, Option<String>, Target),
         (agent, agents): (Option<String>, usize),
-        trace: String,
+        (trace, app): (String, Option<String>),
     ) -> Result<Value, Failed> {
         // A reply kept unsaved goes in first, before the message that follows it.
         self.save_unsaved().await;
@@ -27,13 +27,16 @@ impl Task {
         let opened = match (target.is_reply(), agents > 1) {
             (true, _) => Opened::Reply,
             (false, true) => Opened::Picked,
+            (false, false) if app.is_some() => Opened::App,
             (false, false) => Opened::Person,
         };
         if let Some(ids) = self.steerable(&chat, agent.as_deref()) {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
             // Never sent on to the engine unsaved: its answer would answer a message nobody has.
-            let saved = self.db_person_message(&ids, &text, picks, target).await;
+            let saved = self
+                .db_person_message(&ids, &text, (picks, target), app)
+                .await;
             let (message, read) = saved.map_err(|why| self.fail_send(&ids, why))?;
             if let Err(e) = self.write_user(&read, Some(&ids.turn)).await {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
@@ -64,10 +67,13 @@ impl Task {
             let of = (row.agent.as_deref(), row.answers.as_deref());
             store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, opened)?;
             let (chat, turn, picks) = (&row.chat, &row.turn, picks.as_deref());
-            let message = match replying.is_reply() {
+            let mut message = match replying.is_reply() {
                 true => store::add_reply(&tx, chat, turn, &said, picks, &replying)?,
                 false => store::add_person_message(&tx, chat, turn, &said, picks)?,
             };
+            if let Some(app) = &app {
+                gathr::from_app::mark(&tx, &mut message, app)?;
+            }
             let id = message["id"].as_str().unwrap_or_default().to_string();
             let read = replies::read_as(&tx, &id, &said)?;
             tx.commit()?;

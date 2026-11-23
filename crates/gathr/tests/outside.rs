@@ -1,9 +1,10 @@
 //! The endpoint for AI apps outside Gathr (`/api/mcp`, reached through `gathr connect`) is guarded as `/api` is: it
-//! takes the service's own token, never a running engine's, and nothing without one.
+//! takes the service's own token, never a running engine's, and nothing without one. What an app sends costs the
+//! person's tokens once: one send, one message and one turn; a read, none.
 
 mod common;
 
-use common::{first_token, held_recording, team};
+use common::{first_token, held_recording, recording, rows, team};
 use gathr::http;
 use serde_json::{Value, json};
 
@@ -57,7 +58,64 @@ fn an_outside_app_needs_the_services_token_and_never_an_engines() {
     names.sort();
     assert_eq!(
         names,
-        ["add_agent", "add_project", "add_skill", "add_tool", "look"]
+        [
+            "add_agent",
+            "add_project",
+            "add_skill",
+            "add_tool",
+            "look",
+            "read",
+            "send"
+        ]
     );
     std::fs::write(data.0.join("go"), "").unwrap();
+}
+
+/// A `tools/call` at `/api/mcp`, as `gathr connect` passes one on for the app it names: the tool's text, and whether
+/// it failed.
+fn call(port: u16, token: &str, tool: &str, arguments: Value) -> (String, bool) {
+    let body = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": { "name": tool, "arguments": arguments } });
+    let auth = format!("Bearer {token}");
+    let headers = [
+        ("Authorization", auth.as_str()),
+        ("Content-Type", "application/json"),
+        ("Accept", "application/json, text/event-stream"),
+        ("x-gathr-app", "Garden Planner"),
+    ];
+    let answer = http::post(port, "/api/mcp", &headers, &body.to_string()).unwrap();
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let result = answer.json()["result"].clone();
+    let text = result["content"][0]["text"].as_str().unwrap_or_default();
+    (text.to_string(), result["isError"] == true)
+}
+
+#[test]
+fn one_send_makes_one_message_and_one_turn_and_a_read_makes_none() {
+    let data = common::TempDir::new();
+    let (service, _, _) = team(&data.0, &recording("signed_in"), &[]);
+    let (port, token) = (service.info.port, service.info.token.clone());
+    let made = || {
+        let sql = "SELECT (SELECT count(*) FROM messages WHERE role = 'user') AS messages,
+                          (SELECT count(*) FROM turns) AS turns, (SELECT group_concat(app) FROM from_app) AS apps";
+        let row = rows(&data.0, sql)[0].clone();
+        (
+            row["messages"].clone(),
+            row["turns"].clone(),
+            row["apps"].clone(),
+        )
+    };
+
+    let (sent, failed) = call(port, &token, "send", json!({ "words": "Plan the beds" }));
+    assert!(!failed, "{sent}");
+    assert!(sent.ends_with(": done.\n\nLead: Hi!"), "{sent}");
+    let once = (json!(1), json!(1), json!("Garden Planner"));
+    assert_eq!(made(), once);
+
+    let chat = sent.trim_start_matches("Chat ").split(':').next().unwrap();
+    for asked in [json!({ "chat": chat }), json!({})] {
+        let (read, failed) = call(port, &token, "read", asked);
+        assert!(!failed, "{read}");
+    }
+    assert_eq!(made(), once, "a read starts nothing");
 }

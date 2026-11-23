@@ -3,6 +3,7 @@ import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useStat
 import { Button } from '@/components/ui/button';
 import { api, type Member, type Message, type Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
+import { ConnectMark } from '../components/ConnectMark';
 import { DesignsMark } from '../components/DesignsMark';
 import { Face, type FaceOf } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
@@ -187,6 +188,7 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
         time={said.message.time}
         scheduled={said.message.scheduled}
         from={said.message.from}
+        app={said.message.app}
         text={words}
         said={[said.message]}
         ctx={ctx}
@@ -530,6 +532,8 @@ interface BarProps {
   scheduled?: string;
   /** A project's brief: the assistant that wrote it, said with its face in place of the time. */
   from?: string;
+  /** Words an AI app sent for the person: the app, said with Connect an app's mark in place of the time. */
+  app?: string;
   /** The words Copy takes; none, no Copy. */
   text: string;
   /** The messages whose thumbs-ups are counted. */
@@ -544,7 +548,7 @@ interface BarProps {
  * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
+function Bar({ time, scheduled, from, app, text, said, last, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -567,6 +571,11 @@ function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
         <span className="room-time room-from">
           <Face agent={ctx.people.face(from)} size={16} />
           From {ctx.people.name(from)}
+        </span>
+      ) : app ? (
+        <span className="room-time room-from">
+          <ConnectMark className="room-bar-icon" />
+          From {app}
         </span>
       ) : scheduled ? (
         <span className="room-time room-scheduled">
