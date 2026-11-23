@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
-import { mono, paper } from "./surfaces";
+import { paper } from "./surfaces";
 import { clamp, take } from "../utils/range";
 
 export type ChartVariant = "area" | "line" | "bars";
@@ -27,6 +27,9 @@ export function Chart({
   variant = "area",
   trend,
   upIsGood = true,
+  title,
+  names,
+  against,
   className,
   ...props
 }: Omit<
@@ -40,6 +43,7 @@ export function Chart({
   | "variant"
   | "trend"
   | "upIsGood"
+  | "title"
 > & {
   label: string;
   value: string;
@@ -51,6 +55,12 @@ export function Chart({
   trend?: "up" | "down" | "flat" | undefined;
   /** Whether a rise is good news, as for revenue, or bad news, as for latency. */
   upIsGood?: boolean | undefined;
+  /** Gathr: the chart's name, first in its head, with `label` quiet after it. */
+  title?: string | undefined;
+  /** Gathr: a name for each point ("Jan", "Feb"…): the first and last under the chart, and the high point's. */
+  names?: readonly string[] | undefined;
+  /** Gathr: what `delta` is measured against, said after it as "vs Oct". */
+  against?: string | undefined;
 }) {
   const shown = take(points, clamp(visibleCount, 1, points.length));
   const y = scale(points);
@@ -64,6 +74,14 @@ export function Chart({
     ? `M ${PAD},${H - PAD} ${coords.map((c) => `L ${c.x},${c.y}`).join(" ")} L ${last.x},${H - PAD} Z`
     : "";
   const lastIndex = shown.length - 1;
+  // Gathr: the points' names, when there is one for each; the high point named when it isn't the last.
+  const named = names?.length === points.length ? names.slice(0, shown.length) : undefined;
+  const high = Math.max(...shown);
+  const highAt = shown.indexOf(high);
+  const peak =
+    named && highAt !== lastIndex && named[highAt]
+      ? { at: highAt, value: high, name: named[highAt] }
+      : undefined;
   const direction =
     trend ??
     (delta === undefined
@@ -89,30 +107,34 @@ export function Chart({
 
       {...props}
     >
-      <div className="flex items-baseline justify-between">
-        <span className={cn(mono, "text-muted-foreground")}>{label}</span>
+      <div className="flex items-baseline justify-between gap-2 text-[12.5px]">
+        {title && <span className="text-[13px] font-medium">{title}</span>}
+        <span className="text-muted-foreground">{label}</span>
+      </div>
+
+      <div className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] tabular-nums">
+        <span className="text-2xl font-medium tracking-tight">{value}</span>
         {delta !== undefined && (
           <span
             data-trend={direction}
             className={cn(
-              mono,
-              "tabular-nums",
+              "font-medium",
               good === undefined
                 ? "text-muted-foreground"
                 : good
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-red-600 dark:text-red-400",
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-red-700 dark:text-red-400",
             )}
           >
             {delta}
           </span>
         )}
+        {delta !== undefined && against && (
+          <span className="text-muted-foreground">vs {against}</span>
+        )}
       </div>
 
-      <span className="text-2xl font-medium tracking-tight tabular-nums">
-        {value}
-      </span>
-
+      <div className={cn("relative", named && "mt-3")}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
@@ -179,6 +201,24 @@ export function Chart({
           </>
         )}
       </svg>
+      {peak && (
+        <span
+          className="absolute -translate-x-1/2 -translate-y-full pb-1 text-[11.5px] font-medium whitespace-nowrap tabular-nums"
+          style={{
+            left: `${(x(peak.at) / W) * 100}%`,
+            top: `${(y(peak.value) / H) * 88}px`,
+          }}
+        >
+          {peak.value.toLocaleString()} · {peak.name}
+        </span>
+      )}
+      </div>
+      {named && (
+        <div className="text-muted-foreground -mt-1.5 flex justify-between text-[11.5px]">
+          <span>{named[0]}</span>
+          <span>{named.at(-1)}</span>
+        </div>
+      )}
     </div>
   );
 }

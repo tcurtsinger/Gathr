@@ -288,6 +288,34 @@
   margin: 0;
   color: var(--muted-foreground);
 }
+/* Why a turn ended short (the owner's pick, 2026-11-23): a soft red line under its words, its reason, then Retry. */
+.room-why-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 2px 18px 10px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 10px;
+  background: var(--danger-surface);
+  color: color-mix(in oklab, var(--foreground) 88%, var(--background));
+  font-size: 13.5px;
+}
+.room-card > .room-why-line:first-child {
+  margin-top: 10px;
+}
+.room-reply .room-why-line {
+  margin: 6px 0 2px;
+}
+.room-why-line > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--danger);
+}
+.room-why-line > span {
+  flex: 1;
+  min-width: 0;
+}
 
 /* What the turn kept: a note, a tool, a skill. A quiet line each, under its words; a click opens it. */
 .room-noted {
@@ -343,6 +371,17 @@
   color: var(--foreground);
   font-weight: 500;
 }
+/* A note's or a schedule's line wraps as text, its later lines under the label, not in a column beside it. */
+.room-kept-line:not(.room-kept-row) {
+  display: block;
+  padding-left: 26px;
+  text-indent: -20px;
+}
+.room-kept-line:not(.room-kept-row) > :first-child {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
 /* "Scheduled weekdays at 9:00:" stays one line: the words beside it wrap. */
 .room-kept-when {
   flex: none;
@@ -381,6 +420,11 @@
 }
 .room-step-list li {
   display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.room-step-name {
+  display: flex;
   gap: 8px;
   min-width: 0;
 }
@@ -388,8 +432,15 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
-.room-step-list li[data-status="error"] {
+.room-step-list li[data-status="error"] > .room-step-name {
   color: var(--danger);
+}
+/* A failed step's first line of output, under it, whole. */
+.room-step-list .room-step-out {
+  overflow: visible;
+  color: var(--muted-foreground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .room-step-list code {
   overflow: hidden;
@@ -515,7 +566,13 @@
 }
 /* What a turn waits on the person for, at the foot of its card. */
 .room-asks {
-  padding: 0 14px 12px;
+  padding: 0 18px 12px;
+}
+/* An approval in the card's one inset (theme.css), its edges with the card's other blocks. */
+.room-asks [data-slot="approval-card"] {
+  border: 1px solid var(--inset-border);
+  border-radius: var(--inset-radius);
+  background: var(--background);
 }
 .room-reply .room-asks {
   padding: 6px 0 0;

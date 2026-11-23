@@ -29,12 +29,18 @@ function changedOf(steps: Step[]): Changed[] {
   return [...files.values()];
 }
 
-/** Lines added and removed, side by side. */
+/**
+ * Lines added and removed, side by side; a side with none says nothing, unless both have none. A file's row keeps both
+ * places, so the numbers stay in their columns.
+ */
 function Counts({ added, removed, each }: { added: number; removed: number; each?: boolean }) {
+  const plus = added > 0 || removed === 0;
   return (
     <span className={each ? 'files-card-counts files-card-each' : 'files-card-counts'}>
-      <span className="files-card-plus">+{added.toLocaleString('en')}</span>
-      <span className="files-card-minus">−{removed.toLocaleString('en')}</span>
+      {(plus || each) && <span className="files-card-plus">{plus && `+${added.toLocaleString('en')}`}</span>}
+      {(removed > 0 || each) && (
+        <span className="files-card-minus">{removed > 0 && `−${removed.toLocaleString('en')}`}</span>
+      )}
     </span>
   );
 }
@@ -70,7 +76,7 @@ export function FilesCard({ steps, agent, onView }: Props) {
           <b>
             Edited {files.length} {files.length === 1 ? 'file' : 'files'}
           </b>
-          <Counts added={added} removed={removed} />
+          {files.length > 1 && <Counts added={added} removed={removed} />}
         </span>
         {onView && (
           <Button type="button" size="xs" variant="outline" onClick={onView}>

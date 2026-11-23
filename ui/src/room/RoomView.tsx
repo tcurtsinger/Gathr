@@ -7,6 +7,7 @@ import {
   type Chat,
   type Failure,
   type Member,
+  type Message,
   type Named,
   type PauseScope,
   type Pauses,
@@ -173,6 +174,9 @@ export function RoomView(props: Props) {
       openChanges(chat.id);
     },
     answer: chat.archived ? undefined : answer,
+    retry: chat.archived
+      ? undefined
+      : (m: Message, agent: string) => send(m.body as string, agent, m.picks ?? undefined),
     like: chat.archived
       ? undefined
       : (message: string, give: boolean) =>

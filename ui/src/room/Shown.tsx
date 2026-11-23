@@ -176,6 +176,9 @@ function draw(chat: string, block: Block) {
         label={chart.label}
         value={chart.value}
         delta={chart.change}
+        against={typeof chart.vs === 'string' ? chart.vs : undefined}
+        title={block.title}
+        names={Array.isArray(chart.labels) ? chart.labels.map(String) : undefined}
         points={chart.points}
         visibleCount={chart.points.length}
         variant={chart.style ?? 'area'}
@@ -204,7 +207,8 @@ function draw(chat: string, block: Block) {
 }
 
 /**
- * What an agent showed in its turn, under its words, each with its title as a quiet line above.
+ * What an agent showed in its turn, under its words, each with its title as a quiet line above (a chart's and a
+ * diagram's is in their own head).
  * Charts that follow one another sit side by side in one wrapping row.
  */
 export function Shown({ chat, blocks }: { chat: string; blocks: Block[] }) {
@@ -220,7 +224,7 @@ export function Shown({ chat, blocks }: { chat: string; blocks: Block[] }) {
   if (!runs.length) return null;
   const item = ([i, b, d]: [number, Block, ReactNode]) => (
     <div key={i} className="shown-block">
-      {b.title && b.kind !== 'diagram' && <div className="shown-title">{b.title}</div>}
+      {b.title && b.kind !== 'diagram' && b.kind !== 'chart' && <div className="shown-title">{b.title}</div>}
       {d}
     </div>
   );

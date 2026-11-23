@@ -1,4 +1,4 @@
-import { BookOpen, Check, ChevronRight, Copy, Plug, ThumbsUp } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, CircleAlert, Copy, Plug, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Member, type Message, type Reaction } from '../api';
@@ -76,6 +76,8 @@ export interface Acts {
   changes?: () => void;
   /** Answers a question from its card; unset, the card's Answer opens the questions panel. */
   answer?: OnAnswer;
+  /** Sends the person's message that started a failed turn again, to the same agent. Unset in an archived chat. */
+  retry?: (message: Message, agent: string) => void;
 }
 
 /** A search hit: the chat it opened and the message in it. */
@@ -115,6 +117,7 @@ export function Room({ chat, project, state, people, acts, found, header, after,
     acts,
     found: found?.message,
     notes: notesOf(state.messages, state.turns),
+    openers: openersOf(state.messages),
   };
   return (
     <>
@@ -160,6 +163,15 @@ interface Ctx {
   found?: string;
   /** The chat's notes on designs: a message that begins with one draws it above its words. */
   notes: Made[];
+  /** The person's message that started each turn, by the turn: what Retry sends again. */
+  openers: Map<string, Message>;
+}
+
+/** The person's message that started each turn, by the turn. */
+function openersOf(messages: Message[]) {
+  const by = new Map<string, Message>();
+  for (const m of messages) if (m.role === 'user' && m.turn && typeof m.body === 'string') by.set(m.turn, m);
+  return by;
 }
 
 /** Whether the item's words hold the message: `data-found` for it. */
@@ -301,8 +313,7 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
   // A turn sent to no agent has none: it is drawn as "An agent".
   const agent = card.turn.agent ?? '';
   const running = working(card);
-  // Once the turn ends, the files card is the record of the steps that changed a file: the line holds the rest.
-  const rest = running ? card.steps : card.steps.filter((s) => 'note' in s || !s.changed?.length);
+  const rest = work(card.steps, running);
   // A turn that waits on the person's approval has the blue frame, as a question does, and its clock stops.
   const needs = ctx.approvals.some((a) => a.turn === card.id);
   return (
@@ -327,11 +338,12 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
             agent={agent}
           />
         )}
-        {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
+        {!card.text && card.turn.why && !short(card) && <p className="room-body room-why">{card.turn.why}</p>}
+        <Why card={card} ctx={ctx} />
         <Shown chat={ctx.chat} blocks={card.blocks} />
         {!running && <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />}
         <Kept card={card} ctx={ctx} />
-        {rest.length > 0 && <Steps steps={rest} running={running} />}
+        {rest.length > 0 && <Steps steps={rest} running={running} failed={card.turn.status === 'failed'} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
       {running && (
@@ -375,9 +387,77 @@ function State({ card }: { card: Card }) {
   );
 }
 
-/** All of the turn's tool runs and working notes as one line; a click opens them, in the order they came. */
-function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
-  const [open, setOpen] = useState(false);
+/** Whether a turn ended short of done with a reason to say: it failed, was stopped or waits for a sign-in. */
+const short = (card: Card) => !!card.turn.why && !working(card) && card.turn.status !== 'done';
+
+/**
+ * Why a turn ended short, under its words (the owner's pick, 2026-11-23): a soft red line with the reason and, on a
+ * failed turn the person's own message started (not a reply, a scheduled run or an outside app's), Retry, which sends
+ * that message again to the same agent.
+ */
+function Why({ card, ctx }: { card: Card; ctx: Ctx }) {
+  if (!short(card)) return null;
+  const opener = ctx.openers.get(card.id);
+  const agent = card.turn.agent;
+  const retry = ctx.acts.retry;
+  const again =
+    card.turn.status === 'failed' &&
+    opener &&
+    !opener.reply_to &&
+    !opener.scheduled &&
+    !opener.app &&
+    agent &&
+    retry
+      ? () => retry(opener, agent)
+      : undefined;
+  return (
+    <div className="room-why-line">
+      <CircleAlert aria-hidden="true" />
+      <span>{card.turn.why}</span>
+      {again && (
+        <Button type="button" size="xs" variant="outline" onClick={again}>
+          Retry
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The steps the line counts and lists. Gathr's own calls whose answer the card already shows (a note, a tool, a skill
+ * or a schedule kept, a table or a chart shown) and the engine's tool search are left out (the owner's pick,
+ * 2026-11-23); once the turn ends, so are the steps that changed a file, which the files card holds.
+ */
+function work(steps: Step[], running: boolean) {
+  return steps.filter((s) => {
+    if ('note' in s) return true;
+    if (HIDDEN.has(s.tool) || keptOf([s]).length) return false;
+    return running || !s.changed?.length;
+  });
+}
+const HIDDEN = new Set([
+  'ToolSearch',
+  'mcp__gathr__show',
+  'mcp__gathr__propose_project',
+  'mcp__gathr__propose_agent',
+]);
+
+/** A tool as the steps list names it: an MCP tool's `mcp__espn__get_roster` as "espn · get roster". */
+function toolName(tool: string) {
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
+  return mcp ? `${mcp[1]} · ${mcp[2].replaceAll('_', ' ')}` : tool;
+}
+
+/** A failed step's first line of what came back. */
+const failedLine = (s: Step) =>
+  'tool' in s && s.status === 'error' ? s.result?.text.split('\n').find((l) => l.trim()) : undefined;
+
+/**
+ * All of the turn's tool runs and working notes as one line; a click opens them, in the order they came. A failed
+ * step shows its first line of output under it, and in a failed turn the list starts open.
+ */
+function Steps({ steps, running, failed }: { steps: Step[]; running: boolean; failed?: boolean }) {
+  const [open, setOpen] = useState(() => !!failed && steps.some((s) => failedLine(s)));
   return (
     <div className="room-steps">
       <button type="button" className="room-work" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -395,8 +475,11 @@ function Steps({ steps, running }: { steps: Step[]; running: boolean }) {
             ) : (
               // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
               <li key={i} data-status={s.status}>
-                <span>{s.input?.title ?? s.tool}</span>
-                {s.input?.text && <code>{s.input.text}</code>}
+                <span className="room-step-name">
+                  <span>{s.input?.title ?? toolName(s.tool)}</span>
+                  {s.input?.text && <code>{s.input.text}</code>}
+                </span>
+                {failedLine(s) && <code className="room-step-out">{failedLine(s)}</code>}
               </li>
             ),
           )}
@@ -778,6 +861,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
             agent={agent}
           />
         )}
+        <Why card={item} ctx={ctx} />
         <Shown chat={ctx.chat} blocks={item.blocks} />
         {!running && <FilesCard steps={item.steps} agent={agent} onView={ctx.acts.changes} />}
         <Kept card={item} ctx={ctx} />

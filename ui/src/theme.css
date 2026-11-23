@@ -71,4 +71,8 @@
 }
 :root {
   --hover-tint: color-mix(in oklab, var(--foreground) 7%, transparent);
+  /* The one inset for what sits in an agent's card (the owner's pick, 2026-11-23): a code block, a table, a chart, a
+     flow, math, a diagram, the files card and an approval. Its surface is the window's own background. */
+  --inset-radius: 10px;
+  --inset-border: color-mix(in oklab, var(--border) 70%, transparent);
 }

@@ -24,6 +24,10 @@ export interface Block {
     value: string;
     points: number[];
     change?: string;
+    /** What `change` is measured against: "Oct", "last year". */
+    vs?: string;
+    /** A name for each point, as many as the points: "Jan", "Feb"… */
+    labels?: string[];
     style?: 'line' | 'area' | 'bars';
     up_is_good?: boolean;
   };

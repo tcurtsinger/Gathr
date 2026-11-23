@@ -85,8 +85,8 @@ in the sidebar 14px; the time, the row under a message and a card's state 12 to 
 An agent's words (`markdown.css`, ported from SerenityOS): blocks 10px apart; a heading of any level a section
 label, 1.0625em at 600, 16px clear above; list dots 0.4em with the text 10px after, numbers muted, items 3px apart;
 a quote a 2px rule at its left, muted; inline code 0.84em on a 7% foreground chip with 4px corners; a code block
-and a table 13px; a table is one frame with 16px corners, its header small, monospace and muted over a hairline,
-its cells 10px by 16px with no lines between rows.
+13px, a table 13.5px; a table is one frame, its header 12.5px and muted over a hairline, its cells 10px by 16px with
+no lines between rows. Monospace is for code and commands only, never for labels or plain sentences.
 
 ## Layout
 
@@ -161,7 +161,10 @@ Blocking Settings uses the shared backdrop. Layers must not clip focused control
 Text actions use the prototype's shared 32px pill Button. Icon controls keep their
 contextual square or circular shape. Small controls use the 8px base radius;
 floating surfaces 16px; ComposerBar 24px with 10px padding. The person's bubble has 16px corners and
-10px 14px padding, at most 76% of the column; an agent's card 14px corners; a code block 8px.
+10px 14px padding, at most 76% of the column; an agent's card 14px corners. Everything framed inside a card (a
+code block, a table, a chart, a flow, math, a diagram, the files card, an approval) is one inset (`--inset-radius`,
+`--inset-border` in `theme.css`; the owner's pick, 2026-11-23): 10px corners, a 70% border hairline, on the window's
+own background in both themes.
 
 ## Components
 
@@ -198,20 +201,24 @@ apart.
   when it leads, and at the right "Working · 40s" in blue with the turning mark, counting every second, then
   a check and how long it took ("1m 12s"), or Stopped, Waiting for sign-in or Failed in words. Then its last
   words; while the turn runs they are muted, and a turn with no words shows its reason muted. A turn that
-  ended with nothing to say shows nothing.
+  failed, was stopped or waits for a sign-in with a reason shows it under its words as a soft red line (the danger
+  surface, 10px corners, an alert mark), with Retry at its right on a failed turn the person started, which sends
+  their message again to the same agent. A turn that ended with nothing to say shows nothing.
 - **Words an outside app sent** (Connect's `send`) are the same card under the app's logo, 28px (20px on a reply), and
   its brand as the name: "Claude", "Codex", or the name another app gave (`EngineLogo.tsx`'s `AppLogo`, Connect's
   mark for an app that is neither).
 - **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
   table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
   link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
-  row sit side by side), a flow as Gathr's own boxes (`room/Flow.tsx`: laid out by what follows what, 120px
-  wide, each growing down to hold its words, centred on its row), math as its Math block
+  row sit side by side; its title heads it with its label quiet after, then the value, the change and "vs Oct";
+  with a name per point, the first and last under it and the high point's beside it), a flow as Gathr's own boxes
+  (`room/Flow.tsx`: laid out by what follows what, 120px wide, each growing down to hold its words, centred on its
+  row and in the card; a done step has a check), math as its Math block, down the left, upright
   (`^` and `_` raised and lowered), a diagram in its Diagram frame (mermaid drawn by beautiful-mermaid in the
   window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
   that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, drawn only
-  while on or near the screen, with Open at its top right; each but a diagram with its title as a quiet 12.5px line
-  above, a diagram in its frame. A project or an agent the assistant proposes is a framed card there too
+  while on or near the screen, with Open at its top right; each but a chart or a diagram with its title as a quiet
+  12.5px line above. Flow, math and a diagram are the card's text width. A project or an agent the assistant proposes is a framed card there too
   (`room/Proposal.tsx`, 12px corners): the project's name over its folder in mono, a row per agent with its 20px
   face, or the agent's 28px face, name and description, then Account and Model; then Make project or Add agent and
   Change, which give way, once used, to a quiet line like a kept line's, "Made project Garden app" or "Added agent
@@ -223,13 +230,18 @@ apart.
   schedule's short name, not its words). A click opens Memory at the note's
   place, the tool's or skill's page in Plugins, or the schedule in Scheduled.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
-  ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed
-  one in the danger colour. The card of the files a turn changed (`room/FilesCard.tsx`) shows once the turn
+  ran 2 commands, fetched 1 page", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order,
+  a failed one in the danger colour with its first line of output under it (a failed turn's list starts open).
+  Gathr's own calls the card already shows (a kept line, a shown block, a proposal) and the engine's tool search
+  are neither counted nor listed, and an MCP tool reads "espn · get roster", never `mcp__…`. A card with nothing
+  else to list has no line. The card of the files a turn changed (`room/FilesCard.tsx`) shows once the turn
   ends, under its words and what it showed, and the steps it shows leave this line: Changes' mark, "Edited 3
   files" with lines added and removed, View changes (a small outline Button), then a row per file, its folders
-  muted and its name in the foreground, the first three, then "Show 2 more files" (Show fewer once open).
-- **The approval card** is the registry's, at the foot of the card that waits on it: "Allow Bash?" (or
-  "Allow adding a tool?"), the agent's name under it, the command or the file it would write, Gathr's own
+  muted and its name in the foreground, the first three, then "Show 2 more files" (Show fewer once open). With one
+  file the head has no counts (the row has them); a side with no lines ("−0") says nothing.
+- **The approval card** is the registry's, at the foot of the card that waits on it: "Run a command?", "Edit a
+  file?", "Write a file?", "Fetch a page?" for an engine's own tools, "Allow <tool>?" for any other (or "Allow
+  adding a tool?"), the agent's name under it, the command or the file it would write, Gathr's own
   reason when Gathr asks ("Writes outside the agent's folders. Allow covers files in … in this chat."),
   then Deny and Allow; Allowing… or Denying… while the answer is sent.
 - **The row under a message:** its time ("9:21", the person's clock; under a scheduled run's words, Scheduled's mark and

@@ -184,16 +184,18 @@
   padding: 0;
   border: 0;
   /* The same corners as the frame inside it: Streamdown clips the block's paint to its own. */
-  border-radius: 8px;
+  border-radius: var(--inset-radius);
   background: none;
 }
 .markdown [data-streamdown="code-block-header"] {
   display: none;
 }
-/* Room at the right for Copy, so it never covers the code. */
+/* The card's one inset (theme.css), with room at the right for Copy, so it never covers the code. */
 .markdown [data-streamdown="code-block-body"] {
   padding: 11px 46px 11px 12px;
-  border-radius: 8px;
+  border: 1px solid var(--inset-border);
+  border-radius: var(--inset-radius);
+  background: var(--background);
 }
 .markdown :has(> [data-streamdown="code-block-actions"]) {
   top: 5px;
@@ -208,18 +210,15 @@
 }
 /* A table is one quiet frame, the look of assistant-ui's Data table (the owner's pick, 2026-11-22) drawn on Gathr's own
    table so a cell still holds code, bold and links. Streamdown's two frames, the outer one tinted, become one: the
-   Data table's `paper` surface, 16px corners, and nothing between the frame and the rows. The rules near the top of this
+   card's one inset (theme.css), and nothing between the frame and the rows. The rules near the top of this
    file still hold: words kept whole, a wide table scrolling sideways inside the frame, headers wrapping, code on one
    line; and the column alignment the agent wrote is the cell's own style, which these rules leave alone. */
 .markdown [data-streamdown="table-wrapper"] {
   gap: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
-  border-radius: 16px;
-  background: var(--popover);
-}
-:root.light .markdown [data-streamdown="table-wrapper"] {
+  border: 1px solid var(--inset-border);
+  border-radius: var(--inset-radius);
   background: var(--background);
 }
 .markdown :has(> [data-streamdown="table"]) {
@@ -232,7 +231,7 @@
   border: 0;
 }
 .markdown [data-streamdown="table"] {
-  font-size: 13px;
+  font-size: 13.5px;
 }
 .markdown [data-streamdown="table"] thead tr {
   border-bottom: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
@@ -240,14 +239,13 @@
 .markdown [data-streamdown="table-header"] {
   background: none;
 }
-/* The header small, quiet and monospace; the cells at the label size, top-aligned, a little softer than the words. */
+/* The header small and quiet, in the words' face (mono is for code); the cells top-aligned, a little softer than the
+   words. A shown table matches it (shown.css). */
 .markdown [data-streamdown="table-header-cell"] {
   padding: 12px 16px;
   color: var(--muted-foreground);
-  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
-  letter-spacing: -0.025em;
 }
 .markdown [data-streamdown="table-cell"] {
   padding: 10px 16px;
