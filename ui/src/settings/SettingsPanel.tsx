@@ -42,7 +42,7 @@ interface Props {
   onClose: () => void;
 }
 
-const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark][]][] = [
+const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark | typeof ConnectMark][]][] = [
   [
     'App',
     [

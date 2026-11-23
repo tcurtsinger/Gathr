@@ -125,7 +125,7 @@ fn still_streaming(history: &Value, streaming: Vec<Value>) -> Vec<Value> {
 }
 
 #[derive(Deserialize)]
-struct NewMessage {
+pub struct NewMessage {
     text: String,
     agent: Option<String>,
     #[serde(default)]
@@ -136,9 +136,12 @@ struct NewMessage {
     /// A reply under a message (0076): the message it answers.
     #[serde(flatten)]
     target: gathr::replies::Target,
+    /// The AI app outside Gathr that sent it (`tools::outside`): never from the request's own JSON.
+    #[serde(skip)]
+    pub app: Option<String>,
 }
 
-async fn send(
+pub async fn send(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Path(chat): Path<String>,
@@ -180,6 +183,7 @@ async fn send(
         agents: 1 + others.len(),
         picks,
         target,
+        app: body.app,
         trace: t.0.clone(),
         reply,
     };

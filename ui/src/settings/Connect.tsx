@@ -42,7 +42,10 @@ export function Connect() {
     </div>
   );
   return (
-    <Page title="Connect" line="Let an AI app on this PC add skills, tools, agents and projects.">
+    <Page
+      title="Connect"
+      line="Let an AI app on this PC send work to your team and add skills, tools, agents and projects."
+    >
       {saved && (
         <>
           <div className="settings-rows">

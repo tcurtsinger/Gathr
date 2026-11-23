@@ -119,6 +119,8 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Erro
         "DELETE FROM questions WHERE chat_id = ?1".into(),
         "DELETE FROM schedule_runs WHERE chat_id = ?1".into(),
         "DELETE FROM schedules WHERE chat_id = ?1".into(),
+        "DELETE FROM from_app WHERE message_id IN (SELECT id FROM messages WHERE chat_id = ?1)"
+            .into(),
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         "DELETE FROM open_checks WHERE chat_id = ?1".into(),

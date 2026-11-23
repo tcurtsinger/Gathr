@@ -31,6 +31,8 @@ pub enum Cmd {
         picks: Option<String>,
         /// What a reply answers (0076), checked: none for a message on the main line.
         target: gathr::replies::Target,
+        /// The AI app outside Gathr that sent it for the person (`from_app`), by the name it gave.
+        app: Option<String>,
         /// The request's trace: the turn's too, so one reference finds both.
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,

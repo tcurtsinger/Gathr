@@ -240,7 +240,8 @@ static MESSAGE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
          m.copy_of, m.picks, m.reply_to,
          CASE WHEN m.role = 'user' THEN (SELECT r.due_ts FROM schedule_runs r WHERE r.message_id = m.id) END,
          CASE WHEN m.role = 'user' AND t.opened_by = 'brief' THEN
-           (SELECT bt.agent_id FROM messages b JOIN turns bt ON bt.id = b.turn_id WHERE {}) END
+           (SELECT bt.agent_id FROM messages b JOIN turns bt ON bt.id = b.turn_id WHERE {}) END,
+         CASE WHEN m.role = 'user' THEN (SELECT f.app FROM from_app f WHERE f.message_id = m.id) END
          FROM messages m LEFT JOIN turns t ON t.id = m.turn_id",
         crate::proposals::BRIEF_OF
     )
@@ -292,6 +293,10 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     // A project's brief: the assistant that wrote it, which the window shows under it.
     if let Some(from) = r.get::<_, Option<String>>(12)? {
         row["from"] = json!(from);
+    }
+    // Words an AI app outside Gathr sent for the person: the app's name, which the window shows under them.
+    if let Some(app) = r.get::<_, Option<String>>(13)? {
+        row["app"] = json!(app);
     }
     Ok(row)
 }

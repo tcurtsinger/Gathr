@@ -348,11 +348,12 @@ impl Task {
                 agents,
                 picks,
                 target,
+                app,
                 trace,
                 reply,
             } => {
                 let sent = self
-                    .send(chat, (text, picks, target), (agent, agents), trace)
+                    .send(chat, (text, picks, target), (agent, agents), (trace, app))
                     .await;
                 let _ = reply.send(sent);
             }

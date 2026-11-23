@@ -4,9 +4,9 @@
  * weight whatever a place gives its icons, and it takes the colour of the words beside it. The notice is
  * designs/notices/connect-mark.txt.
  */
-export function ConnectMark() {
+export function ConnectMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" fill="currentColor" stroke="none" aria-hidden="true">
+    <svg viewBox="0 0 32 32" fill="currentColor" stroke="none" aria-hidden="true" className={className}>
       <path d={NODES} />
     </svg>
   );

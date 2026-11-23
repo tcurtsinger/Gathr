@@ -42,16 +42,19 @@ impl Task {
         &self,
         ids: &Ids,
         body: &str,
-        picks: Option<String>,
-        target: gathr::replies::Target,
+        (picks, target): (Option<String>, gathr::replies::Target),
+        app: Option<String>,
     ) -> Result<(Value, String), String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
         let add = move |tx: &rusqlite::Transaction| {
             let picks = picks.as_deref();
-            let message = match target.is_reply() {
+            let mut message = match target.is_reply() {
                 true => store::add_reply(tx, &chat, &turn, &body, picks, &target)?,
                 false => store::add_person_message(tx, &chat, &turn, &body, picks)?,
             };
+            if let Some(app) = &app {
+                gathr::from_app::mark(tx, &mut message, app)?;
+            }
             let id = message["id"].as_str().unwrap_or_default().to_string();
             // What the engine reads: a reply's line first (0076).
             let read = gathr::replies::read_as(tx, &id, &body)?;

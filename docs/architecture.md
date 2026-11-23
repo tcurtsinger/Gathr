@@ -41,7 +41,9 @@ one running copy for every agent (`pc_tools.rs`). `gathrd` relays both, so an en
 An AI app outside Gathr on this PC (Claude Code, Codex, another) connects through `gathr connect`, a local MCP server
 that passes its messages to `/api/mcp` with the service's token (`bin/gathr/connect.rs`, `tools/outside.rs`): it adds
 skills, tools, agents and projects as the window and agents do, with no approval in Gathr, and each says the app's name
-(`added_by.rs`, migration 0082).
+(`added_by.rs`, migration 0082). It also sends words to the person's assistant, to a project's lead in a new chat, or
+on in a chat, through the same route as the person's own send, marked with the app's name (`tools/work.rs`,
+`from_app.rs`, migration 0083), and reads how the chat stands and what its agents said since; nothing is pushed to it.
 A skill is a folder with a `SKILL.md` in the agent folder's Skills (`skills.rs`). An engine gets its tools and
 skills as it starts, so an agent's next turn after a change starts its engine again (`gathrd/turns/mod.rs`).
 
@@ -73,6 +75,9 @@ each with a quiet line kept in `stays` (0081); a new assistant takes it over at 
 A project the assistant proposes (`proposals.rs`, `gathrd/tools/propose.rs`) is a block of kind `project` in its turn,
 drawn as a card; the person's Make project makes, in one transaction and once only, the project, its first chat and the
 brief there as their message, whose turn (`opened` `brief`) starts the lead as their message would.
+Words an AI app outside Gathr sends (`send` at `/api/mcp`) are the person's message, sent by their route, with the
+app's name kept in `from_app`; a turn they open is `opened` `app`, and the agent reads one line of Gathr's naming the
+app before them (`replies::line`).
 Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`): what an agent scheduled comes into its chat at its time, on this
 PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
 transaction. A missed run runs late when it was due today or less than two hours ago, else one skipped run is kept. A pause holds a run as it holds any turn Gathr starts.
