@@ -12,6 +12,7 @@ pub mod briefing;
 mod github;
 mod hook;
 mod note;
+mod outside;
 mod person;
 mod propose;
 mod react;
@@ -22,6 +23,7 @@ mod server;
 mod show;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
+pub use outside::{PATH as OUTSIDE_PATH, service as outside_service};
 pub use server::{names, service};
 
 /// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.

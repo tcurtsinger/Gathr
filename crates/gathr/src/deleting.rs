@@ -216,6 +216,7 @@ pub fn remove_agent(conn: &mut Connection, agent: &str) -> Result<Removed, Error
     )?;
     tx.execute("DELETE FROM schedules WHERE agent_id = ?1", [agent])?;
     crate::agents::mark_removed(&tx, agent)?;
+    crate::added_by::forget(&tx, "agent", agent)?;
     tx.commit()?;
     removed.plan = plan;
     Ok(removed)
@@ -278,6 +279,7 @@ pub fn delete_project(
     ] {
         tx.execute(sql, [project])?;
     }
+    crate::added_by::forget(&tx, "project", project)?;
     Event::point("gathr.project.delete")
         .trace(trace)
         .ok()

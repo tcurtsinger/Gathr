@@ -57,14 +57,10 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let name = ask.name.map(|n| one_line(&n)).filter(|n| !n.is_empty());
-        let given =
-            |text: Option<String>| text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-        let added = match (given(ask.link), given(ask.command)) {
-            (Some(link), None) => on_web(&self.state, link, name).await,
-            (None, Some(command)) => on_pc(&self.state, &caller, command, name).await,
-            _ => Err("Give a link or a command: one of them.".into()),
-        };
+        let name = ask.name;
+        let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
+        let added = tool(&self.state, &trace, (ask.link, ask.command), name).await;
+        let added = added.map(|(answer, _)| answer);
         Ok(self.respond(&caller, "add_tool", started, added).await)
     }
 
@@ -79,8 +75,24 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let added = skill(&self.state, &caller, &ask.folder, ask.replace == Some(true)).await;
+        let added = own_skill(&self.state, &caller, &ask.folder, ask.replace == Some(true)).await;
         Ok(self.respond(&caller, "add_skill", started, added).await)
+    }
+}
+
+/// A tool on the web from its link, or on this PC from its command: one of them. The answer, and the tool's id.
+pub(super) async fn tool(
+    s: &Arc<State>,
+    trace: &str,
+    (link, command): (Option<String>, Option<String>),
+    name: Option<String>,
+) -> Result<(String, String), String> {
+    let name = name.map(|n| one_line(&n)).filter(|n| !n.is_empty());
+    let given = |text: Option<String>| text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+    match (given(link), given(command)) {
+        (Some(link), None) => on_web(s, link, name).await,
+        (None, Some(command)) => on_pc(s, trace, command, name).await,
+        _ => Err("Give a link or a command: one of them.".into()),
     }
 }
 
@@ -122,7 +134,11 @@ async fn db<T: Send + 'static>(
 
 /// A tool on the web, connected to as the person's Add does. One that wants a key or signs in through
 /// the browser is saved without either: the person gives it in Plugins. No key is ever taken here.
-async fn on_web(s: &Arc<State>, link: String, name: Option<String>) -> Result<String, String> {
+async fn on_web(
+    s: &Arc<State>,
+    link: String,
+    name: Option<String>,
+) -> Result<(String, String), String> {
     let host = web_tools::checked(&link).map_err(|e| e.to_string())?;
     let same = link.clone();
     let taken = db(s, move |c| {
@@ -162,17 +178,17 @@ async fn on_web(s: &Arc<State>, link: String, name: Option<String>) -> Result<St
     let name = name.or(named).unwrap_or(host);
     let saved = db(s, move |c| web_tools::add(c, &name, &link, None)).await?;
     let _ = s.chats.live.send(json!({ "type": "tools" }));
-    Ok(added(&saved.name, &saved.id, needs, went))
+    Ok((added(&saved.name, &saved.id, needs, went), saved.id))
 }
 
 /// A tool on this PC, saved and started as the person's Add does. A variable given empty is the
 /// person's to fill in: the tool is saved all the same.
 async fn on_pc(
     s: &Arc<State>,
-    caller: &Caller,
+    trace: &str,
     command: String,
     name: Option<String>,
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let runs = pc_tools::read(&command).map_err(|e| e.to_string())?.runs;
     let empty: Vec<String> = (runs.variables.iter())
         .filter(|(_, value)| value.is_empty())
@@ -205,7 +221,7 @@ async fn on_pc(
             "{name} already runs this command with the same variables."
         ));
     }
-    let trace = Trace(caller.trace().unwrap_or_else(gathr::ids::trace_id));
+    let trace = Trace(trace.to_string());
     let saved = crate::pc_tools::add(s, &trace, &command, name).await;
     let saved = saved.map_err(|fail| fail.why().to_string())?.0;
     let (id, name) = (saved["tool"]["id"].as_str(), saved["tool"]["name"].as_str());
@@ -216,11 +232,16 @@ async fn on_pc(
         Err(None) => "It didn't start, and printed nothing.".into(),
     };
     let needs = (!empty.is_empty()).then(|| format!("a value for {}", empty.join(" and ")));
-    Ok(added(name, id, needs, went))
+    Ok((added(name, id, needs, went), id.to_string()))
 }
 
 /// A skill from a folder the agent wrote, inside what it may write, links followed.
-async fn skill(s: &State, caller: &Caller, folder: &str, replace: bool) -> Result<String, String> {
+async fn own_skill(
+    s: &State,
+    caller: &Caller,
+    folder: &str,
+    replace: bool,
+) -> Result<String, String> {
     caller.agent.as_ref().ok_or("You're not an agent here.")?;
     let path = caller.cwd.join(folder.trim());
     let inside = gathr::approvals::within(&path, &caller.folders);
@@ -230,6 +251,15 @@ async fn skill(s: &State, caller: &Caller, folder: &str, replace: bool) -> Resul
             "{folder} isn't a folder in your own folder or Shared."
         ));
     };
+    skill(s, real, replace).await.map(|(answer, _)| answer)
+}
+
+/// A skill copied from the folder `real`. The answer, and the skill's name.
+pub(super) async fn skill(
+    s: &State,
+    real: PathBuf,
+    replace: bool,
+) -> Result<(String, String), String> {
     let data: PathBuf = s.data.path().to_path_buf();
     let copied = db(s, move |c| {
         let dir = gathr::skills::folder(c, &data)?;
@@ -242,5 +272,5 @@ async fn skill(s: &State, caller: &Caller, folder: &str, replace: bool) -> Resul
     } else {
         "Wrote the skill:"
     };
-    Ok(format!("{did}\n{name}\n{NEXT_START}"))
+    Ok((format!("{did}\n{name}\n{NEXT_START}"), name))
 }

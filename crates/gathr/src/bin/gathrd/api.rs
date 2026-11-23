@@ -83,6 +83,11 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
         .nest_service("/mcp", crate::tools::service(state.clone()))
+        // An AI app outside Gathr, through `gathr connect`: guarded as the rest of `/api` is.
+        .nest_service(
+            crate::tools::OUTSIDE_PATH,
+            crate::tools::outside_service(state.clone()),
+        )
         .route_service(relay::PATH, relay::service(state.clone()))
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())

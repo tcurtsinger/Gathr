@@ -1,6 +1,7 @@
 //! `gathr`: Gathr's command line. `diag` reads the event record; `open` gives a browser a way in;
-//! `seed` makes test data; `dev` runs the service for development.
+//! `seed` makes test data; `dev` runs the service for development; `connect` lets an AI app on this PC use Gathr.
 
+mod connect;
 mod dev;
 mod text;
 mod window;
@@ -45,6 +46,13 @@ enum Command {
         /// Also start the UI on the port plus 10, and the desktop window.
         #[arg(long)]
         window: bool,
+    },
+    /// An MCP server on standard input and output for an AI app on this PC: it passes each message to the running
+    /// service. It never starts the service.
+    Connect {
+        /// The app's name, in place of the one it gives as it connects.
+        #[arg(long = "as", value_name = "NAME")]
+        app: Option<String>,
     },
 }
 
@@ -120,6 +128,7 @@ fn main() -> ExitCode {
             "dev",
             dev::run(&data, port, seed, window, show).map(|()| Value::Null),
         ),
+        Command::Connect { app } => ("connect", connect::run(&data, app).map(|()| Value::Null)),
     };
     match result {
         Ok(Value::Null) => ExitCode::SUCCESS,

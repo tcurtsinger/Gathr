@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { api, type Failure, type Skill, type WebTool } from '../api';
 import { Confirm } from '../components/Confirm';
+import { ConnectMark } from '../components/ConnectMark';
 import { useCard } from '../components/Corner';
 import { IconButton } from '../components/IconButton';
 import { listen } from '../live';
@@ -18,6 +19,7 @@ import { Screen } from '../Screen';
 import { AddPcTool } from './AddPcTool';
 import { AddTool } from './AddTool';
 import { ChangeKey } from './ChangeKey';
+import { type Connect, ConnectApp } from './ConnectApp';
 import { NewSkill } from './NewSkill';
 import { SkillMenu } from './SkillMenu';
 import { SkillPage } from './SkillPage';
@@ -33,9 +35,13 @@ export type PluginAt = { skill: string } | { tool: string; next?: ToolNext };
 /** Opens Plugins at a page: a line in a chat for a tool or skill an agent added calls it. */
 export const OpenPlugin = createContext<((at: PluginAt) => void) | undefined>(undefined);
 
-/** The list, a skill's or a tool's page, New skill, Add a tool on the web or on this PC, or Change one on this PC. */
+/**
+ * The list, a skill's or a tool's page, New skill, Add a tool on the web or on this PC, Change one on this PC, or
+ * Connect an app.
+ */
 type View =
   | { page: 'list' }
+  | { page: 'connect' }
   | { page: 'skill'; name: string }
   | { page: 'tool'; id: string; next?: ToolNext }
   | { page: 'new' }
@@ -54,6 +60,7 @@ type Removing = { skill: Skill; opener: HTMLElement | null } | { tool: WebTool; 
 export function Plugins({ at }: { at?: PluginAt }) {
   const [skills, setSkills] = useState<Skill[] | null>(null);
   const [tools, setTools] = useState<WebTool[] | null>(null);
+  const [connect, setConnect] = useState<Connect | null>(null);
   const [view, setView] = useState<View>({ page: 'list' });
   useEffect(() => {
     if (at)
@@ -70,7 +77,14 @@ export function Plugins({ at }: { at?: PluginAt }) {
   const search = useRef<HTMLInputElement>(null);
 
   const loadSkills = useCallback(() => api.skills().then((s) => setSkills(s.skills), setFailure), []);
-  const loadTools = useCallback(() => api.tools().then(setTools, setFailure), []);
+  const loadTools = useCallback(
+    () =>
+      api.tools().then((t) => {
+        setTools(t.tools);
+        setConnect(t.connect);
+      }, setFailure),
+    [],
+  );
   useEffect(() => {
     loadSkills();
     loadTools();
@@ -182,6 +196,7 @@ export function Plugins({ at }: { at?: PluginAt }) {
     return state.tone && dot(state.tone, state.words);
   };
   const title = { all: 'Tools and skills', tools: 'Tools', skills: 'Skills' }[kind];
+  const connecting = view.page === 'connect';
 
   return (
     <>
@@ -205,7 +220,7 @@ export function Plugins({ at }: { at?: PluginAt }) {
               <button
                 type="button"
                 className="navbutton"
-                aria-current={kind === 'tools' ? 'page' : undefined}
+                aria-current={kind === 'tools' && !connecting ? 'page' : undefined}
                 onClick={() => pick('tools')}
               >
                 <Plug aria-hidden="true" />
@@ -214,11 +229,23 @@ export function Plugins({ at }: { at?: PluginAt }) {
               <button
                 type="button"
                 className="navbutton"
-                aria-current={kind === 'skills' ? 'page' : undefined}
+                aria-current={kind === 'skills' && !connecting ? 'page' : undefined}
                 onClick={() => pick('skills')}
               >
                 <BookOpen aria-hidden="true" />
                 Skills
+              </button>
+              <button
+                type="button"
+                className="navbutton"
+                aria-current={connecting ? 'page' : undefined}
+                onClick={() => {
+                  setFailure(null);
+                  setView({ page: 'connect' });
+                }}
+              >
+                <ConnectMark />
+                Connect an app
               </button>
             </div>
             <div className="chatlist">
@@ -291,6 +318,7 @@ export function Plugins({ at }: { at?: PluginAt }) {
             onChangeRuns={(tool, text) => setView({ page: 'change-pc', id: tool.id, name: tool.name, text })}
           />
         )}
+        {connecting && <ConnectApp connect={connect} />}
         {view.page === 'new' && (
           <NewSkill
             onBack={() => setView({ page: 'list' })}

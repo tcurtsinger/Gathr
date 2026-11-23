@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Folder } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
+import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
@@ -148,6 +149,7 @@ function ProjectPage({ project, agents, saved, onBack, onSaved, onDeleted }: Pag
   return (
     <Page
       title={project.name}
+      line={project.added_by ? <AddedBy app={project.added_by} /> : undefined}
       back={
         <button type="button" className="settings-back" onClick={onBack}>
           <ChevronLeft aria-hidden="true" />

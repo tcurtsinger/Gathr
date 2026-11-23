@@ -14,6 +14,8 @@ pub struct Project {
     pub folder: String,
     pub members: Vec<Member>,
     pub created: String,
+    /// The AI app outside Gathr that made it, if one did.
+    pub added_by: Option<String>,
 }
 
 /// What a change sets; `None` leaves it as it is. Each is already checked.
@@ -165,5 +167,6 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Project>, Error> {
         folder,
         members,
         created: crate::ids::utc(created),
+        added_by: crate::added_by::of(conn, "project", id)?,
     }))
 }

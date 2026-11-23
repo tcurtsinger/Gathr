@@ -2,6 +2,7 @@ import { ChevronLeft } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
+import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
@@ -169,7 +170,12 @@ export function AgentPage(props: Props) {
             {agent ? agent.name : 'Add agent'}
             {assistant && <small className="agent-tag">Assistant</small>}
           </h1>
-          {agent?.description && <p className="muted">{agent.description}</p>}
+          {(agent?.description || agent?.added_by) && (
+            <p className="muted">
+              {agent.description}
+              <AddedBy app={agent.added_by} />
+            </p>
+          )}
         </div>
         {agent && (
           <div className="screen-actions">

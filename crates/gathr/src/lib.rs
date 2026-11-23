@@ -2,6 +2,7 @@
 //! the database, the event record, error references and the diagnostics queries.
 
 pub mod accounts;
+pub mod added_by;
 pub mod agents;
 pub mod app;
 pub mod approvals;

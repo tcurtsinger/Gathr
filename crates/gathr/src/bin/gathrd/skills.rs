@@ -27,15 +27,25 @@ pub fn routes() -> Router<Arc<State>> {
 
 /// The Skills folder and every skill in it.
 fn listed(conn: &Connection, dir: &FilePath) -> Result<Value, Error> {
-    Ok(json!({ "folder": dir, "skills": skills::list(dir, &skills::off(conn)?) }))
+    Ok(json!({ "folder": dir, "skills": every(conn, dir)? }))
+}
+
+/// Every skill, each with the AI app outside Gathr that added it, if one did.
+fn every(conn: &Connection, dir: &FilePath) -> Result<Vec<Value>, Error> {
+    let found = skills::list(dir, &skills::off(conn)?).into_iter();
+    found
+        .map(|skill| {
+            let mut shown = json!(skill);
+            shown["added_by"] = json!(gathr::added_by::of(conn, "skill", &skill.name)?);
+            Ok(shown)
+        })
+        .collect()
 }
 
 /// One skill, with its SKILL.md's text after the front matter.
 fn shown(conn: &Connection, dir: &FilePath, name: &str) -> Result<Value, Error> {
     let path = skills::path(dir, name)?;
-    let skill = skills::list(dir, &skills::off(conn)?)
-        .into_iter()
-        .find(|s| s.name == name);
+    let skill = every(conn, dir)?.into_iter().find(|s| s["name"] == name);
     let mut shown = json!(skill);
     shown["text"] = json!(skills::text(&path));
     Ok(shown)
@@ -141,6 +151,7 @@ async fn remove(
     on_skills(&s, &t, "Remove failed", true, move |c, dir| {
         skills::remove(dir, &name)?;
         skills::set_enabled(c, &name, true)?;
+        gathr::added_by::forget(c, "skill", &name)?;
         listed(c, dir)
     })
     .await

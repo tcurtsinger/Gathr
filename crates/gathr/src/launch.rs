@@ -241,6 +241,18 @@ pub fn beside_me(program: &str) -> Result<std::path::PathBuf, Error> {
     Ok(std::env::current_exe()?.with_file_name(name))
 }
 
+/// The command line `gathr` an AI app outside Gathr runs to connect (`gathr connect`): the one installed beside the
+/// window's `gathrd`, which stays where it is while the service runs from its copy, else the one beside this program
+/// (a dev service's). None when neither is there.
+pub fn command_line(data: &DataDir) -> Option<PathBuf> {
+    let name = format!("gathr{}", std::env::consts::EXE_SUFFIX);
+    let installed = Copies::new(data)
+        .installed()
+        .map(|p| p.with_file_name(&name));
+    let beside = beside_me("gathr").ok();
+    installed.into_iter().chain(beside).find(|p| p.is_file())
+}
+
 /// The key for a data folder other than the person's own (`None` for theirs): the window's
 /// one-instance key, and the name of its entry at login, so a test folder never stands in for
 /// theirs. Every caller runs the same build, so the hasher's output matches between them.
