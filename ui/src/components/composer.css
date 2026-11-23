@@ -79,6 +79,29 @@
   flex: none;
   gap: 2px;
 }
+.composer-pick {
+  gap: 4px;
+  max-width: 220px;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+}
+.composer-pick-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.composer-pick-who b {
+  font-weight: 550;
+}
+.composer-pick-who small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 .composer-who {
   min-width: 0;
   overflow: hidden;

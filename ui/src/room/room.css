@@ -131,7 +131,7 @@
 .room-you {
   align-self: flex-end;
   max-width: 76%;
-  padding: 10px 14px;
+  padding: 7px 14px;
   border-radius: 16px;
   background: var(--accent-surface);
   overflow-wrap: anywhere;
@@ -256,6 +256,10 @@
 .room-grow {
   flex: 1;
 }
+/* A chat with one agent: the card keeps its fill, not its frame, and has no head; its name is under it, by the time. */
+.room-card[data-solo]:not([data-needs]) {
+  border-color: transparent;
+}
 .room-state {
   display: inline-flex;
   align-items: center;
@@ -282,6 +286,12 @@
 /* The card ends right after its words. */
 .room-card > .room-body:last-child {
   padding-bottom: 13px;
+}
+.room-card[data-solo] > .room-body {
+  padding-top: 9px;
+}
+.room-card[data-solo] > .room-body:last-child {
+  padding-bottom: 9px;
 }
 /* Words said while the turn still runs read as a remark until it ends. */
 .room-card[data-live] > .room-body,
@@ -424,6 +434,18 @@
   margin-right: 5px;
   font-size: inherit;
 }
+/* The agent's name before the time, in a chat with one agent; while it works, the state follows it. */
+.room-who-name {
+  margin-right: 6px;
+  color: color-mix(in oklab, var(--foreground) 80%, var(--background));
+  font-weight: 600;
+}
+.room-bar .room-state {
+  margin-right: 6px;
+}
+.room-live {
+  margin-top: 5px;
+}
 /* A scheduled run's words: Scheduled's mark and when they were due, where the time is. */
 .room-bar .room-scheduled {
   display: inline-flex;
@@ -534,6 +556,36 @@
 .room-fold span {
   color: var(--muted-foreground);
 }
+/* A folded thread's first lines: who replied and what they said, one line each; a click opens it. */
+.room-peek {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 4px 8px 2px;
+  border-radius: 8px;
+  text-align: left;
+}
+.room-peek:hover {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+.room-peek-line {
+  display: grid;
+  grid-template-columns: 20px auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.room-peek-line b {
+  font-weight: 650;
+}
+.room-peek-line > span:last-child {
+  overflow: hidden;
+  color: color-mix(in oklab, var(--foreground) 78%, var(--background));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .room-replies {
   display: flex;
   flex-direction: column;
@@ -568,8 +620,71 @@
 
 /* A question to the person: the room's card, ringed while it waits, with Answer; its choices are pills over a box
    for their own words, in the questions panel. Answered, the answer sits under it as a quiet line from "You". */
-.room-question[data-open] {
+.room-question[data-open],
+.room-card[data-needs] {
   border-color: color-mix(in oklab, var(--attention) 45%, var(--border));
+}
+/* An approval spans its card, as the card's own ask. */
+.room-card > .room-asks [data-slot="approval-card"] {
+  max-width: none;
+}
+/* An open question's choices: a row each, the picked one ringed; "Something else…" opens a box for the person's words. */
+.room-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 18px 14px;
+}
+.room-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.room-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+  font-size: 14.5px;
+  text-align: left;
+}
+.room-row:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 4%, var(--background));
+}
+.room-row[aria-pressed="true"] {
+  border-color: color-mix(in oklab, var(--attention) 55%, var(--border));
+  background: color-mix(in oklab, var(--attention) 7%, var(--background));
+}
+.room-row > i {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid color-mix(in oklab, var(--foreground) 35%, transparent);
+  border-radius: 50%;
+}
+.room-row[aria-pressed="true"] > i {
+  border: 5px solid var(--attention);
+}
+.room-row[data-own] {
+  color: var(--muted-foreground);
+}
+.room-row[data-own]:not([aria-pressed="true"]) > i {
+  border-style: dashed;
+}
+.room-row small {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.room-choose-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+.room-choose .composer {
+  max-width: none;
 }
 .room-choices {
   display: flex;
