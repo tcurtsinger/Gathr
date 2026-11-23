@@ -1,4 +1,4 @@
-import { CheckIcon, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Select } from 'radix-ui';
 import { type ComponentProps, type ReactNode, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,8 @@ type Props = Omit<ComponentProps<'button'>, 'value' | 'onChange' | 'children'> &
 const EMPTY = '\u0000';
 const inner = (value: string) => (value === '' ? EMPTY : value);
 
-// The registry's DropdownMenuContent and its checkbox item, so the list looks as the More menu does.
+// The registry's DropdownMenuContent and its item, so the list looks as the More menu does. The chosen one is
+// highlighted and has no check (the owner's ask, 2026-11-22).
 const list = cn(
   'z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width)',
   'origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border bg-popover',
@@ -35,8 +36,9 @@ const list = cn(
   'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
 );
 const item = cn(
-  'relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none',
+  'flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none',
   'focus:bg-accent focus:text-accent-foreground',
+  'data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground',
 );
 
 /** Gathr's one dropdown, drawn by the app: closed, a field with the chosen value; open, a menu of the choices. */
@@ -80,11 +82,6 @@ export function Dropdown({
           <Select.Viewport className="p-1">
             {choices.map((c) => (
               <Select.Item key={c.value} value={inner(c.value)} className={item}>
-                <span className="pointer-events-none absolute left-2 flex size-4 items-center justify-center">
-                  <Select.ItemIndicator>
-                    <CheckIcon className="size-4" />
-                  </Select.ItemIndicator>
-                </span>
                 <Select.ItemText>
                   {c.icon ? (
                     <span className="dropdown-choice">
