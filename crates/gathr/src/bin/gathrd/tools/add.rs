@@ -22,7 +22,10 @@ use crate::api::{State, Trace};
 
 /// What every answer ends with: an engine is given tools and skills as it starts, and an agent's next
 /// turn starts its engine again once they have changed.
-const NEXT_START: &str = "Agents get it from their next turn. You can't use it in this one.";
+pub(super) const NEXT_START: &str =
+    "Agents get it from their next turn. You can't use it in this one.";
+/// The same, for an AI app outside Gathr, which has no turn.
+pub(super) const NEXT_TURN: &str = "Agents get it from their next turn.";
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct AddTool {

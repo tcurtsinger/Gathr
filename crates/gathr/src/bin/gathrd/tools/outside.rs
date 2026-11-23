@@ -142,7 +142,7 @@ impl Outside {
             Some(real) => add::skill(s, real, ask.replace == Some(true)).await,
         };
         let added = match added {
-            Ok((answer, name)) => noted(s, ("skill", name), &app).await.map(|()| answer),
+            Ok((answer, name)) => noted(s, ("skill", name), &app).await.map(|()| said(answer)),
             Err(why) => Err(why),
         };
         Ok(self
@@ -163,7 +163,7 @@ impl Outside {
         let (s, app) = (&self.state, app_of(&parts));
         let added = add::tool(s, &trace, (ask.link, ask.command), ask.name).await;
         let added = match added {
-            Ok((answer, id)) => noted(s, ("tool", id), &app).await.map(|()| answer),
+            Ok((answer, id)) => noted(s, ("tool", id), &app).await.map(|()| said(answer)),
             Err(why) => Err(why),
         };
         Ok(self
@@ -259,6 +259,11 @@ async fn db<T: Send + 'static>(
     let done =
         done.unwrap_or_else(|| Err(gathr::Error::Other("the database didn't answer".into())));
     done.map_err(|e| e.to_string())
+}
+
+/// An agent's answer as an outside app reads it: without the words about the agent's own turn.
+fn said(answer: String) -> String {
+    answer.replace(add::NEXT_START, add::NEXT_TURN)
 }
 
 /// Notes the app that added a skill or a tool, and tells every window again, now that it says so.
