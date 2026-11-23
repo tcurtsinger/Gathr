@@ -63,7 +63,7 @@ export const filesOf = (a: ChatChanges['agents'][number]) => [
 
 /** Home's Changes tile: how many files the chat's agents changed and their lines, once read. */
 export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen: () => void }) {
-  const all = changes?.agents.flatMap(filesOf) ?? [];
+  const all = changes?.agents?.flatMap(filesOf) ?? [];
   return (
     <button type="button" className="home-tile" onClick={onOpen}>
       <span className="home-tile-name">
@@ -94,12 +94,12 @@ export function useUnseen(chat: string, room: RoomState, sidebar: boolean) {
     if (!sidebar) return;
     const mark = () => {
       const c = last.get(chat);
-      if (c) seen.set(chat, said(c));
+      if (c?.agents) seen.set(chat, said(c));
     };
     mark();
     return mark;
   }, [chat, sidebar]);
-  if (sidebar || !changes || !changes.agents.some((a) => filesOf(a).length)) return false;
+  if (sidebar || !changes?.agents?.some((a) => filesOf(a).length)) return false;
   return said(changes) !== seen.get(chat);
 }
 
