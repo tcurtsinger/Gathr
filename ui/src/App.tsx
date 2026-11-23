@@ -285,7 +285,7 @@ export function App() {
       assistant: fresh.assistant,
     });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
-    setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
+    setSettings({ page, chat: chat?.id, turn, opener });
   const choose = (id: string) => {
     if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
     setSelected(id);
@@ -378,7 +378,6 @@ export function App() {
     setSettings((s) => ({
       page: 'turns',
       chat: chat?.id,
-      title: chat?.title,
       reference,
       opener: s?.opener ?? (document.activeElement as HTMLElement),
     }));
@@ -585,6 +584,7 @@ export function App() {
           setSettings(null);
           loadYou();
         }}
+        onNewProject={() => setNewProject(true)}
       />
       <Corner onReference={openReference} />
     </div>

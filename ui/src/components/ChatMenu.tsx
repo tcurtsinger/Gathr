@@ -36,8 +36,8 @@ interface Props {
 }
 
 /**
- * A More menu (the prototype's ChatActions): the pause item, then Rename, then Archive or Restore, then Delete,
- * each after a separator. The chat's header has them all, a sidebar row Rename, Archive and Delete, a
+ * A More menu (the prototype's ChatActions): the pause item, then Rename, then Archive or Restore, then Delete;
+ * a separator after the pause item and before Delete only. The chat's header has them all, a sidebar row Rename, Archive and Delete, a
  * project's row Settings and Delete.
  */
 export function ChatMenu({
@@ -114,7 +114,7 @@ export function ChatMenu({
       <DropdownMenuContent align={align} sideOffset={8}>
         {items.map(([key, item], i) => (
           <Fragment key={key}>
-            {i > 0 && <DropdownMenuSeparator />}
+            {i > 0 && (key === 'delete' || items[i - 1][0] === 'pause') && <DropdownMenuSeparator />}
             {item}
           </Fragment>
         ))}

@@ -15,6 +15,7 @@ function Screen() {
         target={target}
         onPage={(page) => setTarget((t) => t && { ...t, page })}
         onClose={() => setTarget(null)}
+        onNewProject={() => {}}
       />
     </>
   );

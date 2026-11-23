@@ -19,6 +19,10 @@
   width: 1px;
   background: var(--border);
 }
+/* With no chat title beside it (Agents, Plugins, Designs, Memory, Scheduled), the divider would stand alone. */
+.topline:not(:has(> :not(.window-buttons)))::before {
+  display: none;
+}
 /* The sidebar's button, Back and Forward, over the line's left end: Home's column on Windows and in a browser,
    after the Mac's own three buttons there. With the sidebar closed the line's content starts after them. */
 .app {

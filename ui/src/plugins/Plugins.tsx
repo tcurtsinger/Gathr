@@ -182,6 +182,16 @@ export function Plugins({ at }: { at?: PluginAt }) {
     return state.tone && dot(state.tone, state.words);
   };
   const title = { all: 'Tools and skills', tools: 'Tools', skills: 'Skills' }[kind];
+  const addMenu = (
+    <AddMenu
+      onTool={() => setView({ page: 'add-tool' })}
+      onPc={() => setView({ page: 'add-pc' })}
+      onFolder={(files) => added(api.addSkillFolder(files))}
+      onZip={(file) => added(api.addSkillZip(file))}
+      onFile={(file) => added(api.addSkillFile(file))}
+      onNew={() => setView({ page: 'new' })}
+    />
+  );
 
   return (
     <>
@@ -321,10 +331,10 @@ export function Plugins({ at }: { at?: PluginAt }) {
         )}
         {view.page === 'list' && (
           <>
-            <h1>{title}</h1>
-            <div className="screen-bar">
-              {!nothing && (
-                <>
+            {!nothing && (
+              <>
+                <h1>{title}</h1>
+                <div className="screen-bar">
                   <label className="search-box plugins-search">
                     <Search aria-hidden="true" />
                     <input
@@ -343,18 +353,12 @@ export function Plugins({ at }: { at?: PluginAt }) {
                       </button>
                     ))}
                   </fieldset>
-                </>
-              )}
-              <AddMenu
-                onTool={() => setView({ page: 'add-tool' })}
-                onPc={() => setView({ page: 'add-pc' })}
-                onFolder={(files) => added(api.addSkillFolder(files))}
-                onZip={(file) => added(api.addSkillZip(file))}
-                onFile={(file) => added(api.addSkillFile(file))}
-                onNew={() => setView({ page: 'new' })}
-              />
-            </div>
+                  {addMenu}
+                </div>
+              </>
+            )}
             {nothing ? (
+              // The same empty block as Designs' and Scheduled', at the same height, with the way to fill it.
               <div className="screen-empty">
                 <h2>Nothing installed</h2>
                 <p className="muted">
@@ -366,6 +370,7 @@ export function Plugins({ at }: { at?: PluginAt }) {
                     }[kind]
                   }
                 </p>
+                {addMenu}
               </div>
             ) : (
               <>

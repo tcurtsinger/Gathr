@@ -78,6 +78,7 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
               id="new-project-name"
               value={name}
               maxLength={80}
+              placeholder="Website"
               onChange={(e) => setName(e.target.value)}
               required
             />

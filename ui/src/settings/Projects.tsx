@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
@@ -19,7 +19,7 @@ export type Seat = { agent: string; role: Role };
  * Settings > Projects: the projects listed, each with its folder and team; one opens a page of its own, its
  * name, folder and team in one draft with one Save.
  */
-export function Projects({ start }: { start?: string }) {
+export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -62,7 +62,17 @@ export function Projects({ start }: { start?: string }) {
     );
   const face = (id: string, name: string) => agents.find((a) => a.id === id) ?? { id, name };
   return (
-    <Page title="Projects" line="Each project’s folder and default team.">
+    <Page
+      title="Projects"
+      line="Each project’s folder and default team."
+      action={
+        // New project's dialog, the one the new chat's project menu opens, over Settings.
+        <Button type="button" variant="outline" onClick={onAdd}>
+          <Plus />
+          Add
+        </Button>
+      }
+    >
       {projects?.length === 0 && <p className="settings-empty">No projects</p>}
       {projects && projects.length > 0 && (
         <ul className="settings-rows settings-top">

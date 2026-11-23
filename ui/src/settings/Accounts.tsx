@@ -222,10 +222,10 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
   );
 
   return (
-    <li>
+    <li className="account-row" data-confirming={confirming || undefined}>
       <Row
         name={<span id={name}>{account.name}</span>}
-        line={`${engineName(account.engine)} · ${state}`}
+        line={engineName(account.engine)}
         lead={<EngineLogo engine={account.engine} className="engine-logo" />}
         after={
           <>
@@ -248,7 +248,11 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
           />
         ) : (
           <>
-            {!busy && action}
+            {/* Its own column, so the states line up down the list whatever the engine's name. */}
+            <span className="account-state" data-state={busy || waiting ? 'busy' : account.login}>
+              {state}
+            </span>
+            <span className="account-action">{!busy && action}</span>
             <AccountMenu
               account={account}
               busy={busy !== null}

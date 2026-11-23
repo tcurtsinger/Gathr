@@ -63,7 +63,12 @@ test('Escape cancels the edit without closing Settings, and saves nothing', asyn
   service(sent);
   let closed = 0;
   const screen = await render(
-    <SettingsPanel target={{ page: 'teamwork', opener: null }} onPage={() => {}} onClose={() => closed++} />,
+    <SettingsPanel
+      target={{ page: 'teamwork', opener: null }}
+      onPage={() => {}}
+      onClose={() => closed++}
+      onNewProject={() => {}}
+    />,
   );
   await screen.getByRole('button', { name: 'Change' }).click();
   await userEvent.fill(screen.getByRole('textbox', { name: 'Agent folder' }), 'Y:\\Other');

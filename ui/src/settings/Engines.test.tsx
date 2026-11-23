@@ -131,7 +131,7 @@ test('a sign-in shows the code field only when its engine takes a pasted code', 
   const paste = rows.filter({ hasText: 'Made-up paste' });
   const browser = rows.filter({ hasText: 'Made-up browser' });
   await expect.element(paste.getByRole('textbox', { name: 'Code' })).toBeVisible();
-  await expect.element(browser.getByText('Codex · Signing in')).toBeVisible();
+  await expect.element(browser.getByText('Signing in', { exact: true })).toBeVisible();
   await expect.element(browser.getByRole('textbox', { name: 'Code' })).not.toBeInTheDocument();
   await browser.getByRole('button', { name: 'Open sign-in page' }).click();
   expect(opened).toEqual([page]);

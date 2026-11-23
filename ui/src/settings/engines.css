@@ -27,6 +27,26 @@
   width: 16px;
   height: 16px;
 }
+/* An account's state, Sign in or out, and More: fixed columns, so each state starts at the same x down the list
+   whatever its engine's name or its button's word. Signed out in the same red as the Can't run mark. */
+.account-row:not([data-confirming]) .setting-control {
+  display: grid;
+  grid-template-columns: 84px 86px auto;
+  align-items: center;
+  gap: 8px;
+}
+.account-state {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.account-state[data-state="signed_out"] {
+  color: var(--destructive);
+}
+.account-action {
+  display: flex;
+  justify-content: flex-end;
+}
 /* Add or Rename, over the list. */
 .account-form {
   display: grid;

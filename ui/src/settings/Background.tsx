@@ -25,16 +25,12 @@ export function Background() {
   const picked = saved?.background_model ?? null;
   const none = listed && !listed.auto && !picked;
   return (
-    <Page title="Background">
+    <Page title="Background" line="A small model for work that runs in the background.">
       {saved && (
         <div className="settings-rows">
           <Row
             name={<label htmlFor="background-model">Model</label>}
-            line={
-              none
-                ? 'No account has a small model.'
-                : 'A small model for work nobody waits on. It uses that account’s usage.'
-            }
+            line={none ? 'Sign in to an account that has one.' : 'It uses that account’s usage.'}
             lineId="background-line"
           >
             <Dropdown
