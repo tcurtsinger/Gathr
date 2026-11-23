@@ -1,17 +1,14 @@
 import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type Account, type Agent, api, type Failure, type Model } from '../api';
+import { type Account, type Agent, api, type Failure } from '../api';
 import { useCard } from '../components/Corner';
-import { Dropdown } from '../components/Dropdown';
-import { EngineLogo } from '../components/EngineLogo';
 import { Face } from '../components/Face';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
 import type { AgentsAt, ProposingAgent } from '../room/Proposal';
 import { Screen } from '../Screen';
 import { AgentPage } from './AgentPage';
-import { chosen } from './models';
 import './agents.css';
 
 const NEW = 'new';
@@ -54,10 +51,11 @@ export function Agents({ at, onAssistant }: Props) {
       if (event.type === 'agents' || event.type === 'accounts' || event.type === 'lagged') load();
     });
   }, [load]);
-  const models = useListedModels(agents);
 
-  const agent = agents?.find((a) => a.id === open);
-  // An agent deleted elsewhere while its page is open: back to the list.
+  // Nothing picked: the assistant's page, else the first agent's. The list is the sidebar, never a page of its own.
+  const current = open ?? assistant ?? agents?.[0]?.id ?? null;
+  const agent = agents?.find((a) => a.id === current);
+  // An agent deleted elsewhere while its page is open: back to the first.
   useEffect(() => {
     if (open && open !== NEW && agents && !agents.some((a) => a.id === open)) setOpen(null);
   }, [open, agents]);
@@ -80,44 +78,55 @@ export function Agents({ at, onAssistant }: Props) {
       },
     );
   };
-  const accountName = (id: string) => accounts?.find((a) => a.id === id)?.name ?? '';
-  const engineOf = (id: string) => accounts?.find((a) => a.id === id)?.engine ?? '';
   const ready = agents !== null && accounts !== null;
-  const tag = <small className="agent-tag">Assistant</small>;
+  const add = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="screen-add"
+      disabled={!accounts?.length}
+      onClick={() => show(NEW)}
+    >
+      <Plus aria-hidden="true" />
+      Add
+    </Button>
+  );
 
   return (
     <Screen
       name="Agents"
+      action={agents?.length ? add : undefined}
       nav={
         <div className="chatlist agent-nav">
-          {agents?.length === 0 && <p className="sidebar-empty">Nothing yet</p>}
           {agents?.map((a) => (
-            <div key={a.id} className="chatrow" data-current={a.id === open || undefined}>
+            <div key={a.id} className="chatrow" data-current={a.id === current || undefined}>
               <button
                 type="button"
                 className="chat-link"
-                aria-current={a.id === open ? 'page' : undefined}
+                aria-current={a.id === current ? 'page' : undefined}
                 onClick={() => show(a.id)}
               >
                 <Face agent={a} size={20} />
                 <span>{a.name}</span>
-                {a.id === assistant && tag}
+                {a.id === assistant && <small className="agent-tag">Assistant</small>}
               </button>
             </div>
           ))}
         </div>
       }
     >
-      {ready && (agent || open === NEW) && accounts.length > 0 && (
+      {ready && (agent || current === NEW) && accounts.length > 0 && (
         // A new page for each agent, so one agent's draft never carries to another.
         <AgentPage
-          key={agent ? open : (proposal?.message ?? open)}
+          key={agent ? current : (proposal?.message ?? current)}
           agent={agent}
           accounts={accounts}
           assistant={!!agent && agent.id === assistant}
           saved={!!agent && saved === agent.id}
           proposal={agent ? null : proposal}
           onBack={() => show(null)}
+          onAssistant={() => agent && pickAssistant(agent.id)}
           onSaved={(done) => {
             setAgents((list) =>
               list?.some((a) => a.id === done.id)
@@ -129,97 +138,23 @@ export function Agents({ at, onAssistant }: Props) {
             setProposal(null);
           }}
           onDeleted={(left) => {
-            setAgents((list) => list?.filter((a) => a.id !== open) ?? null);
+            setAgents((list) => list?.filter((a) => a.id !== current) ?? null);
             setFailure(left);
             show(null);
           }}
         />
       )}
-      {ready && !agent && open !== NEW && (
-        <>
-          <h1>Agents</h1>
-          <div className="screen-bar agent-bar">
-            {agents.length > 0 && (
-              <>
-                <label htmlFor="agents-assistant" className="muted">
-                  Assistant
-                </label>
-                <Dropdown
-                  id="agents-assistant"
-                  className="agent-assistant"
-                  value={assistant ?? ''}
-                  onChange={pickAssistant}
-                  choices={agents.map((a) => ({
-                    value: a.id,
-                    label: a.name,
-                    icon: <Face agent={a} size={20} />,
-                  }))}
-                />
-              </>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="screen-add"
-              disabled={accounts.length === 0}
-              onClick={() => show(NEW)}
-            >
-              <Plus aria-hidden="true" />
-              Add
-            </Button>
-          </div>
-          {agents.length === 0 ? (
-            <div className="screen-empty">
-              <h2>No agents yet</h2>
-              <p className="muted">Each agent has an account, a model and approvals.</p>
-              {accounts.length === 0 && <p className="muted">No accounts</p>}
-            </div>
-          ) : (
-            <ul className="agent-index">
-              {agents.map((a) => {
-                const listed = models[a.account];
-                return (
-                  <li key={a.id} className="screen-row">
-                    <button type="button" className="screen-open" onClick={() => show(a.id)}>
-                      <Face agent={a} size={28} />
-                      <span className="screen-words">
-                        <strong>
-                          {a.name}
-                          {a.id === assistant && tag}
-                        </strong>
-                        {a.description && <span>{a.description}</span>}
-                      </span>
-                      <span className="agent-meta">
-                        {accountName(a.account)}
-                        {listed && ` · ${chosen(listed, a.model)}`}
-                      </span>
-                      {/* The engine's logo, at the row's end: the owner's pick, so the rows' logos line up. */}
-                      <span className="agent-engine">
-                        <EngineLogo engine={engineOf(a.account)} />
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
+      {ready && agents.length === 0 && current !== NEW && (
+        <div className="screen-empty">
+          <h2>No agents yet</h2>
+          <p className="muted">
+            {accounts.length
+              ? 'Each has an account, a model and approvals.'
+              : 'Add an account in Settings first.'}
+          </p>
+          {add}
+        </div>
       )}
     </Screen>
   );
-}
-
-/** The models of each account an agent runs on, as each engine lists them, for the list's rows; none where it fails. */
-function useListedModels(agents: Agent[] | null) {
-  const [models, setModels] = useState<Record<string, Model[]>>({});
-  const used = [...new Set(agents?.map((a) => a.account))].join(' ');
-  useEffect(() => {
-    for (const account of used.split(' ').filter(Boolean))
-      api.models(account).then(
-        (list) => setModels((m) => ({ ...m, [account]: list })),
-        () => {},
-      );
-  }, [used]);
-  return models;
 }

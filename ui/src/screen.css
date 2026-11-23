@@ -37,17 +37,25 @@
 .screen-add {
   margin-left: auto;
 }
+/* A screen with nothing in it yet: one quiet block in the middle of its page, the same on every screen. */
 .screen-empty {
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14vh;
+  text-align: center;
 }
 .screen-empty h2 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
 }
 .screen-empty p {
   margin: 0;
+}
+.screen-empty [data-slot="button"] {
+  margin: 8px 0 0;
 }
 .screen-group + .screen-group {
   margin-top: 22px;

@@ -17,6 +17,8 @@ interface Props {
   onSelect: (chat: string) => void;
   /** A new chat, in the project given. */
   onNew: (project?: string) => void;
+  /** New project's form. */
+  onNewProject: () => void;
   /** Settings > Projects, at this project. */
   onProjectSettings: (project: string, opener: HTMLElement | null) => void;
   onDeleteProject: (project: Project, opener: HTMLElement | null) => void;
@@ -102,6 +104,18 @@ export function Sidebar(props: Props) {
         )}
       </div>
       <div className="chatlist">
+        {/* Projects' own header, its + always shown: the one place a project is made from the list. */}
+        <div className="projects-head">
+          <h2>Projects</h2>
+          <button
+            type="button"
+            className="projects-add"
+            aria-label="New project"
+            onClick={props.onNewProject}
+          >
+            <Plus aria-hidden="true" />
+          </button>
+        </div>
         {projects.map((p) => {
           const open = !folded.has(p.id);
           const own = chats.filter((c) => c.project === p.id);

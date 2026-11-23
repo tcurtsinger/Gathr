@@ -25,6 +25,7 @@ import { FileTiles, LocalTile } from '../components/FileTile';
 import { OpenFile } from '../components/files';
 import { kept, type Picked } from '../components/mention';
 import { ProjectPick } from '../components/ProjectPick';
+import { StateMark } from '../components/StateMark';
 import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
@@ -78,6 +79,10 @@ interface Props {
   onSidebar: (open: boolean) => void;
   /** Opens the Agents screen. */
   onAgents: () => void;
+  /** The name of the agent's account when it is signed out. */
+  signedOut?: (agent: string) => string | undefined;
+  /** Settings > Engines, to sign in. */
+  onSignIn?: () => void;
 }
 
 /** A chat: the middle of the window, and its sidebar. */
@@ -114,6 +119,8 @@ export function RoomView(props: Props) {
   const pickable = usual
     ? [usual, ...who.filter((w) => w.id !== usual.id).sort((a, b) => a.name.localeCompare(b.name))]
     : [];
+  // A new chat's agent on a signed-out account can't answer: said over the box, with Sign in.
+  const out = ahead && props.signedOut?.(ahead.id);
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   // Closed by itself in the assistant's chat, where a guest stays for one subject.
   const sidebar = !fresh && (props.sidebar ?? (!own && state.members.length > 1));
@@ -267,6 +274,15 @@ export function RoomView(props: Props) {
             </p>
           ) : (
             <>
+              {out && (
+                <p className="new-cant" role="status">
+                  <StateMark state="cant" size={12} />
+                  <span>{out} is signed out</span>
+                  <Button size="sm" variant="outline" onClick={props.onSignIn}>
+                    Sign in
+                  </Button>
+                </p>
+              )}
               {fresh && !own && (
                 <div className="new-picks">
                   <ProjectPick

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
 import { useCard } from '../components/Corner';
-import { desktop } from '../desktop';
+import { desktop, pickFolder } from '../desktop';
 import { report } from '../report';
 import { Row } from './Row';
 
@@ -52,24 +52,16 @@ export function AgentFolder() {
 
   /** The system's folder picker in the desktop window; a browser, or a picker that fails, gets the field. */
   const pick = () => {
-    const window = desktop();
     // One picker at a time: each open is its own system dialog, and Change can still be invoked behind it.
     if (saving || picking.current) return;
-    if (!window) return setTyped(folder);
-    const options = {
-      directory: true,
-      defaultPath: folder,
-      title: 'Agent folder',
-      canCreateDirectories: true,
-    };
+    if (!desktop()) return setTyped(folder);
     picking.current = true;
-    window
-      .invoke('plugin:dialog|open', { options })
+    pickFolder('Agent folder', folder)
       .then(
         (picked) => {
           // Back to Change, as from the field: WebKit never focuses a clicked button.
           change.current?.focus();
-          if (typeof picked === 'string') store(picked);
+          if (picked) store(picked);
         },
         (e) => {
           report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });

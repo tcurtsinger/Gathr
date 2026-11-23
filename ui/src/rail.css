@@ -55,3 +55,18 @@
     animation: none;
   }
 }
+/* An agent's account is signed out: a dot on Settings, where it signs in. */
+.rail-settings {
+  position: relative;
+}
+.rail-settings[data-attention]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--destructive);
+  box-shadow: 0 0 0 2px var(--shell);
+}

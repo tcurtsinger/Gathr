@@ -76,3 +76,24 @@
   letter-spacing: 2px;
   color: var(--text);
 }
+/* An engine's first copy downloading: the row's line, muted, turning. */
+.engine-fetching {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.engine-fetching svg {
+  width: 13px;
+  height: 13px;
+  animation: engine-turn 1.2s linear infinite;
+}
+@keyframes engine-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .engine-fetching svg {
+    animation: none;
+  }
+}

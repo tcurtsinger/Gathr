@@ -446,6 +446,9 @@ export interface Engine {
   };
 }
 
+/** An engine with no copy yet says so in a why: it is downloading, not failing. */
+export const downloading = (why?: string | null) => !!why?.endsWith(' is downloading');
+
 export interface Account {
   id: string;
   name: string;

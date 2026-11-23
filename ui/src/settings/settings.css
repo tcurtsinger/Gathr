@@ -1,11 +1,14 @@
 /* Settings (the owner's pick A, 2026-11-21): no header bar, the pages in groups at the left, each page a narrow
-   column of flat rows between hairlines. */
-.settings-panel {
+   column of flat rows between hairlines. New project (NewProject.tsx) holds Settings > Projects' rows: it takes
+   their colours. */
+:is(.settings-panel, .new-project) {
   --settings-nav: #292929;
   --hair: oklch(0.985 0.002 106 / 8.5%);
   --faint: oklch(0.6 0.004 106);
   --field: oklch(0.985 0.002 106 / 3%);
   --current: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.settings-panel {
   width: min(1024px, calc(100vw - 64px));
   height: min(760px, calc(100dvh - 96px));
   border: 0;
@@ -13,7 +16,7 @@
     0 0 0 1px var(--border),
     0 24px 64px #0000005c;
 }
-html.light .settings-panel {
+html.light :is(.settings-panel, .new-project) {
   --settings-nav: oklch(0.973 0.002 106);
   --hair: oklch(0.92 0.004 106);
   --faint: oklch(0.62 0.006 106);

@@ -1,20 +1,18 @@
-/* New project: the one dialog (components/Dialog.tsx), with the shared form fields (app.css). */
+/* New project: the one dialog (components/Dialog.tsx) holding Settings > Projects' rows and team editor. */
 .new-project {
-  width: min(480px, calc(100vw - 32px));
+  width: min(560px, calc(100vw - 32px));
 }
-.new-project form {
-  display: grid;
-  gap: 16px;
-  padding: 20px 24px 24px;
+.new-project .settings-col {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 24px 28px 24px;
   overflow: auto;
 }
-.new-project-agent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
+.new-project .settings-head h3 {
+  font-size: 20px;
+  line-height: 28px;
 }
-.new-project legend small {
-  margin-left: 6px;
-  color: var(--muted);
+.new-project .setting-control input {
+  width: 260px;
 }

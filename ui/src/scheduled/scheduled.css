@@ -7,10 +7,6 @@
 .scheduled-nav .chatrow[data-disabled] .face {
   opacity: 0.55;
 }
-.scheduled-none {
-  margin: 6px 8px;
-  font-size: 13px;
-}
 .screen-title .scheduled-where {
   font-size: 14px;
 }

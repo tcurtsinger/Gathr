@@ -15,6 +15,8 @@ interface Props {
   open: Opened;
   onOpen: (screen: Opened) => void;
   onSettings: (opener: HTMLElement) => void;
+  /** An agent's account is signed out: a dot on Settings. */
+  signedOut: boolean;
   /** Gathr's own update (0032): the version ready to install, or that it's installing now. */
   update: { ready: string | null; updating: boolean; asking: boolean; onUpdate: () => void };
 }
@@ -23,7 +25,7 @@ interface Props {
  * The rail on the window's shell (0070): Home, Agents, Memory, Plugins, Designs and Scheduled at the top, the open one
  * lit; Update and Settings at the foot.
  */
-export function Rail({ open, onOpen, onSettings, update }: Props) {
+export function Rail({ open, onOpen, onSettings, signedOut, update }: Props) {
   const button = (screen: Opened, name: string, icon: ReactNode) => (
     <IconButton
       aria-label={name}
@@ -60,7 +62,8 @@ export function Rail({ open, onOpen, onSettings, update }: Props) {
         )}
         <IconButton
           aria-label="Settings"
-          className="rail-button"
+          className="rail-button rail-settings"
+          data-attention={signedOut || undefined}
           onClick={(e) => onSettings(e.currentTarget)}
         >
           <Settings aria-hidden="true" />

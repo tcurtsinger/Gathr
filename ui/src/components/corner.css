@@ -93,3 +93,18 @@
   width: 15px;
   height: 15px;
 }
+/* Under way, not failed: muted, turning. */
+.corner-calm {
+  color: var(--muted-foreground);
+  animation: corner-turn 1.2s linear infinite;
+}
+@keyframes corner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .corner-calm {
+    animation: none;
+  }
+}
