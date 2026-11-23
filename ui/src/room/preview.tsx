@@ -270,7 +270,7 @@ function Preview() {
             hint={`Message ${team.find((t) => t.id === chosen)?.name}`}
             people={team}
             to={draft.picks.length ? draft.picks : team.filter((t) => t.id === chosen)}
-            choices={members.map((m) => ({ id: m.agent, name: m.name, lead: m.role === 'supervisor' }))}
+            choices={members.map((m) => ({ id: m.agent, name: m.name }))}
             onPick={setChosen}
           />
         </Room>

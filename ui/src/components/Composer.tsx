@@ -48,9 +48,9 @@ interface Props {
   to?: readonly { id: string; name: string; joins?: boolean }[];
   /**
    * Who a message that names nobody can go to: with `onPick`, a chip by Send says who gets it before anything is
-   * typed, and opens to pick another. Its frame is faint green while it holds the lead.
+   * typed, and opens to pick another.
    */
-  choices?: readonly { id: string; name: string; lead?: boolean }[];
+  choices?: readonly { id: string; name: string }[];
   onPick?: (agent: string) => void;
   /** What its field is called: "Message" at the chat's foot, "Reply" at a thread's (0076). */
   label?: string;
@@ -257,7 +257,6 @@ export function Composer(props: Props) {
                 aria-label="To"
                 side="top"
                 className="composer-pick"
-                data-lead={choices?.some((c) => c.id === chip.id && c.lead) || undefined}
                 value={chip.id}
                 onChange={onPick as (agent: string) => void}
                 choices={(choices ?? []).map((c) => ({

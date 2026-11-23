@@ -59,6 +59,12 @@ export function people(members: Member[], known: FaceOf[]): People {
   };
 }
 
+/** "Lead" under the lead's picture, in a chat with more than one agent (the owner's pick, 2026-11-23). */
+export function LeadMark({ people, agent }: { people: People; agent: string }) {
+  if (!people.lead(agent) || people.names.length < 2) return null;
+  return <span className="room-lead">Lead</span>;
+}
+
 /** What the person can do on a card: answer its approval, open its question, like it. */
 export interface Acts {
   approve: (request: string, allow: boolean) => void;
@@ -289,7 +295,7 @@ function Picked({ message, words: text }: { message: Message; words: string }) {
 
 /**
  * An agent's main message: its picture in the margin, the card, its name under it, then its replies folded. The card
- * has no head: a lead's card has a faint green frame, and one waiting on the person a blue one.
+ * has no head; one waiting on the person has a blue frame. The lead's picture has "Lead" under it.
  */
 function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
   // A turn sent to no agent has none: it is drawn as "An agent".
@@ -303,12 +309,12 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
     <div className="room-item room-turn">
       <span className="room-who">
         <Face agent={ctx.people.face(agent)} size={28} />
+        <LeadMark people={ctx.people} agent={agent} />
       </span>
       <article
         className="room-card"
         data-live={running || undefined}
         data-needs={needs || undefined}
-        data-lead={ctx.people.lead(agent) || undefined}
         data-found={holds(card, ctx.found)}
         aria-label={needs ? `${ctx.people.name(agent)}, needs you` : ctx.people.name(agent)}
       >
