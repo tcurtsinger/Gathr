@@ -203,6 +203,21 @@ fn nothing_ready_and_a_bad_download_each_say_why_with_a_reference() {
         ok && trace.to_string().contains("gathr.app.update"),
         "{trace}"
     );
+
+    // The next check that ends up to date clears it: Settings no longer says the last check failed.
+    publish(
+        &feed,
+        &dir.0,
+        "0.0.1",
+        env!("CARGO_BIN_EXE_gathrd"),
+        "same ui",
+    );
+    check_now(&service);
+    let app = until(30, "the failure to clear", || {
+        let app = service.call("GET", "/api/app").json();
+        (app["state"] == "idle" && app["failed"].is_null()).then_some(app)
+    });
+    assert_eq!(app["version"], "0.0.1", "{app}");
 }
 
 fn current(data: &Path) -> Value {
