@@ -62,7 +62,7 @@ test('a refused save says why with its reference, and keeps the draft', async ()
   const opened: string[] = [];
   const screen = await render(
     <>
-      <Projects start="p" />
+      <Projects start="p" onAdd={() => {}} />
       <Corner onReference={(ref) => opened.push(ref)} />
     </>,
   );
@@ -79,7 +79,7 @@ test('a refused save says why with its reference, and keeps the draft', async ()
 
 test('the team keeps one lead and at least one agent; a new lead makes the one before a Member', async () => {
   service((body) => new Response(JSON.stringify({ ...project, ...body, members: project.members })));
-  const screen = await render(<Projects start="p" />);
+  const screen = await render(<Projects start="p" onAdd={() => {}} />);
   const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
   const remove = (name: string) => screen.getByRole('button', { name: `Remove ${name}` });
   const pick = async (field: ReturnType<typeof role>, choice: string) => {
@@ -120,7 +120,7 @@ test('Delete asks with what the service counts, then deletes the project and sho
     }
     return answer({});
   });
-  const screen = await render(<Projects start="p" />);
+  const screen = await render(<Projects start="p" onAdd={() => {}} />);
   await screen.getByRole('button', { name: 'Delete' }).click();
   const confirm = screen.getByRole('dialog', { name: 'Delete Made-up project?' });
   await expect.element(confirm.getByText('4 chats will be deleted. Files are kept.')).toBeVisible();

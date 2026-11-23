@@ -5,10 +5,11 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-/* Just right of navigation, 40px down; the sidebar is its containing block. */
+/* Just right of navigation, 8px down, where it opened when it ran the window's height; the sidebar is its
+   containing block. */
 .flyout-anchor {
   position: absolute;
-  top: 40px;
+  top: 8px;
   right: 0;
   width: 1px;
   height: 1px;
@@ -19,8 +20,8 @@
   display: flex;
   flex-direction: column;
   width: min(340px, calc(100vw - 32px));
-  height: calc(100dvh - 56px);
-  max-height: var(--radix-popover-content-available-height);
+  /* As tall as what it holds, up to the window's height: an empty search is just its box. */
+  max-height: min(calc(100dvh - 56px), var(--radix-popover-content-available-height));
   overflow: hidden;
   border-radius: 12px;
   background: var(--popover);

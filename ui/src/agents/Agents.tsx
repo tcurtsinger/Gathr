@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { type Account, type Agent, api, type Failure } from '../api';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
+import { WORD } from '../components/marks';
+import { StateMark } from '../components/StateMark';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
 import type { AgentsAt, ProposingAgent } from '../room/Proposal';
@@ -110,6 +112,12 @@ export function Agents({ at, onAssistant }: Props) {
                 <Face agent={a} size={20} />
                 <span>{a.name}</span>
                 {a.id === assistant && <small className="agent-tag">Assistant</small>}
+                {accounts?.find((x) => x.id === a.account)?.login === 'signed_out' && (
+                  // Its account is signed out: the mark the sidebar's assistant row shows.
+                  <i className="chat-mark" role="img" aria-label={WORD.cant}>
+                    <StateMark state="cant" size={9} />
+                  </i>
+                )}
               </button>
             </div>
           ))}

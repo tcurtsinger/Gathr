@@ -177,7 +177,7 @@ export function Sidebar(props: Props) {
               }}
             >
               Archived
-              <span className="nav-count">{archived.length}</span>
+              {archived.length > 0 && <span className="nav-count">{archived.length}</span>}
             </button>
           </h2>
           {archiveOpen &&

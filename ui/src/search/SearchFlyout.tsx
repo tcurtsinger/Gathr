@@ -154,7 +154,7 @@ export function SearchFlyout({ name, onOpen, onShortcut }: Props) {
           ref={input}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search"
+          placeholder="Chats and messages"
           aria-label="Search chats and messages"
           maxLength={200}
           autoComplete="off"

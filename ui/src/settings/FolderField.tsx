@@ -27,6 +27,7 @@ export function FolderField({ id, value, title, onChange }: Props) {
         className="project-folder"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        placeholder="Folder path"
         required
         spellCheck={false}
         autoComplete="off"

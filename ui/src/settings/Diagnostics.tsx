@@ -12,7 +12,6 @@ type Filter = (typeof filters)[number];
 
 interface Props {
   chat?: string;
-  title?: string;
   /** Opens at this turn. */
   turn?: string;
   /** Shows this reference's events instead, for one with no turn behind it (a sign-in). */
@@ -51,7 +50,7 @@ function Reference({ reference }: { reference: string }) {
   );
 }
 
-function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
+function Turns({ chat, turn }: Omit<Props, 'reference'>) {
   const [list, setList] = useState<TurnTimeline[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
@@ -86,7 +85,7 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
 
   if (!chat) return <Page wide title="Turns" line="No chat open" />;
   return (
-    <Page wide title={title ?? 'Turns'} line="Each turn, step by step.">
+    <Page wide title="Turns" line="In this chat, step by step.">
       <div className="toolbar">
         <label htmlFor="diagnostics-filter">Turns</label>
         <Dropdown

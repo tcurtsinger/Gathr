@@ -54,7 +54,7 @@
 .screen-empty p {
   margin: 0;
 }
-.screen-empty [data-slot="button"] {
+.screen-empty :is([data-slot="button"], .screen-add) {
   margin: 8px 0 0;
 }
 .screen-group + .screen-group {

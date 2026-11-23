@@ -13,6 +13,10 @@
   font-size: 20px;
   line-height: 28px;
 }
+/* Name and Folder close with a line, as every row does, before the team's heading. */
+.new-project .settings-head + .settings-rows {
+  border-bottom: 1px solid var(--hair);
+}
 .new-project .setting-control input {
   width: 260px;
 }

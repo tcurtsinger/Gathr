@@ -28,7 +28,6 @@ export interface SettingsTarget {
   project?: string;
   /** Turns opens at this chat, and this turn when one is given. */
   chat?: string;
-  title?: string;
   turn?: string;
   /** Turns shows this reference's events, for a failure with no turn. */
   reference?: string;
@@ -40,6 +39,8 @@ interface Props {
   target: SettingsTarget | null;
   onPage: (page: Page) => void;
   onClose: () => void;
+  /** Projects' Add: New project's dialog. */
+  onNewProject: () => void;
 }
 
 const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark | typeof ConnectMark][]][] = [
@@ -69,7 +70,7 @@ const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark | typeo
 ];
 
 /** Settings, centred over the current screen (0023): its pages at the left in three groups. The screen under it keeps its state. */
-export function SettingsPanel({ target, onPage, onClose }: Props) {
+export function SettingsPanel({ target, onPage, onClose, onNewProject }: Props) {
   // Each pick in the left column opens its page afresh: Projects again goes back to the list.
   const [visit, setVisit] = useState(0);
   return (
@@ -120,16 +121,11 @@ export function SettingsPanel({ target, onPage, onClose }: Props) {
             ) : target.page === 'teamwork' ? (
               <Teamwork />
             ) : target.page === 'projects' ? (
-              <Projects start={target.project} />
+              <Projects start={target.project} onAdd={onNewProject} />
             ) : target.page === 'friction' ? (
               <Friction />
             ) : (
-              <Diagnostics
-                chat={target.chat}
-                title={target.title}
-                turn={target.turn}
-                reference={target.reference}
-              />
+              <Diagnostics chat={target.chat} turn={target.turn} reference={target.reference} />
             )}
           </div>
         </div>
