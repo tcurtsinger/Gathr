@@ -16,11 +16,12 @@ export function EngineLogo({ engine, className }: { engine: string; className?: 
 /** An app outside Gathr, from the name it gave: its brand, and the engine whose logo it shows. */
 function brandOf(app: string): { name: string; engine?: string } {
   if (/claude/i.test(app)) return { name: 'Claude', engine: 'claude' };
-  if (/chatgpt|codex|openai/i.test(app)) return { name: 'ChatGPT', engine: 'codex' };
+  if (/codex/i.test(app)) return { name: 'Codex', engine: 'codex' };
+  if (/chatgpt|openai/i.test(app)) return { name: app, engine: 'codex' };
   return { name: app };
 }
 
-/** "Claude" or "ChatGPT" for an app of theirs; any other app keeps the name it gave. */
+/** "Claude" or "Codex" for those apps; any other app keeps the name it gave. */
 export const appName = (app: string) => brandOf(app).name;
 
 /** The app's logo, or Connect's mark for an app that is neither. */

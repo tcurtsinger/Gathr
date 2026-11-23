@@ -200,7 +200,7 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
 
 /**
  * Words an AI app outside Gathr sent for the person (the owner's ask, 2026-11-22): drawn as an agent's main message,
- * under the app's logo and its brand, "Claude" or "ChatGPT", or the name another app gave.
+ * under the app's logo and its brand, "Claude" or "Codex", or the name another app gave.
  */
 function Outside({ said, app, ctx }: { said: Said; app: string; ctx: Ctx }) {
   const body = said.message.body as string;
