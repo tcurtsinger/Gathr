@@ -155,12 +155,14 @@ impl TestService {
         }
     }
 
-    /// The live socket, past its handshake, reading with a 3 s timeout.
+    /// The live socket, past its handshake, reading with a 10 s timeout: as long as `wait_for` is
+    /// given. A loaded Windows runner held every running test still for 7 to 10 s at once (PR
+    /// #431's CI: tests that take 0.5 s took 10 s), and a 3 s read failed a turn that was fine.
     pub fn live(&self) -> std::net::TcpStream {
         use std::io::{Read, Write};
         let mut socket = std::net::TcpStream::connect(("127.0.0.1", self.info.port)).unwrap();
         socket
-            .set_read_timeout(Some(Duration::from_secs(3)))
+            .set_read_timeout(Some(Duration::from_secs(10)))
             .unwrap();
         let handshake = format!(
             "GET /api/live?token={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
