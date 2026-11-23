@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type BoardLine } from '../api';
+import { Face } from '../components/Face';
 import { listen } from '../live';
 import './board.css';
 
@@ -10,7 +11,10 @@ const STATES: Record<BoardLine['state'], string> = {
   done: 'Done',
 };
 
-/** The chat's board, on the panel's Home: read only. A read that fails says nothing: the live socket reloads it. */
+/**
+ * The chat's board, on the panel's Home, each line with its owner's face: read only. A read that fails says nothing:
+ * the live socket reloads it.
+ */
 export function Board({ chat }: { chat: string }) {
   const [lines, setLines] = useState<BoardLine[] | null>(null);
   useEffect(() => {
@@ -31,9 +35,12 @@ export function Board({ chat }: { chat: string }) {
       {lines.length === 0 && <p className="board-empty">No work yet</p>}
       {lines.map((line) => (
         <div key={line.id} className="board-line">
-          <div>{line.text}</div>
-          <div className="board-meta">
-            <span className={`board-state ${line.state}`}>{STATES[line.state]}</span>· {line.name}
+          <Face agent={{ id: line.owner, name: line.name }} size={20} />
+          <div>
+            <div>{line.text}</div>
+            <div className="board-meta">
+              <span className={`board-state ${line.state}`}>{STATES[line.state]}</span>
+            </div>
           </div>
         </div>
       ))}

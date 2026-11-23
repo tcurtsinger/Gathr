@@ -2,14 +2,17 @@ import { ChevronRight, CodeXml, Copy, File as FileIcon, FileX, Folder, FolderOpe
 import { type CSSProperties, useCallback, useContext, useEffect, useState } from 'react';
 import { api, Failure, type FileEntry, type FileTree, type Unshown } from '../api';
 import { useCard } from '../components/Corner';
+import { DesignsMark } from '../components/DesignsMark';
 import { Face } from '../components/Face';
 import { pictureUrl } from '../components/FileTile';
 import { isPicture, OpenFile } from '../components/files';
 import { IconButton } from '../components/IconButton';
+import { optionsOf, useDesigns } from './Design';
 import { FileBody, hasLook } from './FileBody';
 import { isPage, PageFrame } from './PageFrame';
 import { PdfBody } from './PdfBody';
 import { SheetBody } from './SheetBody';
+import type { RoomState } from './useRoom';
 
 /** A file open in a tab: its path, and its place in the tree from the top folder down. */
 export interface Opened {
@@ -21,8 +24,19 @@ export interface Opened {
   page?: string;
 }
 
-/** The Files tab: the project's folder, then Shared, the project's Designs and each agent's folder for this chat. */
-export function Tree({ chat, onOpen }: { chat: string; onOpen: (file: Opened) => void }) {
+/**
+ * The Files tab: the project's folder, Shared and the project's designs, then each agent's folder for this chat. A
+ * design is one row, opening as the Designs tab opens it.
+ */
+export function Tree({
+  chat,
+  room,
+  onOpen,
+}: {
+  chat: string;
+  room: RoomState;
+  onOpen: (file: Opened) => void;
+}) {
   const [tree, setTree] = useState<FileTree>();
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
@@ -41,15 +55,63 @@ export function Tree({ chat, onOpen }: { chat: string; onOpen: (file: Opened) =>
       onOpen={onOpen}
     />
   );
-  const agents = [tree.shared, tree.designs, ...tree.agents].flatMap((p) => (p ? [p] : []));
+  const own = [tree.project, tree.shared].flatMap((p) => (p ? [p] : []));
   return (
     <div className="tree">
       {tree.project && <h3>Project</h3>}
-      {tree.project && top({ ...tree.project, folder: true }, true)}
-      {agents.length > 0 && <h3>Agents</h3>}
-      {agents.map((p) => top({ ...p, folder: true }, p === tree.shared, p.agent))}
-      {!tree.project && !agents.length && <p className="tree-empty">No files yet</p>}
+      {own.map((p) => top({ ...p, folder: true }, true))}
+      {tree.designs && <DesignsNode chat={chat} room={room} onOpen={onOpen} />}
+      {tree.agents.length > 0 && <h3>Agents</h3>}
+      {tree.agents.map((p) => top({ ...p, folder: true }, false, p.agent))}
+      {!own.length && !tree.designs && !tree.agents.length && <p className="tree-empty">No files yet</p>}
     </div>
+  );
+}
+
+/** The project's Designs in the tree: each design one row, with its options and who is writing it. */
+function DesignsNode({
+  chat,
+  room,
+  onOpen,
+}: {
+  chat: string;
+  room: RoomState;
+  onOpen: (file: Opened) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { list, writer } = useDesigns(chat, room, open);
+  return (
+    <>
+      <button
+        type="button"
+        className="tree-row"
+        style={{ '--depth': 0 } as CSSProperties}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronRight className="tree-chevron" data-open={open} aria-hidden="true" />
+        <DesignsMark />
+        <span>Designs</span>
+      </button>
+      {open &&
+        list?.map((d) => {
+          const { by, writing } = writer(d);
+          return (
+            <button
+              type="button"
+              key={d.path}
+              className="tree-row"
+              style={{ '--depth': 1 } as CSSProperties}
+              onClick={() => onOpen({ path: d.path, crumbs: [d.name], design: true })}
+            >
+              <span className="tree-chevron" />
+              <DesignsMark />
+              <span>{d.name}</span>
+              <small>{writing && by ? `${optionsOf(d)} · ${by.name} writing` : optionsOf(d)}</small>
+            </button>
+          );
+        })}
+    </>
   );
 }
 

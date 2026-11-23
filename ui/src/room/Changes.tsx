@@ -33,7 +33,7 @@ function Totals({ added, removed }: { added: number; removed: number }) {
 const last = new Map<string, ChatChanges>();
 
 /** The chat's change, read on each look while `open`: the last read until then, undefined before any. */
-function useChanges(chat: string, room: RoomState, open: boolean) {
+export function useChanges(chat: string, room: RoomState, open: boolean) {
   const [changes, setChanges] = useState(() => last.get(chat));
   const [failure, setFailure] = useState<Failure>();
   useCard(failure);
@@ -56,26 +56,51 @@ function useChanges(chat: string, room: RoomState, open: boolean) {
 }
 
 /** Every changed file of an agent: in its worktree, then in each other checkout. */
-const filesOf = (a: ChatChanges['agents'][number]) => [...a.files, ...a.outside.flatMap((o) => o.files)];
+export const filesOf = (a: ChatChanges['agents'][number]) => [
+  ...a.files,
+  ...a.outside.flatMap((o) => o.files),
+];
 
-/** Home's Changes tile: how many files the chat's agents changed, once read, when they changed any. */
-export function ChangesTile({ chat, room, open, onOpen }: Props & { onOpen: () => void }) {
-  const changes = useChanges(chat, room, open);
-  const files = changes?.agents.reduce((n, a) => n + filesOf(a).length, 0) ?? 0;
+/** Home's Changes tile: how many files the chat's agents changed and their lines, once read. */
+export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen: () => void }) {
+  const all = changes?.agents?.flatMap(filesOf) ?? [];
   return (
     <button type="button" className="home-tile" onClick={onOpen}>
-      <ChangesMark />
-      Changes
-      {files > 0 && <span className="changes-count">{files}</span>}
+      <span className="home-tile-name">
+        <ChangesMark />
+        Changes
+      </span>
+      <span className="home-tile-sub">
+        {all.length > 0 && count(all.length, 'file')}
+        {all.length > 0 && <Totals {...sum(all)} />}
+        {changes && !all.length && 'None yet'}
+      </span>
     </button>
   );
 }
 
-interface Props {
-  chat: string;
-  room: RoomState;
-  /** Whether it is the shown tab: only then it reads the change again. */
-  open: boolean;
+// Each chat's change as the person last saw it with the panel open, while the window is open.
+const seen = new Map<string, string>();
+const said = (c: ChatChanges) =>
+  JSON.stringify(c.agents.map((a) => filesOf(a).map((f) => [f.path, f.added, f.removed])));
+
+/**
+ * Whether the chat has a change the person hasn't seen: read on each look while the panel is closed, against the
+ * change last read while it was open.
+ */
+export function useUnseen(chat: string, room: RoomState, sidebar: boolean) {
+  const changes = useChanges(chat, room, !sidebar);
+  useEffect(() => {
+    if (!sidebar) return;
+    const mark = () => {
+      const c = last.get(chat);
+      if (c?.agents) seen.set(chat, said(c));
+    };
+    mark();
+    return mark;
+  }, [chat, sidebar]);
+  if (sidebar || !changes?.agents?.some((a) => filesOf(a).length)) return false;
+  return said(changes) !== seen.get(chat);
 }
 
 /**
@@ -83,8 +108,7 @@ interface Props {
  * worktree, then under each other checkout it wrote in. A file's lines are read when it is first open, and again when
  * its totals change.
  */
-export function Changes({ chat, room, open }: Props) {
-  const changes = useChanges(chat, room, open);
+export function Changes({ chat, changes }: { chat: string; changes?: ChatChanges }) {
   // Each file's fold, by agent, checkout and path, kept from when it is first seen: as the whole change's size says then.
   const folds = useRef(new Map<string, boolean>()).current;
   const [, setFolded] = useState(0);
