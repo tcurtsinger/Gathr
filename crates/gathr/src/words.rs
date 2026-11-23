@@ -7,13 +7,13 @@ mod counted;
 pub use counted::{Counted, counted};
 
 pub const CARRY_ON: i64 = 2;
-pub const CHECK: i64 = 3;
+pub const CHECK: i64 = 4;
 pub const LAST_WORD: i64 = 2;
-pub const REPLY: i64 = 2;
+pub const REPLY: i64 = 3;
 pub const PICKED: i64 = 1;
 pub const SCHEDULED: i64 = 1;
 pub const BRIEF: i64 = 1;
-pub const APP: i64 = 1;
+pub const APP: i64 = 2;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -33,14 +33,16 @@ pub(super) fn check(
             })?,
         )
     };
-    let by_person: bool = conn.query_row(
-        "SELECT role = 'user' FROM messages WHERE id = ?1",
+    // The person's role, but an AI app outside Gathr sent it: asked by the app, never by the person.
+    let (by_person, app): (bool, Option<String>) = conn.query_row(
+        "SELECT m.role = 'user', f.app FROM messages m LEFT JOIN from_app f ON f.message_id = m.id WHERE m.id = ?1",
         [asked],
-        |r| r.get(0),
+        |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
-    let asked = match by_person {
-        true => format!("The person asked: {}", body(asked)?),
-        false => body(asked)?,
+    let asked = match (by_person, app) {
+        (true, Some(app)) => format!("{} asked: {}", crate::from_app::speaker(&app), body(asked)?),
+        (true, None) => format!("The person asked: {}", body(asked)?),
+        (false, _) => body(asked)?,
     };
     let lines = [
         format!(

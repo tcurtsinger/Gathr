@@ -1,6 +1,7 @@
 //! The person's messages an AI app outside Gathr sent (`from_app`): the name the app gave as it connected. Such a
-//! message is sent as the person's own, with one line of Gathr's before it for the agent; the app reads the answer
-//! when it asks, through how a chat stands and what its agents said since.
+//! message is sent as the person's own, with one line of Gathr's before it for the agent; every agent hears it as the
+//! app's, another AI agent and not the person. The app reads the answer when it asks, through how a chat stands and
+//! what its agents said since.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -19,14 +20,23 @@ pub fn mark(conn: &Connection, message: &mut Value, app: &str) -> Result<(), Err
     Ok(())
 }
 
-/// Gathr's line before such a message's words, for its agent: which app sent it, and that the app reads the answer.
+/// Who said such a message, as every agent hears it: the app, by its name, never the person.
+pub fn speaker(app: &str) -> String {
+    format!("{app} (an outside AI agent, not the person)")
+}
+
+/// Gathr's line before such a message's words, for its agent: which app sent it, that the words are its own and not
+/// the person's, and that it reads the answer.
 pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
     let sql = "SELECT app FROM from_app WHERE message_id = ?1";
     let app: Option<String> = (conn.prepare_cached(sql)?)
         .query_row([message], |r| r.get(0))
         .optional()?;
     Ok(app.map(|app| {
-        format!("{app}, an AI app the person uses on this PC, sent this for the person. The app reads your answer.")
+        format!(
+            "{app} is another AI agent the person uses on this PC: these are its words, not the person's. \
+             {app} reads your answer."
+        )
     }))
 }
 

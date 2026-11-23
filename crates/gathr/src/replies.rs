@@ -185,19 +185,22 @@ fn answered(
     let Some(to) = to else {
         return Ok(None);
     };
-    let sql = "SELECT m.role, m.body, m.ts, t.agent_id FROM messages m
-               LEFT JOIN turns t ON t.id = m.turn_id WHERE m.id = ?1";
-    let target: Option<(String, String, i64, Option<String>)> = conn
+    let sql = "SELECT m.role, m.body, m.ts, t.agent_id, f.app FROM messages m
+               LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN from_app f ON f.message_id = m.id WHERE m.id = ?1";
+    type Found = (String, String, i64, Option<String>, Option<String>);
+    let target: Option<Found> = conn
         .query_row(sql, [&to], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })
         .optional()?;
-    let Some((role, body, ts, author)) = target else {
+    let Some((role, body, ts, author, app)) = target else {
         return Ok(None);
     };
-    let whose = match role.as_str() {
-        "user" => "their own".to_string(),
-        "gathr" => "Gathr's".to_string(),
+    // Words an AI app outside Gathr sent are the app's, never the person's own.
+    let whose = match (role.as_str(), app) {
+        ("user", Some(app)) => format!("{app}'s"),
+        ("user", None) => "their own".to_string(),
+        ("gathr", _) => "Gathr's".to_string(),
         _ => match whose(author)? {
             w if w.is_empty() => "an agent's".to_string(),
             w => w,
