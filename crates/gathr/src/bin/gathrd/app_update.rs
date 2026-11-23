@@ -336,6 +336,9 @@ impl AppUpdates {
         let event = Event::point("gathr.app.update")
             .trace(&trace)
             .attr("running", self.running.as_str());
+        // A check that ends clears the last failure, except at a refused release: what's shown then
+        // is why it was refused (its start failed), which still holds.
+        let keeps_failure = matches!(found, Ok(Found::Refused(_)));
         let (mut event, ready, failed) = match found {
             Ok(Found::UpToDate) => (event.ok(), None, None),
             Ok(Found::Refused(version)) => (event.ok().attr("refused", version), None, None),
@@ -353,7 +356,7 @@ impl AppUpdates {
         let mut shown = self.shown();
         shown.checking = false;
         shown.checked_us = Some(ids::now_us());
-        if failed.is_some() || ready.is_some() {
+        if !keeps_failure {
             shown.failed = failed;
         }
         ready
