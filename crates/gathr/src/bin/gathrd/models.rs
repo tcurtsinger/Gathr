@@ -34,10 +34,13 @@ pub fn routes() -> Router<Arc<State>> {
     Router::new().route("/api/accounts/{account}/models", get(models))
 }
 
+type Listed = (PathBuf, Login, Value);
+
 #[derive(Default)]
 pub struct Models {
-    /// Each account's last list, and the engine copy and sign-in state it came from.
-    last: Mutex<HashMap<String, (PathBuf, Login, Value)>>,
+    /// Each account's last list, and the engine copy and sign-in state it came from. A lock per
+    /// account, so one account's ask never holds up another's.
+    last: std::sync::Mutex<HashMap<String, Arc<Mutex<Option<Listed>>>>>,
     /// Engines still closing after their answer, which shutdown waits for.
     closing: std::sync::Mutex<JoinSet<()>>,
 }
@@ -70,15 +73,25 @@ async fn models(
 /// The account's models, asked of its engine once per engine copy and sign-in state.
 pub async fn list(s: &State, trace: &str, account: &Account) -> Result<Value, String> {
     let folder = account.folder(&s.data);
-    // One ask at a time: a second request waits for the first's list instead of starting another.
-    let mut last = s.models.last.lock().await;
+    // One ask at a time per account: a second request waits for the first's list instead of
+    // starting another.
+    let slot = {
+        let mut all = s.models.last.lock().expect("never poisoned");
+        all.entry(account.id.clone()).or_default().clone()
+    };
+    let mut last = slot.lock().await;
     let program = if account.engine == "codex" {
         gathr::codex::command::find(gathr::codex::copies::storage(&s.data).program())
     } else {
         command::find(s.chats.copy())
     };
-    let login = s.chats.login_status(&folder).await.0;
-    if let (Ok(program), Some((was, was_login, list))) = (&program, last.get(&account.id))
+    // A stale login is a signed-in one whose token is due for renewal: its account lists the same
+    // models, so a renewal, every few hours, doesn't start an engine to ask again.
+    let login = match s.chats.login_status(&folder).await.0 {
+        Login::Stale => Login::SignedIn,
+        login => login,
+    };
+    if let (Ok(program), Some((was, was_login, list))) = (&program, last.as_ref())
         && program == was
         && login == *was_login
     {
@@ -109,7 +122,7 @@ pub async fn list(s: &State, trace: &str, account: &Account) -> Result<Value, St
                     .attr("version", list["version"].clone()),
             );
             let program = program.expect("asked only with a program");
-            last.insert(account.id.clone(), (program, login, list.clone()));
+            *last = Some((program, login, list.clone()));
             Ok(list)
         }
         Err(why) => {
