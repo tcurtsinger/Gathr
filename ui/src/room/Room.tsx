@@ -532,7 +532,7 @@ interface BarProps {
   scheduled?: string;
   /** A project's brief: the assistant that wrote it, said with its face in place of the time. */
   from?: string;
-  /** Words an AI app sent for the person: the app, said with Connect an app's mark in place of the time. */
+  /** Words an AI app sent for the person: the app, said with Connect's mark in place of the time. */
   app?: string;
   /** The words Copy takes; none, no Copy. */
   text: string;

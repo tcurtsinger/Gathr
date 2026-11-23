@@ -107,20 +107,7 @@ async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -
     let mut tools = asked.join_all().await;
     tools.sort_by_key(|(i, _)| *i);
     let tools: Vec<Value> = tools.into_iter().map(|(_, tool)| tool).collect();
-    Ok(Json(json!({ "tools": tools, "connect": connect(&s) })))
-}
-
-/// What an AI app on this PC runs to connect to this service: Gathr's command line and its arguments, with this data
-/// folder when it isn't the system's own (a dev service's). None when there's no command line to run.
-fn connect(s: &State) -> Option<Value> {
-    let program = gathr::launch::command_line(&s.data)?;
-    let default = gathr::platform::default_data_dir();
-    let mut args = Vec::new();
-    if gathr::launch::folder_key(s.data.path(), &default).is_some() {
-        args.extend(["--data".to_string(), s.data.path().display().to_string()]);
-    }
-    args.push("connect".to_string());
-    Some(json!({ "program": program, "args": args }))
+    Ok(Json(json!({ "tools": tools })))
 }
 
 /// One tool, with its state and, when it's connected, its actions; one with a Client ID, with the

@@ -29,10 +29,27 @@ struct Picked {
 }
 
 /// Settings > General: the agent folder (0034), the hand-off limit, Auto-compact, the person's name
-/// and their assistant.
+/// and their assistant; and for Settings > Connect, what an AI app on this PC runs.
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     let data = s.data.path().to_path_buf();
-    db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
+    let shown = db(&s, &t, "Settings failed", move |c| shown(c, &data)).await?;
+    Ok(with_connect(&s, shown))
+}
+
+/// The settings with what an AI app on this PC runs to connect to this service (`gathr connect`): Gathr's command line
+/// and its arguments, with this data folder when it isn't the system's own (a dev service's). Null when there's no
+/// command line to run.
+fn with_connect(s: &State, Json(mut shown): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    shown["connect"] = json!(gathr::launch::command_line(&s.data).map(|program| {
+        let default = gathr::platform::default_data_dir();
+        let mut args = Vec::new();
+        if gathr::launch::folder_key(s.data.path(), &default).is_some() {
+            args.extend(["--data".to_string(), s.data.path().display().to_string()]);
+        }
+        args.push("connect".to_string());
+        json!({ "program": program, "args": args })
+    }));
+    Json(shown)
 }
 
 #[derive(Deserialize, Default)]
@@ -136,7 +153,7 @@ async fn change_settings(
     if picked {
         crate::team::take_over(&s, &t).await;
     }
-    Ok(answer)
+    Ok(with_connect(&s, answer))
 }
 
 fn shown(

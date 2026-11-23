@@ -1,16 +1,10 @@
-import {
-  Activity,
-  Cpu,
-  Flag,
-  Folder,
-  type LucideIcon,
-  SlidersHorizontal,
-  Sparkles,
-  Users,
-} from 'lucide-react';
+import { Activity, Cpu, Flag, Folder, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
 import { useState } from 'react';
+import { BackgroundMark } from '../components/BackgroundMark';
+import { ConnectMark } from '../components/ConnectMark';
 import { Dialog } from '../components/Dialog';
 import { Background } from './Background';
+import { Connect } from './Connect';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import { Friction } from './Friction';
@@ -18,7 +12,15 @@ import { General, Teamwork } from './General';
 import { Projects } from './Projects';
 import './settings.css';
 
-export type Page = 'general' | 'engines' | 'background' | 'teamwork' | 'projects' | 'turns' | 'friction';
+export type Page =
+  | 'general'
+  | 'engines'
+  | 'background'
+  | 'connect'
+  | 'teamwork'
+  | 'projects'
+  | 'turns'
+  | 'friction';
 
 export interface SettingsTarget {
   page: Page;
@@ -40,13 +42,14 @@ interface Props {
   onClose: () => void;
 }
 
-const groups: [string, [Page, string, LucideIcon][]][] = [
+const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark][]][] = [
   [
     'App',
     [
       ['general', 'General', SlidersHorizontal],
       ['engines', 'Engines', Cpu],
-      ['background', 'Background', Sparkles],
+      ['background', 'Background', BackgroundMark],
+      ['connect', 'Connect', ConnectMark],
     ],
   ],
   [
@@ -112,6 +115,8 @@ export function SettingsPanel({ target, onPage, onClose }: Props) {
               <Engines />
             ) : target.page === 'background' ? (
               <Background />
+            ) : target.page === 'connect' ? (
+              <Connect />
             ) : target.page === 'teamwork' ? (
               <Teamwork />
             ) : target.page === 'projects' ? (

@@ -1,0 +1,12 @@
+The Background mark in Settings (ui/src/components/BackgroundMark.tsx)
+
+"automation-4p" from fontaudio by fefanto, https://github.com/fefanto/fontaudio
+(svgs/fad-automation-4p.svg), as SVG Repo has it: https://www.svgrepo.com/svg/510384/automation-4p
+
+Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon.
+
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/
+The set's README says its icons are under CC BY 4.0, its fonts under SIL OFL 1.1 and its code under MIT:
+https://github.com/fefanto/fontaudio/blob/master/README.md#license
+SVG Repo lists this icon as MIT; the set's own statement is followed here.

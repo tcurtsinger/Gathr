@@ -71,9 +71,9 @@ pub fn waits(conn: &Connection, chat: &str) -> Result<Option<String>, Error> {
 }
 
 /// The agents' words in the chat since `app` last sent a message there (since the person's last message, when it
-/// sent none), oldest first: each as "Name: words", a long one cut as `read_chat` cuts it.
+/// sent none), oldest first: each as "Name: words", whole, since the app has nothing to open a cut message with.
 pub fn said_since(conn: &Connection, chat: &str, app: &str) -> Result<Vec<String>, Error> {
-    let sql = "SELECT m.id, m.body, coalesce(a.name, 'An agent') FROM messages m
+    let sql = "SELECT m.body, coalesce(a.name, 'An agent') FROM messages m
                LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
                WHERE m.chat_id = ?1 AND m.role = 'assistant' AND m.kind = 'text' AND m.ts > coalesce(
                    (SELECT max(u.ts) FROM messages u JOIN from_app f ON f.message_id = u.id
@@ -82,8 +82,8 @@ pub fn said_since(conn: &Connection, chat: &str, app: &str) -> Result<Vec<String
                ORDER BY m.ts, m.rowid";
     let mut stmt = conn.prepare_cached(sql)?;
     let rows = stmt.query_map(params![chat, app], |r| {
-        let (id, body, name): (String, String, String) = (r.get(0)?, r.get(1)?, r.get(2)?);
-        Ok(format!("{name}: {}", crate::text::kept(&body, &id)))
+        let (body, name): (String, String) = (r.get(0)?, r.get(1)?);
+        Ok(format!("{name}: {body}"))
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
