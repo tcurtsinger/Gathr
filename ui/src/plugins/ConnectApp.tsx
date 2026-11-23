@@ -39,7 +39,10 @@ export function ConnectApp({ connect }: { connect: Connect | null }) {
     <article className="skill-page connect-app">
       <h1>Connect an app</h1>
       <p className="muted">
-        Paste this line into an AI app on this PC. It can then add skills, tools, agents and projects.
+        {app === 'other'
+          ? 'Give the app this program and its arguments as an MCP server.'
+          : 'Run this line in a terminal on this PC.'}{' '}
+        The app can then add skills, tools, agents and projects.
       </p>
       <fieldset className="plugins-kind connect-apps" aria-label="App">
         {apps.map((a) => (
