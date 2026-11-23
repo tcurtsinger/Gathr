@@ -107,7 +107,8 @@ its cells 10px by 16px with no lines between rows.
   shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
   backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
   "Start failed" page keeps the system's title bar.
-- The rail: Home at the top, its centre on the word mark's line, then Agents, Memory, Plugins, Designs and Scheduled (lucide's
+- The rail: Home at the top, its centre on the word mark's line, then Agents, Memory (Solar's Book Bookmark,
+  `MemoryMark.tsx`), Plugins, Designs (Phosphor's pencil-line, Regular, `DesignsMark.tsx`) and Scheduled (lucide's
   Clock, `ScheduledMark.tsx`), 6px apart; the
   screen that is open is drawn as current (32px, 8px radius, foreground 9%). At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
@@ -140,7 +141,8 @@ its cells 10px by 16px with no lines between rows.
   chat at least 360px: when the window narrows, the workspace gives way first, down to
   360px, then navigation. Only the drawn widths give way; widths the person dragged come
   back when the window widens. Its tabs sit in a 38px row of their own at its top, tabs 28px high.
-  It opens by itself in a chat of more than one agent; after that, as the person left it in that chat.
+  It opens by itself in a chat of more than one agent, except the assistant's; after that, as the person left it in
+  that chat.
   Settings is the explicit layout exception described below.
 
 ResizeHandle supports pointer capture, 10px arrows, 40px Shift+arrows and Home/End.
@@ -166,7 +168,12 @@ floating surfaces 16px; ComposerBar 24px with 10px padding. The person's bubble 
 The window uses the recorded official registry components, wrapped from outside: assistant-ui's composer
 and approval card, and shadcn's Button and dropdown menu. Do not build lookalikes in `ui/`.
 assistant-ui's Claude and OpenAI logos (`EngineLogo.tsx`) say which engine an account, a program or an agent is on,
-and which app sent words for the person; the Claude mark keeps its colour, the OpenAI mark takes the text's.
+and which app sent words for the person; the Claude mark keeps its colour, the OpenAI mark takes the text's. They are
+16px at the end of an agent's row on the Agents screen and beside an engine in the new account's dropdown, 20px before
+an account's or a program's row in Engines.
+Gathr's one dropdown (`components/Dropdown.tsx`, Radix Select): closed, a field with the chosen value and a chevron;
+open, a list drawn as the More menu is, the chosen row highlighted, with no check. A choice can carry a face or a logo
+before its label.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
 `ui/registry.json` records each adaptation with its original and adapted hash and why:
 Button today. Retain source
@@ -178,7 +185,9 @@ decision; this design update adds no JavaScript dependency.
 
 The room (`ui/src/room/Room.tsx`, `room.css`; the owner's picks of 2026-11-20 and 2026-11-22) lists, by when
 they started, the person's messages, each agent's main message, an agent's question to the person and, of
-Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px apart.
+Gathr's own lines, only a compaction's and, in the assistant's chat, an agent joining or leaving (its 16px face and
+name, "joined" or "left"; a joined line comes before the agent's first card), quiet, centred and 13px. Items are 18px
+apart.
 
 - **The person's message** is a bubble at the right in `accent-surface`, its words as typed (no Markdown),
   its files' tiles under them; files alone sit at the right with no bubble. A note on a design shows above
@@ -190,6 +199,9 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   a check and how long it took ("1m 12s"), or Stopped, Waiting for sign-in or Failed in words. Then its last
   words; while the turn runs they are muted, and a turn with no words shows its reason muted. A turn that
   ended with nothing to say shows nothing.
+- **Words an outside app sent** (Connect's `send`) are the same card under the app's logo, 28px (20px on a reply), and
+  its brand as the name: "Claude", "Codex", or the name another app gave (`EngineLogo.tsx`'s `AppLogo`, Connect's
+  mark for an app that is neither).
 - **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
   table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
   link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
@@ -197,8 +209,13 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   wide, each growing down to hold its words, centred on its row), math as its Math block
   (`^` and `_` raised and lowered), a diagram in its Diagram frame (mermaid drawn by beautiful-mermaid in the
   window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
-  that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, with Open
-  at its top right; each but a diagram with its title as a quiet 12.5px line above, a diagram in its frame.
+  that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, drawn only
+  while on or near the screen, with Open at its top right; each but a diagram with its title as a quiet 12.5px line
+  above, a diagram in its frame. A project or an agent the assistant proposes is a framed card there too
+  (`room/Proposal.tsx`, 12px corners): the project's name over its folder in mono, a row per agent with its 20px
+  face, or the agent's 28px face, name and description, then Account and Model; then Make project or Add agent and
+  Change, which give way, once used, to a quiet line like a kept line's, "Made project Garden app" or "Added agent
+  Kit".
 - **Kept lines,** under the words, one quiet 12.5px row each with its icon: "Noted about you: …" or "Noted
   about Seed catalogue: …" for a tool's note (Memory's mark), "Added tool Notes · needs key" with an Add button that reads Added once given (Sign in and Signed in
   for a sign-in), "Added skill branch-names" or "Changed skill …", a tool's or skill's name cut with an ellipsis,
@@ -207,14 +224,17 @@ Gathr's own lines, only a compaction's, quiet, centred and 13px. Items are 18px 
   place, the tool's or skill's page in Plugins, or the schedule in Scheduled.
 - **Steps:** all of a turn's tool runs and working notes are one quiet line with a chevron, "Read 4 files,
   ran 2 commands", "Ran 14 steps", or "5 steps so far" while it runs; a click lists them in order, a failed
-  one in the danger colour. The card of the files a turn changed shows once the turn ends, under its words,
-  and the steps it shows leave this line.
+  one in the danger colour. The card of the files a turn changed (`room/FilesCard.tsx`) shows once the turn
+  ends, under its words and what it showed, and the steps it shows leave this line: Changes' mark, "Edited 3
+  files" with lines added and removed, View changes (a small outline Button), then a row per file, its folders
+  muted and its name in the foreground, the first three, then "Show 2 more files" (Show fewer once open).
 - **The approval card** is the registry's, at the foot of the card that waits on it: "Allow Bash?" (or
   "Allow adding a tool?"), the agent's name under it, the command or the file it would write, Gathr's own
   reason when Gathr asks ("Writes outside the agent's folders. Allow covers files in … in this chat."),
   then Deny and Allow; Allowing… or Denying… while the answer is sent.
 - **The row under a message:** its time ("9:21", the person's clock; under a scheduled run's words, Scheduled's mark and
-  "Scheduled · 9:00 AM", when they were due), Copy (a check for a moment once
+  "Scheduled · 9:00 AM", when they were due; under a brief the assistant handed to a project's chat, its 16px face
+  and "From Mira"), Copy (a check for a moment once
   copied), then one thumbs-up with its count last, so a growing count moves nothing; text and icons 13px,
   muted. Under a card it starts at the left and shows once the turn ends; under the bubble it ends at the
   right. The thumb is filled blue once the person gave theirs. Who gave one shows beside the count while the
@@ -235,9 +255,10 @@ Code blocks are one frame with no bar: no language row, no Download, no line num
 right corner and a long line wraps under it, never covered. Tables have no buttons and scroll sideways in their
 frame when too wide.
 
-There is no recipient picker (C24, 0028): the box's hint names who
-gets a message that names nobody in a new chat, "Message Mira" (the assistant, or the project's lead), and
-reads "Message the team" in a chat that has begun; with no agents at all it reads "No agents yet" and takes
+The box has no recipient picker of its own (C24, 0028); only a new chat picks its agent, over the box. The hint names who
+gets a message that names nobody in a new chat, "Message Mira" (the agent picked beside the project, else the
+assistant or the project's lead), names everyone in the assistant's chat, "Message Mira and Kit", and
+reads "Message the team" in another chat that has begun; with no agents at all it reads "No agents yet" and takes
 nothing. Enter sends, Shift+Enter is a new line; the box grows to a third of the window, then scrolls; the caret is
 blue. The paperclip, a paste or a drop on the chat ("Drop to add") adds files, up to 10, each up to 10 MB. While a
 turn runs and nothing is typed, Send is Stop chat. Typing @ at a word's start, anywhere in the
@@ -270,7 +291,7 @@ tab. A file in a message is a square tile where it stands: a picture cropped to 
 other file opens as a tab. An @Name of the chat's agents in an agent's words is blue.
 
 The chat's sidebar (`room/Sidebar.tsx`) is tabs: Home, always first and never closed, with Find file at its
-top, then Open (the Files and Designs tiles, and in a project's chat Changes with its count of changed files)
+top, then Open (the Files, Designs and Changes tiles, Changes with its count of changed files once read)
 and the Board (To do, Doing in blue, In review in `review`, Done in `free`; No work yet). Files, Designs and
 Changes, once opened, then a tab per open file or design, each with its close X; a tab is at most 180px, the
 open one on the chat's own surface with a border. The file tabs scroll sideways, and a tab partly out of
@@ -290,7 +311,8 @@ same mark at 9px, Working turning, 8px after its cut title.
 ### Navigation and workspace
 
 New and Search sit above projects and their chats; Search shows no key words, and Ctrl K (Cmd K
-on a Mac) still opens it. Settings and Update are on the rail. Rows are 30px; the word mark's block
+on a Mac) still opens it. Under them, the assistant's row: its 16px face and name, lit while its chat is open, with
+that chat's mark and no menu; that chat is in no other list. Settings and Update are on the rail. Rows are 30px; the word mark's block
 36px, 8px under the frame's top. Each project is a small muted header like Chats, with no icon, its chats
 under it; a click folds it, and folded it shows its count. A chat's row is one 7px-rounded box that greys as
 a whole on hover; its More, and a project header's + and More, are 24px icons with no box of their own, shown
@@ -313,8 +335,9 @@ Agents show their picture beside their name: Gathr's own drawing of a shape (twe
 Flower, Hexagon, Pebble, Shield, Drop, Star, Diamond, Bubble, Leaf), a pair of eyes (twelve: Lines, Glance, Side,
 Squint, Dots, Rings, Ovals, Happy, Rest, Wink, Calm, Quirk) and a line colour (twelve, Red to Grey), lines only on
 no background, the same everywhere: 56 on an agent's page and the new chat, 28 on a card, 24 in the @ list, the
-Agents panel and a project's team, 20 on a reply, in the Questions panel, in the To line and in the Agents
-screen's Assistant pick. Each colour has a light value for
+Agents panel and a project's team, 20 on a reply, in the Questions panel, in the To line, in the Agents
+screen's Assistant pick and on a proposed project's rows, 16 on the assistant's row, in the new chat's agent picker and
+on a joined line. Each colour has a light value for
 the dark theme and a deep one for the light theme (OKLCH 0.80 and 0.50, the same hue). The line is 3 in the 48
 box and never under 1.5px; at 20 and under the Cloud draws six bumps and the Hexagon sharper corners. An agent
 with nothing picked has all three worked out from its id, so it always looks the same. The picture is hidden
@@ -358,7 +381,8 @@ Restore asks nothing; its failure shows in a corner card.
 Settings is the centred dialog (0023), laid out as the owner's pick A of 2026-11-21 ("flat rows"): at most 1024
 by 760px, 32px horizontal and 48px vertical clearance, no header bar. A left column (220 to 240px, a shade off the
 dialog) has the word Settings at its top, then the pages in three groups under quiet 12px headings, each with a
-16px lucide icon: App (General, Engines, Background), Team (Teamwork, Projects) and Diagnostics (Turns, Friction).
+16px icon, lucide's but for Background (fontaudio's automation-4p, `BackgroundMark.tsx`) and Connect (`ConnectMark.tsx`):
+App (General, Engines, Background, Connect), Team (Teamwork, Projects) and Diagnostics (Turns, Friction).
 The rail's cog opens Settings at Engines. A
 28px X (the shared icon button, named Close Settings) floats 12px from the dialog's top and right. Each page is a
 550px column centred in the content side: a 24px regular-weight title with one muted line under it, then each
@@ -373,6 +397,10 @@ Update while a release is ready, else Check.
 
 Background has one row, Model: the small model, on one of the person's accounts, for work nobody waits on (it
 names new chats). Its first choice is Gathr's own pick, or None when no account has a small model.
+
+Connect has one row, App (Claude Code, Codex or Another app), then the line to run in mono with Copy, or for Another
+app its Program and Arguments, each with Copy, and a muted note under them. What an outside app added says "Added by
+<app>", muted 13px, in the line under its page's title.
 
 Teamwork has Pause after, Auto-compact and the Agent folder: the current path and Change. It
 belongs to the service host. In the desktop window, Change opens the system folder picker at the current folder.

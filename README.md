@@ -4,7 +4,7 @@ Gathr is an open-source desktop app for working with your own AI agents, from di
 
 ## Status
 
-Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, diagnostics and updates are built. The chat and the way agents work as a team were started over on 2026-11-20: [`AGENTS.md`](AGENTS.md) says what was kept. What is built is in [`docs/architecture.md`](docs/architecture.md). How Gathr was built before that day is in [`docs/archive/`](docs/archive/README.md), as history.
+Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, diagnostics and updates are built. The chat and the way agents work as a team were started over on 2026-11-20: [`AGENTS.md`](AGENTS.md) says what was kept. Since then the new chat is built, with replies, reactions, a board and questions to the person, and so are the assistant's own chat, scheduled work and `gathr connect` for AI apps outside Gathr. What is built is in [`docs/architecture.md`](docs/architecture.md). How Gathr was built before that day is in [`docs/archive/`](docs/archive/README.md), as history.
 
 ## Build and check
 

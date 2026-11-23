@@ -39,11 +39,13 @@ with a key or a browser sign-in sealed for the computer's user (DPAPI, or the Ke
 `tool_sign_in.rs`, `seal.rs`). A tool on this PC is a program Gathr starts and talks to over its stdin and stdout,
 one running copy for every agent (`pc_tools.rs`). `gathrd` relays both, so an engine only ever talks to Gathr.
 An AI app outside Gathr on this PC (Claude Code, Codex, another) connects through `gathr connect`, a local MCP server
-that passes its messages to `/api/mcp` with the service's token (`bin/gathr/connect.rs`, `tools/outside.rs`): it adds
+that passes its messages to `/api/mcp` with the service's token (`bin/gathr/connect.rs`, `tools/outside.rs`);
+Settings > Connect gives the line to run. It lists what the person has, and adds
 skills, tools, agents and projects as the window and agents do, with no approval in Gathr, and each says the app's name
 (`added_by.rs`, migration 0082). It also sends words to the person's assistant, to a project's lead in a new chat, or
 on in a chat, through the same route as the person's own send, marked with the app's name (`tools/work.rs`,
-`from_app.rs`, migration 0083), and reads how the chat stands and what its agents said since; nothing is pushed to it.
+`from_app.rs`, migration 0083), waits up to 25 s for the turn to end, and reads how the chat stands and what its agents
+said since; nothing is pushed to it.
 A skill is a folder with a `SKILL.md` in the agent folder's Skills (`skills.rs`). An engine gets its tools and
 skills as it starts, so an agent's next turn after a change starts its engine again (`gathrd/turns/mod.rs`).
 
@@ -53,7 +55,8 @@ more, a name of 2 to 5 words. Settings > Background picks it; left unset, Gathr 
 account's model whose id holds `haiku` (Codex names no small model, so none is picked there by itself). Each run is
 the engine's one-shot mode, never a chat session: `claude -p` (no tools, `--safe-mode`, no session kept) or
 `codex exec` (`--ephemeral`, no `config.toml`, read-only), on the account's own folder, in the empty
-`<data>/background`, with the question in its arguments and the message on its input. It passes the account's
+`<data>/background`, with the question in its arguments and the message on its input between `<message>` lines, as
+text to name, not to do. The assistant's chat keeps its name. It passes the account's
 renewal gate as every start does, and past 30 s its answer is let go but it is never killed. One
 `gathr.background.name` event says `named`, `skipped` or `failed` and why, never the words. A rename by the person
 (Rename, in a chat's More menu) is final: the name lands only while the title is still the one the first line gave.
@@ -64,23 +67,32 @@ A chat has one to five agents; team chats have a lead.
 The service persists messages, replies, reactions, the person's likes, where the person left off, chat names, a board,
 questions to the person, pause/Stop, usage holds and archives.
 Agents use Gathr's MCP server at `/mcp`, each engine with a token of its own, to read the chat (`read_chat`), react,
-set a board line, ask the person, keep a note in Memory (`note`), put a table or a chart in the chat (`show`), add a
-tool or a skill when the person asks (`add_tool`, `add_skill`), schedule work in the chat (`schedule`,
+set a board line, ask the person, keep a note in Memory (`note`), put a table, a chart, a flow, math steps, a diagram
+(Mermaid or a picture) or an HTML page in the chat (`show`: a message of kind `block`, migration 0078, never searched;
+a picture or page must be a file the chat's folders already show), add a
+tool or a skill when the person asks (`add_tool`, `add_skill`; a tool on this PC is refused only when one runs the same
+command with the same variables), schedule work in the chat (`schedule`,
 `unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`) and, the assistant in its own chat,
 send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 The assistant's chat (`assistant.rs`): one chat that never ends, its id the `assistant_chat` setting until it is archived or
 deleted. The assistant leads it; an agent its words or the person's name joins as a guest and leaves by `send_out`,
-each with a quiet line kept in `stays` (0081); a new assistant takes it over at once, the one before leaving.
+each with a quiet line kept in `stays` (migration 0081); a new assistant takes it over at once, the one before leaving.
 A project the assistant proposes (`proposals.rs`, `gathrd/tools/propose.rs`) is a block of kind `project` in its turn,
 drawn as a card; the person's Make project makes, in one transaction and once only, the project, its first chat and the
-brief there as their message, whose turn (`opened` `brief`) starts the lead as their message would.
+brief there as their message ("From" the assistant under it), whose turn (`opened` `brief`) starts the lead as their
+message would. An agent it proposes is a block of kind `agent`; Add agent adds it, in one transaction and once only.
 Words an AI app outside Gathr sends (`send` at `/api/mcp`) are the person's message, sent by their route, with the
 app's name kept in `from_app`; a turn they open is `opened` `app`, and the agent reads one line of Gathr's naming the
-app before them (`replies::line`).
-Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`): what an agent scheduled comes into its chat at its time, on this
-PC's clock (read through SQLite), as a message to that agent drawn as the person's, and starts its turn; the service looks as it starts and every 30 seconds, and writes each run with its turn in one
-transaction. A missed run runs late when it was due today or less than two hours ago, else one skipped run is kept. A pause holds a run as it holds any turn Gathr starts.
+app before them (`replies::line`). The window draws them as the app's, under its logo and name: "Claude" or "Codex"
+for those apps; another keeps the name it gave, under OpenAI's logo for a ChatGPT or OpenAI app, else Connect's mark
+(`ui/src/components/EngineLogo.tsx`).
+Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`, migrations 0079 and 0080): what an agent scheduled, with a short
+name, comes into its chat at its time, on this PC's clock (read through SQLite), as a message to that agent drawn as
+the person's ("Scheduled" and its time), and starts its turn. The service looks as it starts and every 30 seconds, and
+writes each run with its turn in one transaction. A missed run runs late when it was due today or less than two hours
+ago, else one skipped run is kept. A pause holds a run as it holds any turn Gathr starts. The Scheduled screen lists
+them, each with Enabled, its runs, Run now and Delete.
 [0005](archive/decisions/0005-mcp-server.md), [0013](archive/decisions/0013-one-chat-model.md), [0028](archive/decisions/0028-team-chats.md).
 
 The Agent folder contains each project's Shared folder and per-agent working folders, the Skills folder every agent reads, the Memory folder of notes agents keep with the `note` tool (about the person, a project, their own work or a tool added in Plugins) and the person edits on the Memory screen, and the Designs folder with a part per project, which that project's agents write in.
@@ -118,9 +130,13 @@ PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`).
 (`"csp": null` in `crates/gathr-app/tauri.conf.json`). Changes shows what each agent changed in its
 worktree that isn't on the project's main line yet, and what it wrote in other checkouts (`changes.rs`, through git);
 a file in no checkout shows from the lines its steps kept (a file step's stored body keeps its unified diff, which the
-window's messages and live events leave out). `ui/src/registry` keeps the assistant-ui and
+window's messages and live events leave out). A turn's file steps keep the files the engine reported changed, with
+lines added and removed (`changed`), and once the turn ends its card lists them, those steps leaving its steps line
+(`ui/src/room/FilesCard.tsx`). `ui/src/registry` keeps the assistant-ui and
 shadcn files as published ([0030](archive/decisions/0030-ui-foundation.md)).
-The signed window updater and service handover are built.
+The signed window updater and service handover are built. The stopped service leaves its token and the page's
+sign-in in `handover.json` for the start that follows, so the window and page stay signed in; a newer copy a check
+installed is kept until Update switches to it (`crates/gathr/src/app/`).
 [0032](archive/decisions/0032-service-updates.md).
 
 ## Accepted work not built yet
