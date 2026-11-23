@@ -47,6 +47,7 @@
   margin: -10px 20px 16px;
 }
 .find-list > [role="option"] {
+  cursor: default;
   display: flex;
   flex: none;
   gap: 8px;
@@ -59,20 +60,22 @@
 .find-list > [aria-selected="true"] {
   background: var(--hover-tint);
 }
-.find-list svg {
+.find-list :where([role="option"]) > svg {
   width: 14px;
   height: 14px;
   flex: none;
   stroke-width: 1.5;
   color: var(--muted-foreground);
 }
-.find-list span {
+.find-list :where([role="option"]) > span {
   flex: none;
   max-width: 60%;
   overflow: hidden;
-  font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.find-list [role="option"] b {
+  font-weight: 600;
 }
 .find-list small {
   flex: 1;
@@ -80,41 +83,68 @@
   overflow: hidden;
   color: var(--muted-foreground);
   font-size: 12px;
-  text-align: right;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.find-list [role="option"] > button {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 6px;
+}
+.find-list [role="option"] > button:hover {
+  background: var(--hover-tint);
 }
 .find-list > p {
   margin: 6px 10px;
   color: var(--muted-foreground);
 }
 .home-tiles {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin: 0 20px 20px;
 }
 .home-tile {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  width: 92px;
-  height: 84px;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 12px 11px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: transparent;
   color: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
+  text-align: left;
 }
 .home-tile:hover {
   background: var(--hover-tint);
 }
-.home-tile svg {
-  width: 18px;
-  height: 18px;
+.home-tile-name {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+.home-tile-name svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
   stroke-width: 1.5;
+}
+.home-tile-sub {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 18px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.home-tile-sub .changes-totals {
+  font-size: 12px;
 }
 
 .tree {
@@ -233,4 +263,15 @@
   color: var(--foreground);
   font-size: 14px;
   font-weight: 600;
+}
+.tree-row > small {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.tree-row:has(> small) > span:last-of-type {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

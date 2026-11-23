@@ -16,7 +16,7 @@ import type { RoomState } from './useRoom';
 import './design.css';
 
 /** A design: a folder in the project's part of Designs holding HTML pages, one per option. */
-interface Listed {
+export interface Listed {
   name: string;
   path: string;
   pages: number;
@@ -135,18 +135,11 @@ function Writing() {
   );
 }
 
-/** The Designs tab: the chat's designs, newest first, each opening in its own tab. */
-export function Designs({
-  chat,
-  room,
-  open,
-  onOpen,
-}: {
-  chat: string;
-  room: RoomState;
-  open: boolean;
-  onOpen: (d: Listed) => void;
-}) {
+/**
+ * The chat's designs, newest first, read on each look while `open`, with what the chat's steps say of each: the
+ * Designs tab, the tree's Designs and Home's tile. None until the first read.
+ */
+export function useDesigns(chat: string, room: RoomState, open: boolean) {
   const [designs, setDesigns] = useState<string | null>();
   const [list, setList] = useState<Listed[]>();
   const [failure, setFailure] = useState<Failure>();
@@ -183,6 +176,29 @@ export function Designs({
       live = false;
     };
   }, [chat, designs, look]);
+  const writer = (d: Listed) => {
+    const w = seen.get(pathKey(d.path));
+    return { by: room.members.find((m) => m.agent === w?.agent), writing: !!w?.writing };
+  };
+  return { list, writer };
+}
+
+/** "1 page", or the count of options. */
+export const optionsOf = (d: Listed) => (d.pages === 1 ? '1 page' : `${d.pages} options`);
+
+/** The Designs tab: the chat's designs, newest first, each opening in its own tab. */
+export function Designs({
+  chat,
+  room,
+  open,
+  onOpen,
+}: {
+  chat: string;
+  room: RoomState;
+  open: boolean;
+  onOpen: (d: Listed) => void;
+}) {
+  const { list, writer } = useDesigns(chat, room, open);
   if (!list) return null;
   if (!list.length)
     return (
@@ -195,8 +211,7 @@ export function Designs({
   return (
     <div className="design-list">
       {list.map((d) => {
-        const w = seen.get(pathKey(d.path));
-        const by = room.members.find((m) => m.agent === w?.agent);
+        const { by, writing } = writer(d);
         const q = following(room, d.path);
         const picked = pickOf(q);
         return (
@@ -206,10 +221,10 @@ export function Designs({
               <span className="board-meta">
                 {by && <Face agent={{ id: by.agent, name: by.name }} size={16} />}
                 {by && `${by.name} · `}
-                {d.pages === 1 ? '1 page' : `${d.pages} options`}
+                {optionsOf(d)}
               </span>
             </span>
-            {w?.writing ? (
+            {writing ? (
               <Writing />
             ) : q && waits(q) ? (
               <span className="room-state live design-mark">

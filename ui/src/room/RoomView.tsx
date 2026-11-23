@@ -30,6 +30,7 @@ import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
+import { useUnseen } from './Changes';
 import { Questions } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
 import { openChanges, openTab, RoomSidebar } from './Sidebar';
@@ -124,6 +125,7 @@ export function RoomView(props: Props) {
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   // Closed by itself in the assistant's chat, where a guest stays for one subject.
   const sidebar = !fresh && (props.sidebar ?? (!own && state.members.length > 1));
+  const unseen = useUnseen(chat.id, state, sidebar || fresh);
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
   const mine = own ? agents.find((a) => a.id === props.you.assistant) : undefined;
@@ -231,7 +233,7 @@ export function RoomView(props: Props) {
               onOpen={setAsking}
               onAnswer={answer}
             />
-            <WorkspaceToggle open={sidebar} onToggle={() => props.onSidebar(!sidebar)} />
+            <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={() => props.onSidebar(!sidebar)} />
           </div>
         )}
       </TopLine>

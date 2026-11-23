@@ -187,23 +187,3 @@
   grid-column: 3 / 5;
   padding-left: 4px;
 }
-
-/* Home's tile: how many files are changed, at its top right. */
-.home-tile {
-  position: relative;
-}
-.changes-count {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--foreground) 10%, transparent);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 600;
-}

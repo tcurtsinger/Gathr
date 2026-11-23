@@ -1,5 +1,12 @@
-import { File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
+import { ChevronDown, File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { api, type FileTree } from '../api';
 import { ChangesMark } from '../components/ChangesMark';
 import { DesignsMark } from '../components/DesignsMark';
@@ -8,8 +15,8 @@ import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
-import { Changes, ChangesTile } from './Changes';
-import { Designs, DesignTab } from './Design';
+import { Changes, ChangesTile, useChanges } from './Changes';
+import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
 import { isPage } from './PageFrame';
@@ -97,7 +104,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: Home first, always there, then Files, Design, Changes and each open file or design as tabs. */
+/** The panel beside the chat: Home, Files, Designs and Changes always there as icons, then each open file or design. */
 export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
@@ -115,29 +122,51 @@ interface PanelProps {
   onNote: (text: string, agent?: string) => void;
 }
 
+/** The narrowest a file's tab gets before the rest go in the "+N" list, and that list's button. */
+const NARROWEST = 74;
+const GAP = 3;
+const MORE = 44;
+
+/** How many file tabs fit in `width`, with room for the "+N" button when not all do. */
+function fitting(count: number, width: number) {
+  if (count * (NARROWEST + GAP) - GAP <= width) return count;
+  return Math.max(1, Math.floor((width - MORE) / (NARROWEST + GAP)));
+}
+
 function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
-  const order = [
-    HOME,
-    ...(tabs.files ? [FILES] : []),
-    ...(tabs.design ? [DESIGN] : []),
-    ...(tabs.changes ? [CHANGES] : []),
-    ...tabs.open.map((f) => f.path),
-  ];
-  const go = (at: string) => change(chat, { ...tabs, at });
-  const close = (key: string) => {
-    const i = order.indexOf(key);
-    const at = key === tabs.at ? (order[i + 1] ?? order[i - 1]) : tabs.at;
+  const changes = useChanges(chat, room, true);
+  const [tree, setTree] = useState<FileTree>();
+  useEffect(() => {
+    api.tree(chat).then(setTree, () => {});
+  }, [chat]);
+  const strip = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const seen = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
+  const order = [HOME, FILES, DESIGN, CHANGES, ...tabs.open.map((f) => f.path)];
+  // Files, Designs and Changes are always tabs; each is drawn once first shown, and kept.
+  const go = (at: string) =>
     change(chat, {
-      files: tabs.files && key !== FILES,
-      design: tabs.design && key !== DESIGN,
-      changes: tabs.changes && key !== CHANGES,
-      open: tabs.open.filter((f) => f.path !== key),
+      ...tabs,
+      files: tabs.files || at === FILES,
+      design: tabs.design || at === DESIGN,
+      changes: tabs.changes || at === CHANGES,
       at,
     });
+  const close = (keys: string[]) => {
+    const open = tabs.open.filter((f) => !keys.includes(f.path));
+    const i = tabs.open.findIndex((f) => f.path === tabs.at);
+    const at = keys.includes(tabs.at) ? (open[Math.min(i, open.length - 1)]?.path ?? HOME) : tabs.at;
+    change(chat, { ...tabs, open, at });
   };
   const id = (key: string) => order.indexOf(key);
-  const tab = (key: string, icon: ReactNode, name: string, closable = true) => (
+  const tab = (key: string, icon: ReactNode, name: string, file = false) => (
     <Tab
       key={key}
       id={id(key)}
@@ -145,7 +174,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       icon={icon}
       name={name}
       onSelect={() => go(key)}
-      onClose={closable ? () => close(key) : undefined}
+      onClose={file ? () => close([key]) : undefined}
     />
   );
   const view = (key: string, body: ReactNode) => (
@@ -160,23 +189,60 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       {body}
     </section>
   );
+  // The file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
+  const fits = fitting(tabs.open.length, width);
+  const at = tabs.open.findIndex((f) => f.path === tabs.at);
+  const shown = at < fits ? tabs.open.slice(0, fits) : [...tabs.open.slice(0, fits - 1), tabs.open[at]];
+  const rest = tabs.open.length - shown.length;
+  const nameOf = (f: Opened) => f.crumbs.at(-1) ?? f.path;
+  const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
+  const agents = tree?.agents.length ?? 0;
   return (
     <>
       <div className="workspace-tabs">
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
-          {tab(HOME, <House aria-hidden="true" />, 'Home', false)}
-          {tabs.files && tab(FILES, <Files aria-hidden="true" />, 'Files')}
-          {tabs.design && tab(DESIGN, <DesignsMark />, 'Designs')}
-          {tabs.changes && tab(CHANGES, <ChangesMark />, 'Changes')}
-          <div className="workspace-files">
-            {tabs.open.map((f) =>
-              tab(
-                f.path,
-                f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />,
-                f.crumbs.at(-1) ?? f.path,
-              ),
+          <div className="workspace-fixed">
+            {tab(HOME, <House aria-hidden="true" />, 'Home')}
+            {tab(FILES, <Files aria-hidden="true" />, 'Files')}
+            {tab(DESIGN, <DesignsMark />, 'Designs')}
+            {tab(CHANGES, <ChangesMark />, 'Changes')}
+          </div>
+          {tabs.open.length > 0 && <i className="workspace-sep" />}
+          <div className="workspace-files" ref={strip}>
+            {shown.map((f) =>
+              tab(f.path, f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />, nameOf(f), true),
             )}
           </div>
+          {rest > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="workspace-more">
+                +{rest}
+                <ChevronDown aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="workspace-more-list">
+                {tabs.open.map((f) => (
+                  <DropdownMenuItem
+                    key={f.path}
+                    data-on={f.path === tabs.at || undefined}
+                    onSelect={() => go(f.path)}
+                  >
+                    {f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />}
+                    <span>{nameOf(f)}</span>
+                    <small>{f.crumbs.slice(0, -1).join(' / ')}</small>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => close(tabs.open.filter((f) => f.path !== tabs.at).map((f) => f.path))}
+                >
+                  Close others
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => close(tabs.open.map((f) => f.path))}>
+                  Close all
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
       {view(
@@ -186,32 +252,29 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             chat={chat}
             icon={<Search aria-hidden="true" />}
             label="Find file"
-            onOpen={(f) => show(chat, f)}
+            project={tree?.project?.name}
+            changes={changes}
+            onOpen={find}
           >
             <h2>Open</h2>
             <div className="home-tiles">
-              <button
-                type="button"
-                className="home-tile"
-                onClick={() => change(chat, { ...tabs, files: true, at: FILES })}
-              >
-                <Files aria-hidden="true" />
-                Files
+              <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
+              <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
+              <button type="button" className="home-tile" onClick={() => go(FILES)}>
+                <span className="home-tile-name">
+                  <Files aria-hidden="true" />
+                  Files
+                </span>
+                <span className="home-tile-sub">
+                  {tree &&
+                    [
+                      tree.project?.name ?? (tree.shared ? 'Shared' : ''),
+                      agents === 1 ? tree.agents[0].name : agents ? `${agents} agents` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' + ')}
+                </span>
               </button>
-              <button
-                type="button"
-                className="home-tile"
-                onClick={() => change(chat, { ...tabs, design: true, at: DESIGN })}
-              >
-                <DesignsMark />
-                Designs
-              </button>
-              <ChangesTile
-                chat={chat}
-                room={room}
-                open={tabs.at === HOME}
-                onOpen={() => change(chat, { ...tabs, changes: true, at: CHANGES })}
-              />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -225,9 +288,11 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             chat={chat}
             icon={<Filter aria-hidden="true" />}
             label="Filter files"
-            onOpen={(f) => show(chat, f)}
+            project={tree?.project?.name}
+            changes={changes}
+            onOpen={find}
           >
-            <Tree chat={chat} onOpen={(file) => show(chat, file)} />
+            <Tree chat={chat} room={room} onOpen={(file) => show(chat, file)} />
           </Find>,
         )}
       {tabs.design &&
@@ -240,7 +305,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             onOpen={(d) => show(chat, { path: d.path, crumbs: [d.name], design: true })}
           />,
         )}
-      {tabs.changes && view(CHANGES, <Changes chat={chat} room={room} open={tabs.at === CHANGES} />)}
+      {tabs.changes && view(CHANGES, <Changes chat={chat} changes={changes} />)}
       {tabs.open.map((f) =>
         view(
           f.path,
@@ -263,47 +328,59 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   );
 }
 
+/** Home's Designs tile: how many designs, and who is writing one. */
+function DesignsTile({
+  chat,
+  room,
+  open,
+  onOpen,
+}: {
+  chat: string;
+  room: RoomState;
+  open: boolean;
+  onOpen: () => void;
+}) {
+  const { list, writer } = useDesigns(chat, room, open);
+  const by = list?.map(writer).find((w) => w.writing)?.by;
+  return (
+    <button type="button" className="home-tile" onClick={onOpen}>
+      <span className="home-tile-name">
+        <DesignsMark />
+        Designs
+      </span>
+      <span className="home-tile-sub">
+        {list &&
+          (list.length ? [list.length, by && `${by.name} writing`].filter(Boolean).join(' · ') : 'None yet')}
+      </span>
+    </button>
+  );
+}
+
 interface TabProps {
   id: number;
   selected: boolean;
   icon: ReactNode;
   name: string;
   onSelect: () => void;
+  /** A file's tab: it closes, and shows its name; the others show their icon only. */
   onClose?: () => void;
 }
 
-/**
- * One tab: the open one scrolls into sight. A tab scrolled partly out of sight isn't drawn, so the row never shows
- * a sliver of one, such as its bare close mark.
- */
+/** One tab: Home, Files, Designs and Changes by their icon, a file by its name with a close mark. */
 function Tab({ id, selected, icon, name, onSelect, onClose }: TabProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [whole, setWhole] = useState(true);
-  useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [selected]);
-  useEffect(() => {
-    const tab = ref.current;
-    if (!tab?.parentElement) return;
-    const seen = new IntersectionObserver(([e]) => setWhole(e.intersectionRatio > 0.99), {
-      root: tab.parentElement,
-      threshold: [0.99, 1],
-    });
-    seen.observe(tab);
-    return () => seen.disconnect();
-  }, []);
   return (
-    <div ref={ref} className="workspace-tab" data-selected={selected} data-whole={whole}>
+    <div className="workspace-tab" data-selected={selected} data-file={!!onClose || undefined}>
       <button
         type="button"
         role="tab"
         id={`room-tab-${id}`}
+        aria-label={onClose ? undefined : name}
         aria-selected={selected}
         aria-controls={`room-view-${id}`}
         onClick={onSelect}
       >
         {icon}
-        <span>{name}</span>
+        {onClose && <span>{name}</span>}
       </button>
       {onClose && (
         <IconButton aria-label={`Close ${name}`} className="workspace-close" onClick={onClose}>

@@ -44,10 +44,6 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
-/* Hidden, not gone: still a tab to a screen reader and the keyboard. */
-.workspace-tab[data-whole="false"] {
-  opacity: 0;
-}
 .workspace-tab[data-selected="true"] {
   border-color: var(--border);
   background: var(--background);
@@ -87,16 +83,93 @@
   flex: none;
   stroke-width: 1.5;
 }
-/* The file tabs after Home and Files, which stay put: they scroll sideways, to the open one. A tab partly out of
-   sight isn't drawn (Sidebar.tsx). */
+/* Home, Files, Designs and Changes: icons, always in place. */
+.workspace-fixed {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.workspace-fixed .workspace-tab > [role="tab"] {
+  padding: 0 8px;
+}
+.workspace-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  align-self: center;
+  background: var(--border);
+}
+/* The file tabs: they shrink to fit, and those that don't fit go in the "+N" list (Sidebar.tsx). */
 .workspace-files {
   display: flex;
   flex: 1;
   gap: 3px;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
+  overflow: hidden;
+}
+.workspace-tab[data-file] {
+  flex: 0 1 150px;
+  min-width: 74px;
+}
+.workspace-more {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.workspace-more:hover,
+.workspace-more[data-state="open"] {
+  background: var(--hover-tint);
+}
+.workspace-more svg {
+  width: 13px;
+  height: 13px;
+}
+.workspace-more-list {
+  width: 240px;
+}
+.workspace-more-list [role="menuitem"] {
+  gap: 8px;
+}
+.workspace-more-list [role="menuitem"][data-on] {
+  background: var(--hover-tint);
+}
+.workspace-more-list [role="menuitem"] > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.workspace-more-list [role="menuitem"] > small {
+  flex: none;
+  max-width: 50%;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Something changed the person hasn't seen, while the panel is shut. */
+.workspace-toggle[data-unseen] {
+  position: relative;
+}
+.workspace-toggle[data-unseen]::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--attention);
+  box-shadow: 0 0 0 2px var(--frame);
 }
 .workspace-view {
   display: flex;

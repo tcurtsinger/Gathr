@@ -11,7 +11,14 @@
   color: var(--muted-foreground);
 }
 .board-line {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
   padding: 8px;
+}
+.board-line > .face {
+  flex: none;
+  margin-top: 1px;
 }
 .board-line + .board-line {
   border-top: 1px solid var(--border);
