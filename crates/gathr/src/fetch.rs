@@ -98,12 +98,49 @@ pub fn parse_version(version: &str) -> Option<[u32; 3]> {
 
 /// A small text file, within 30 s or until `stop` is set.
 pub fn fetch(url: &str, redirects: Redirects, stop: &AtomicBool) -> Result<String, String> {
-    let mut command = curl(
-        redirects,
-        &["--max-time", "30", "--max-filesize", "1048576"],
-    );
-    command.arg(url);
-    run_until(command, stop)
+    retried(stop, || {
+        let mut command = curl(
+            redirects,
+            &["--max-time", "30", "--max-filesize", "1048576"],
+        );
+        command.arg(url);
+        command
+    })
+}
+
+/// curl's exit codes for a connection that dropped or never came: worth another try.
+const TRANSIENT: [i32; 8] = [
+    6,  // couldn't resolve the host
+    7,  // couldn't connect
+    18, // the transfer ended early
+    28, // timed out
+    35, // the TLS handshake failed, or the connection was reset during it
+    52, // the server answered nothing
+    55, // sending failed
+    56, // receiving failed, such as a connection reset
+];
+/// Tries after the first, waiting 2 s then 4 s.
+const RETRIES: u32 = 2;
+
+/// `run_until` on a fresh `command()`, tried again when the network dropped (`TRANSIENT`), so one
+/// reset connection doesn't fail a check or a download.
+fn retried(stop: &AtomicBool, command: impl Fn() -> Command) -> Result<String, String> {
+    let mut tries = 0;
+    loop {
+        match run_until(command(), stop) {
+            Err((Some(code), _)) if TRANSIENT.contains(&code) && tries < RETRIES => {
+                tries += 1;
+                let until = std::time::Instant::now() + Duration::from_secs(2 << (tries - 1));
+                while std::time::Instant::now() < until {
+                    if stop.load(Ordering::Relaxed) {
+                        return Err("the service stopped".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+            done => return done.map_err(|(_, why)| why),
+        }
+    }
 }
 
 /// curl, failing on any HTTP error.
@@ -126,13 +163,14 @@ fn curl(redirects: Redirects, limits: &[&str]) -> Command {
     command
 }
 
-/// curl's output to its end, or curl killed once `stop` is set; its error line if it fails.
-fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, String> {
+/// curl's output to its end, or curl killed once `stop` is set; its exit code and error line if it
+/// fails.
+fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, (Option<i32>, String)> {
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("curl didn't start: {e}"))?;
+        .map_err(|e| (None, format!("curl didn't start: {e}")))?;
     // Read on threads so a full pipe never holds curl up while this loop waits for it.
     let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
         std::thread::spawn(move || {
@@ -149,19 +187,20 @@ fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, String> 
         if stop.load(Ordering::Relaxed) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("the service stopped".into());
+            return Err((None, "the service stopped".into()));
         }
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-            Err(e) => return Err(format!("curl wasn't waited for: {e}")),
+            Err(e) => return Err((None, format!("curl wasn't waited for: {e}"))),
         }
     };
     let (out, error) = (stdout.join(), stderr.join());
     if status.success() {
         return Ok(out.unwrap_or_default());
     }
-    Err(format!("{} ({status})", error.unwrap_or_default().trim()))
+    let why = format!("{} ({status})", error.unwrap_or_default().trim());
+    Err((status.code(), why))
 }
 
 /// Shared transfer for an npm archive (SHA-512) and a release file (SHA-256).
@@ -173,20 +212,48 @@ pub(crate) fn transfer(
     stop: &AtomicBool,
 ) -> Result<(), String> {
     let size = max_size.to_string();
-    let mut command = curl(
-        redirects,
-        &["--max-filesize", &size, "--speed-limit", "1024"],
-    );
-    command
-        .args(["--speed-time", "60", "--output"])
-        .arg(to)
-        .arg(url);
-    run_until(command, stop).map(|_| ())
+    retried(stop, || {
+        let mut command = curl(
+            redirects,
+            &["--max-filesize", &size, "--speed-limit", "1024"],
+        );
+        command
+            .args(["--speed-time", "60", "--output"])
+            .arg(to)
+            .arg(url);
+        command
+    })
+    .map(|_| ())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_version;
+    use super::{Redirects, fetch, parse_version};
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::atomic::AtomicBool;
+
+    #[test]
+    fn a_connection_dropped_once_is_tried_again() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/gathrd.json", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            // The first connection closes without an answer (curl: 52), the second answers.
+            drop(listener.accept().unwrap());
+            let (mut second, _) = listener.accept().unwrap();
+            let mut request = [0; 1024];
+            let _ = second.read(&mut request);
+            let body = "ok";
+            let answer = format!(
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            second.write_all(answer.as_bytes()).unwrap();
+        });
+        let got = fetch(&url, Redirects::Refused, &AtomicBool::new(false));
+        assert_eq!(got.as_deref(), Ok("ok"));
+        server.join().unwrap();
+    }
 
     #[test]
     fn versions_compare_by_number() {

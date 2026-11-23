@@ -220,6 +220,36 @@ fn nothing_ready_and_a_bad_download_each_say_why_with_a_reference() {
     assert_eq!(app["version"], "0.0.1", "{app}");
 }
 
+/// A check that fails while a release is ready (the network dropped, say) shows nothing: the ready
+/// release still installs, and Settings raises no "Update failed" card for it.
+#[test]
+fn a_failed_check_while_a_release_is_ready_keeps_it_ready_and_says_nothing() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let feed = Feed::start();
+    publish(
+        &feed,
+        &dir.0,
+        VERSION,
+        env!("CARGO_BIN_EXE_gathrd"),
+        "new ui",
+    );
+    let service = TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
+    let _next = Successor(data.clone());
+    let first = ready(&service);
+
+    feed.put("gathrd.json", b"not the manifest".to_vec());
+    check_now(&service);
+    let app = until(30, "the failed check to end", || {
+        let app = service.call("GET", "/api/app").json();
+        (app["checked"] != first["checked"] && app["state"] != "checking").then_some(app)
+    });
+    assert_eq!(app["state"], "ready", "{app}");
+    assert_eq!(app["update"]["version"], VERSION, "{app}");
+    assert!(app["failed"].is_null(), "{app}");
+}
+
 fn current(data: &Path) -> Value {
     serde_json::from_slice(&std::fs::read(data.join("app/current.json")).unwrap()).unwrap()
 }
