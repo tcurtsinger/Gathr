@@ -753,17 +753,6 @@
 .room-choose .composer {
   max-width: none;
 }
-.room-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.room-choice-detail {
-  margin-left: 6px;
-  color: var(--muted-foreground);
-  font-size: 11.5px;
-}
 .room-closed {
   margin: 0 18px 12px;
   color: var(--muted-foreground);
@@ -780,44 +769,103 @@
   white-space: pre-wrap;
 }
 
-/* The top line's end: Questions, then the sidebar's button. */
+/* The top line's end: Agents, Needs you, then the sidebar's button. */
 .room-actions {
   display: flex;
   flex: none;
   align-items: center;
   gap: 4px;
 }
-.questions-dot[data-open] {
-  fill: var(--attention);
-  stroke: var(--attention);
+.head-button.needs-button[data-state="open"] {
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  color: var(--foreground);
 }
-/* The questions panel: each open question with its choices and answer box. */
-.popover-panel.questions {
-  width: 420px;
+/* The one dot on a top line button: something there needs the person. */
+.head-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--attention);
+  box-shadow: 0 0 0 2px var(--shell);
 }
-.questions-none {
+/* The Needs you panel: a row per open question or approval, which goes to its card. */
+.popover-panel.needs {
+  width: 380px;
+}
+.needs-count {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+}
+.needs-none {
   margin: 0;
   padding: 0 8px 8px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.questions-item {
-  padding: 4px 8px 10px;
-}
-.questions-item + .questions-item {
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
-}
-.questions-item .room-line {
+.needs-row {
   display: flex;
-  align-items: center;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.needs-row:hover {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.needs-face {
+  display: flex;
+  flex: none;
+  margin-top: 1px;
+}
+.needs-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.needs-top {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
+  font-size: 13.5px;
 }
-.questions-item .room-said {
-  margin: 6px 0 10px;
+.needs-top b {
+  font-weight: 600;
 }
-.questions-item .room-asks {
-  padding: 0;
+.needs-top .room-time {
+  margin-left: auto;
+}
+.needs-what {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.needs-text {
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.needs-text[data-code] {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12.5px;
+}
+
+/* A card the Needs you panel went to: the same short tint as a search hit. */
+.room [data-flash] {
+  animation: room-found 1.6s ease-out;
 }
 
 /* A search hit opened here: a short attention tint, back to its own background. */

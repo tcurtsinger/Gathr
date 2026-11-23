@@ -72,7 +72,7 @@ const TITLES: Record<string, string> = {
   Write: 'Write a file?',
   WebFetch: 'Fetch a page?',
 };
-const titleOf = (tool: string) => TITLES[tool] ?? `Allow ${tool}?`;
+export const titleOf = (tool: string) => TITLES[tool] ?? `Allow ${tool}?`;
 
 /** Gathr's tools that ask as the agent's Approvals say, in plain words, with what each would add. */
 const ADDS: Record<string, [string, 'command' | 'folder']> = {
@@ -93,7 +93,7 @@ function gathrsWhy(why?: string | null) {
  * What an approval asks to run: the tool as the person knows it, and what it would act on: its command, or the file
  * a file tool would write.
  */
-function asked(a: Approval): { tool: string; command?: string } {
+export function asked(a: Approval): { tool: string; command?: string } {
   const input = a.input as Record<string, unknown> | null | undefined;
   const adds = ADDS[a.tool];
   if (adds) {

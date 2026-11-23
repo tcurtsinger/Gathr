@@ -1,17 +1,7 @@
-/* The top line's Agents button: lit while its panel is open, a blue dot while a background command runs. */
+/* The top line's Agents button: lit while its panel is open. Its dot is the shared .head-dot (room.css). */
 .head-button.agents-button[data-state="open"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
-}
-.agents-dot {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--attention);
-  box-shadow: 0 0 0 2px var(--shell);
 }
 
 /* The panel: one block per agent, its bar of how full its conversation is, and what it left running. */
@@ -41,6 +31,9 @@
 .agents-word {
   color: var(--muted-foreground);
   font-size: 12.5px;
+}
+.agents-word[data-needs] {
+  color: var(--attention);
 }
 .agents-meter {
   display: flex;

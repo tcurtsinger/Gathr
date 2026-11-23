@@ -2,7 +2,7 @@ import { Terminal } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Background, type Failure, type Member, type Turn } from '../api';
+import { api, type Background, type Failure, type Member, type Turn, type TurnStatus } from '../api';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
@@ -12,8 +12,9 @@ import '../components/popover-panel.css';
 import './agents-panel.css';
 
 /**
- * The top line's Agents button and its panel: each agent of the chat with how full its conversation is, Compact,
- * and what its engine still runs in the background. The button's dot shows while any such command runs.
+ * The top line's Agents button and its panel: each agent of the chat with how full its conversation is, what it is
+ * doing (Working, Signed out with Sign in, Compact once nearly full), and what its engine still runs in the
+ * background. The button's dot is lit while an agent is nearly full or signed out: what needs the person.
  */
 export function AgentsPanel(props: {
   chat: string;
@@ -21,8 +22,13 @@ export function AgentsPanel(props: {
   background: Background[];
   turns: Record<string, Turn>;
   people: People;
+  /** The name of the agent's account when it is signed out. */
+  signedOut?: (agent: string) => string | undefined;
+  /** Settings > Engines, to sign in. */
+  onSignIn?: () => void;
 }) {
-  const { members, background } = props;
+  const { members, background, signedOut } = props;
+  const needs = members.some((m) => fillOf(m) >= NEAR || signedOut?.(m.agent));
   const [open, setOpen] = useState(false);
   // The compaction last asked for here: if it fails, its turn says why, as its card in the chat would have.
   const [asked, setAsked] = useState<string>();
@@ -35,7 +41,7 @@ export function AgentsPanel(props: {
       <Popover.Trigger asChild>
         <IconButton aria-label="Agents" className="head-button agents-button">
           <FillMark />
-          {background.length > 0 && <span className="agents-dot" />}
+          {needs && <span className="head-dot" />}
         </IconButton>
       </Popover.Trigger>
       <Popover.Portal>
@@ -57,6 +63,9 @@ export function AgentsPanel(props: {
               running={background.filter((b) => b.agent === m.agent)}
               turns={props.turns}
               people={props.people}
+              alone={members.length < 2}
+              signedOut={!!signedOut?.(m.agent)}
+              onSignIn={props.onSignIn}
               onAsked={setAsked}
             />
           ))}
@@ -87,31 +96,66 @@ function FillMark() {
   );
 }
 
-/** Where the bar turns the attention blue: close to the point the conversation compacts at. */
+/** Where the bar turns the attention blue and Compact shows: close to the point the conversation compacts at. */
 const NEAR = 0.9;
 
-/** One agent: its face and name, Compact, the bar "96K of 500K", and the commands it left running. */
+/** How full the agent's conversation is, 0 to 1, against where it compacts. */
+function fillOf(member: Member) {
+  const used = member.context?.used ?? null;
+  const point = member.context?.compact_at ?? member.context?.window ?? null;
+  return used !== null && point ? Math.min(1, used / point) : 0;
+}
+
+/**
+ * One agent: its face and name, what it is doing, the bar "96K of 500K", and the commands it left running. Signed out
+ * comes first, then a compaction under way or Compact once nearly full, then Working; idle says nothing.
+ */
 function Block(props: {
   chat: string;
   member: Member;
   running: Background[];
   turns: Record<string, Turn>;
   people: People;
+  alone: boolean;
+  signedOut: boolean;
+  onSignIn?: () => void;
   onAsked: (turn: string) => void;
 }) {
   const { chat, member, running, people } = props;
   const used = member.context?.used ?? null;
   const point = member.context?.compact_at ?? member.context?.window ?? null;
-  const fill = used !== null && point ? Math.min(1, used / point) : 0;
+  const fill = fillOf(member);
+  const mine = Object.values(props.turns).filter((t) => t.agent === member.agent);
+  const compacting = mine.some((t) => t.opened === 'compaction' && UNDER.includes(t.status));
+  const working = mine.some((t) => t.opened !== 'compaction' && t.status === 'running');
   return (
     <section className="agents-block" aria-label={member.name}>
       <div className="agents-head">
         <Face agent={people.face(member.agent)} size={24} />
         <b>{member.name}</b>
-        {people.lead(member.agent) && <span className="room-tag">Lead</span>}
+        {!props.alone && people.lead(member.agent) && <span className="room-tag">Lead</span>}
         <span className="room-grow" />
-        {used !== null && (
+        {props.signedOut ? (
+          <>
+            <span className="agents-word" data-needs="">
+              Signed out
+            </span>
+            {props.onSignIn && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="agents-compact"
+                onClick={props.onSignIn}
+              >
+                Sign in
+              </Button>
+            )}
+          </>
+        ) : used !== null && (compacting || fill >= NEAR) ? (
           <Compact chat={chat} agent={member.agent} turns={props.turns} onAsked={props.onAsked} />
+        ) : (
+          working && <span className="agents-word">Working</span>
         )}
       </div>
       <div className="agents-meter">
@@ -147,9 +191,7 @@ function Compact(props: {
   const [refused, setRefused] = useState<Failure>();
   useCard(refused);
   const mine = Object.values(turns).filter((t) => t.agent === agent && t.opened === 'compaction');
-  const under = mine.find(
-    (t) => t.status === 'queued' || t.status === 'waiting_sign_in' || t.status === 'running',
-  );
+  const under = mine.find((t) => UNDER.includes(t.status));
   if (under)
     return <span className="agents-word">{under.status === 'running' ? 'Compacting' : 'Waiting'}</span>;
   const compact = () => {
@@ -179,6 +221,9 @@ function Compact(props: {
     </Button>
   );
 }
+
+/** A compaction's turn statuses while it is still to finish. */
+const UNDER: TurnStatus[] = ['queued', 'waiting_sign_in', 'running'];
 
 /** How long a command has run, read again each 15 seconds: "18m". */
 function Since({ started }: { started: string }) {
