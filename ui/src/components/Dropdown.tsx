@@ -9,6 +9,8 @@ export interface Choice {
   label: string;
   /** Before the label, in the list and closed: an agent's face, an engine's logo. */
   icon?: ReactNode;
+  /** The label underlined: a chat's lead. */
+  marked?: boolean;
 }
 
 type Props = Omit<ComponentProps<'button'>, 'value' | 'onChange' | 'children'> & {
@@ -21,6 +23,8 @@ type Props = Omit<ComponentProps<'button'>, 'value' | 'onChange' | 'children'> &
   shown?: ReactNode;
   /** Above the field rather than below: the pickers over the message box. With no room there, it turns by itself. */
   side?: 'top';
+  /** A class for the open list, to style one dropdown's rows. */
+  listClassName?: string;
 };
 
 // Radix keeps '' for "nothing chosen", so a choice whose value is '' goes by this inside.
@@ -51,6 +55,7 @@ export function Dropdown({
   side,
   disabled,
   className,
+  listClassName,
   ...trigger
 }: Props) {
   // A modal <dialog> is in the top layer: a list put in the body would open behind it.
@@ -74,7 +79,7 @@ export function Dropdown({
           position="popper"
           side={side}
           sideOffset={4}
-          className={list}
+          className={cn(list, listClassName)}
           // Enter picks on keydown; left to go on, it presses whatever has focus next, such as the
           // Close of the New project dialog that picking New project opens.
           onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
@@ -86,7 +91,7 @@ export function Dropdown({
                   {c.icon ? (
                     <span className="dropdown-choice">
                       {c.icon}
-                      {c.label}
+                      {c.marked ? <u className="dropdown-marked">{c.label}</u> : c.label}
                     </span>
                   ) : (
                     c.label

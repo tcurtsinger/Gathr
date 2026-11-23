@@ -103,6 +103,18 @@
 .composer-pick-who b {
   font-weight: 550;
 }
+/* The lead's name, underlined: here and in the list (Dropdown's `marked`). */
+.composer-pick-who b[data-lead],
+.dropdown-marked {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in oklab, currentColor 55%, transparent);
+  text-underline-offset: 4px;
+}
+/* The chip's list: tighter rows than the app's other dropdowns. */
+.composer-pick-list [role="option"] {
+  padding-block: 3px;
+}
 .composer-who {
   min-width: 0;
   overflow: hidden;
