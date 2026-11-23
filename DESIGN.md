@@ -131,7 +131,10 @@ its cells 10px by 16px with no lines between rows.
   at all, Add agent under it. With no project it is a greeting by the
   computer's clock, "Good morning, Sam" (05:00), "Good afternoon" (12:00), "Good evening" (17:00), "Still up,
   Sam?" (00:00), the person's name from Settings > General; with a project picked it is "What should we build
-  in <the project's name>?". While the @ list is open they sit at the column's top.
+  in <the project's name>?". While the @ list is open they sit at the column's top. Over the box's left end
+  sit the new chat's two pickers, 13px muted with no border, each opening upwards: its project behind a folder,
+  then who its message goes to behind that agent's face at 16px (the assistant, or the project's lead, first,
+  then the others it can go to by name; hidden with nobody else to pick).
 - Workspace starts at 40% of available width, initially clamped to 360 to 760px.
   Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
   chat at least 360px: when the window narrows, the workspace gives way first, down to
