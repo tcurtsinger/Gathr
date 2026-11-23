@@ -401,7 +401,13 @@ function Why({ card, ctx }: { card: Card; ctx: Ctx }) {
   const agent = card.turn.agent;
   const retry = ctx.acts.retry;
   const again =
-    card.turn.status === 'failed' && opener && !opener.reply_to && !opener.scheduled && !opener.app && agent && retry
+    card.turn.status === 'failed' &&
+    opener &&
+    !opener.reply_to &&
+    !opener.scheduled &&
+    !opener.app &&
+    agent &&
+    retry
       ? () => retry(opener, agent)
       : undefined;
   return (
