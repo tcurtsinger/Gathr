@@ -9,7 +9,7 @@ import { Face } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
-import { clock, type People, Words } from './Room';
+import { clock, LeadMark, type People, Words } from './Room';
 import '../components/popover-panel.css';
 
 /** Whether the question waits for the person's answer: not answered, nor closed when its chat was archived. */
@@ -41,11 +41,11 @@ export function QuestionCard(props: {
     <div className="room-item room-turn">
       <span className="room-who">
         <Face agent={people.face(q.agent)} size={28} />
+        <LeadMark people={people} agent={q.agent} />
       </span>
       <article
         className="room-card room-question"
         data-open={open || undefined}
-        data-lead={people.lead(q.agent) || undefined}
         aria-label={open ? `${q.name}, needs you` : q.name}
       >
         <Words className="room-body" text={q.question} chat={q.chat} names={people.names} agent={q.agent} />

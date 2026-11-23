@@ -237,13 +237,20 @@
 .room-grow {
   flex: 1;
 }
-/* An agent's card keeps its fill, not its frame, and has no head: its name is under it. A lead's card has a faint
-   green frame, one waiting on the person the blue one (below). */
+/* An agent's card keeps its fill, not its frame, and has no head: its name is under it. One waiting on the person
+   has the blue frame (below). */
 .room-card:not(.room-question, [data-needs]) {
   border-color: transparent;
 }
-.room-card[data-lead]:not([data-needs], [data-open]) {
-  border-color: color-mix(in oklab, var(--free) 40%, var(--border));
+.room-lead {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 .room-state {
   display: inline-flex;

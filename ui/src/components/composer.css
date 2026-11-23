@@ -94,10 +94,6 @@
   display: inline-flex;
   align-items: center;
 }
-/* The lead chosen: the faint green of a lead's card. */
-.composer-pick[data-lead] {
-  border-color: color-mix(in oklab, var(--free) 45%, var(--border));
-}
 .composer-pick-who {
   display: inline-flex;
   align-items: center;
