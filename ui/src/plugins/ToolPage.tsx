@@ -2,6 +2,7 @@ import { ChevronLeft, Plug } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure, type PcRuns, type ToolAction, type WebTool } from '../api';
+import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { Switch } from '../components/Switch';
 import { ChangeClientId, given } from './ClientId';
@@ -112,6 +113,7 @@ export function ToolPage({
                 {state.words}
               </span>
             )}
+            <AddedBy app={tool.added_by} />
           </p>
         </div>
         <div className="screen-actions">

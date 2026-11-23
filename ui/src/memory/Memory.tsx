@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { api, type Failure, type MemoryNote, type MemoryPlace, type MemoryShown } from '../api';
+import { api, type Failure } from '../api';
 import { Confirm } from '../components/Confirm';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
@@ -16,6 +16,7 @@ import { IconButton } from '../components/IconButton';
 import { ago } from '../components/marks';
 import { listen } from '../live';
 import { Screen } from '../Screen';
+import type { MemoryNote, MemoryPlace, MemoryShown } from './places';
 import './memory.css';
 
 /** Opens the Memory screen at a place (`you`, `project:<id>`, `agent:<id>`, `tool:<id>`): a noted line in a chat calls it. */

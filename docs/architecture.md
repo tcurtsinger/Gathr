@@ -38,6 +38,10 @@ Tools and skills, on the Plugins screen, are added once for every agent. A tool 
 with a key or a browser sign-in sealed for the computer's user (DPAPI, or the Keychain on a Mac) (`web_tools.rs`,
 `tool_sign_in.rs`, `seal.rs`). A tool on this PC is a program Gathr starts and talks to over its stdin and stdout,
 one running copy for every agent (`pc_tools.rs`). `gathrd` relays both, so an engine only ever talks to Gathr.
+An AI app outside Gathr on this PC (Claude Code, Codex, another) connects through `gathr connect`, a local MCP server
+that passes its messages to `/api/mcp` with the service's token (`bin/gathr/connect.rs`, `tools/outside.rs`): it adds
+skills, tools, agents and projects as the window and agents do, with no approval in Gathr, and each says the app's name
+(`added_by.rs`, migration 0082).
 A skill is a folder with a `SKILL.md` in the agent folder's Skills (`skills.rs`). An engine gets its tools and
 skills as it starts, so an agent's next turn after a change starts its engine again (`gathrd/turns/mod.rs`).
 

@@ -94,13 +94,18 @@ pub async fn find(s: &State, t: &Trace, id: &str, error: &'static str) -> Result
 }
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    let listed = s
-        .writer
-        .call(|conn| Ok::<_, gathr::Error>((agents::list(conn)?, agents::removed(conn)?)));
+    let listed = s.writer.call(|conn| {
+        let listed = agents::list(conn)?;
+        let added = (listed.iter())
+            .map(|a| gathr::added_by::of(conn, "agent", &a.id))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok::<_, gathr::Error>((listed, added, agents::removed(conn)?))
+    });
     match listed.await {
         // The removed ones apart, for the names on their old messages (0069).
-        Some(Ok((listed, removed))) => {
-            let shown: Vec<Value> = listed.iter().map(|a| shown(&s, a)).collect();
+        Some(Ok((listed, added, removed))) => {
+            let shown = listed.iter().zip(added).map(|(a, by)| shown(&s, a, by));
+            let shown: Vec<Value> = shown.collect();
             Ok(Json(json!({ "agents": shown, "removed": removed })))
         }
         Some(Err(e)) => Err(fail(
@@ -123,13 +128,21 @@ async fn one(
     Extension(t): Extension<Trace>,
     Path(id): Path<String>,
 ) -> Answer {
-    Ok(Json(shown(&s, &find(&s, &t, &id, "Agent failed").await?)))
+    let agent = find(&s, &t, &id, "Agent failed").await?;
+    let added = s
+        .writer
+        .call(move |c| gathr::added_by::of(c, "agent", &id))
+        .await;
+    let added = crate::team::written(&t, added, "Agent failed")?;
+    Ok(Json(shown(&s, &agent, added)))
 }
 
-/// The agent with its engine's hold, if a close it's waiting on has taken too long (0010).
-fn shown(s: &State, agent: &Agent) -> Value {
+/// The agent with its engine's hold, if a close it's waiting on has taken too long (0010), and the AI app outside
+/// Gathr that added it, if one did.
+fn shown(s: &State, agent: &Agent, added_by: Option<String>) -> Value {
     let mut shown = json!(agent);
     shown["hold"] = s.chats.hold(&agent.id);
+    shown["added_by"] = json!(added_by);
     shown
 }
 
@@ -292,7 +305,7 @@ async fn save(
 }
 
 /// Records the change and tells every window.
-fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent, by: Option<String>) {
+pub fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent, by: Option<String>) {
     let event = Event::point("gathr.agent.change")
         .trace(&t.0)
         .ok()

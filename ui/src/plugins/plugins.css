@@ -373,3 +373,28 @@
   overflow-wrap: anywhere;
   user-select: text;
 }
+/* Connect an app: the line, or the program and its arguments, under the apps to pick from. */
+.connect-app {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+.connect-app h1,
+.connect-app p {
+  margin: 0;
+}
+.connect-app .tool-redirect,
+.connect-fields {
+  justify-self: stretch;
+}
+/* A long path wraps onto a second line. */
+.connect-app .tool-redirect code {
+  height: auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  line-height: 1.5;
+}
+.connect-fields {
+  display: grid;
+  gap: 12px;
+}

@@ -52,6 +52,8 @@ pub struct Tool {
     pub added_ts: i64,
     /// `web`, or `pc` for a program Gathr runs on this PC (`pc_tools`), whose link is empty.
     pub kind: &'static str,
+    /// The AI app outside Gathr that added it, if one did.
+    pub added_by: Option<String>,
 }
 
 /// One thing a tool lets an agent do: its name and the first line of its description.
@@ -74,7 +76,8 @@ pub enum Problem {
     NotReachable,
 }
 
-const COLUMNS: &str = "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, client_id, added_ts, program IS NOT NULL";
+const COLUMNS: &str = "id, name, link, enabled, key IS NOT NULL, sign_in IS NOT NULL, client_id, added_ts, program IS NOT NULL,
+     (SELECT app FROM added_by WHERE kind = 'tool' AND added_by.id = tools.id)";
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
     Ok(Tool {
@@ -87,6 +90,7 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Tool> {
         client_id: r.get(6)?,
         added_ts: r.get(7)?,
         kind: if r.get(8)? { "pc" } else { "web" },
+        added_by: r.get(9)?,
     })
 }
 
@@ -208,6 +212,7 @@ pub fn set_enabled(conn: &Connection, id: &str, on: bool) -> Result<(), Error> {
 pub fn remove(conn: &Connection, id: &str) -> Result<(), Error> {
     get(conn, id)?;
     conn.execute("DELETE FROM tools WHERE id = ?1", [id])?;
+    crate::added_by::forget(conn, "tool", id)?;
     seal::forget(id);
     seal::forget(&crate::pc_tools::sealed_as(id));
     seal::forget(&tool_sign_in::sealed_as(id));

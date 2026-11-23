@@ -137,3 +137,14 @@
   flex: none;
   gap: 8px;
 }
+/* "Added by <app>", in the line under a title: what an AI app outside Gathr added. */
+.added-by {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.added-by:not(:first-child) {
+  margin-left: 12px;
+}
+.tool-line .added-by {
+  margin-left: 0;
+}

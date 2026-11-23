@@ -174,37 +174,62 @@ fn new_agent(
     (chat, caller): (&str, Option<&str>),
     ask: ProposeAgent,
 ) -> Result<(NewAgent, Account), Error> {
-    let refuse = |why: String| Err(Error::Refused(why));
     assistants_own(c, (chat, caller), "an agent")?;
     let me = gathr::agents::get(c, caller.unwrap_or_default())?
         .ok_or_else(|| Error::Refused("you are no longer an agent of the person's".into()))?;
+    let mine = (me.account.as_str(), me.model.clone());
+    drafted(
+        c,
+        (&ask.name, &ask.description, ask.account.as_deref()),
+        Some(mine),
+    )
+}
+
+/// A new agent called `name`, for what `description` says, on the account named `account`, else on `mine`'s account
+/// with its model, else on the person's only account; with a face picked as a new agent's is. Or what would stop it
+/// being added, said so the caller can fix it.
+pub(super) fn drafted(
+    c: &rusqlite::Connection,
+    (name, description, account): (&str, &str, Option<&str>),
+    mine: Option<(&str, Option<String>)>,
+) -> Result<(NewAgent, Account), Error> {
+    let refuse = |why: String| Err(Error::Refused(why));
     let accounts = gathr::accounts::list(c)?;
-    let account = match &ask.account {
-        None => accounts.iter().find(|a| a.id == me.account),
-        Some(name) => {
+    let all: Vec<&str> = accounts.iter().map(|a| a.name.as_str()).collect();
+    let found = match (account, &mine) {
+        (Some(name), _) => {
             let name = name.trim().to_lowercase();
             accounts.iter().find(|a| a.name.to_lowercase() == name)
         }
+        (None, Some((id, _))) => accounts.iter().find(|a| a.id == *id),
+        (None, None) if accounts.len() == 1 => accounts.first(),
+        (None, None) if accounts.is_empty() => {
+            return refuse("The person has no account yet: they add one in Settings.".into());
+        }
+        (None, None) => {
+            return refuse(format!(
+                "Give an account: the person's accounts are {}.",
+                all.join(", ")
+            ));
+        }
     };
-    let Some(account) = account.cloned() else {
-        let all: Vec<&str> = accounts.iter().map(|a| a.name.as_str()).collect();
+    let Some(account) = found.cloned() else {
         return refuse(format!(
             "The person has no account called {}: their accounts are {}.",
-            ask.account.unwrap_or_default().trim(),
+            account.unwrap_or_default().trim(),
             all.join(", ")
         ));
     };
-    let description = ask.description.trim().to_string();
+    let description = description.trim().to_string();
     if description.is_empty() {
         return refuse("Say what the agent is for in its description.".into());
     }
     let [shape, eyes, colour] = gathr::agents::shuffled();
+    let model = mine.and_then(|(id, model)| (account.id == id).then_some(model));
     let proposal = NewAgent {
-        name: ask.name.trim().to_string(),
+        name: name.trim().to_string(),
         description,
-        model: (account.id == me.account)
-            .then(|| me.model.clone())
-            .flatten(),
+        model: model.flatten(),
         account: account.id.clone(),
         shape,
         eyes,
@@ -228,7 +253,11 @@ fn new_agent(
 
 /// The id of the model the account's engine lists by `model`'s id or name, ignoring case, an exact model before a
 /// family's Latest of the same name; or which exact models it lists.
-fn listed_model(listed: &Value, model: &str, account: &Account) -> Result<String, String> {
+pub(super) fn listed_model(
+    listed: &Value,
+    model: &str,
+    account: &Account,
+) -> Result<String, String> {
     let models = listed["models"].as_array().into_iter().flatten();
     // The exact models first, as the Agents screen offers them.
     let (exact, rest): (Vec<&Value>, Vec<&Value>) =
@@ -261,12 +290,7 @@ fn proposal(
 ) -> Result<Proposal, Error> {
     let refuse = |why: String| Err(Error::Refused(why));
     assistants_own(c, (chat, caller), "a project")?;
-    let name = gathr::projects::name(&ask.name).map_err(|why| Error::Refused(why.into()))?;
-    if gathr::projects::taken(c, name)? {
-        return refuse(format!(
-            "A project is called {name} already: give another name."
-        ));
-    }
+    let name = project_name(c, &ask.name)?;
     let chat_name = gathr::titles::checked(&ask.chat)
         .map_err(|e| Error::Refused(format!("chat: {e}.")))?
         .to_string();
@@ -275,11 +299,37 @@ fn proposal(
     if n == 0 || n > BRIEF_MOST {
         return refuse(format!("The brief is {n} characters: give 1 to 4,000."));
     }
-    if ask.team.is_empty() || ask.team.len() > gathr::team::MOST {
-        return refuse(format!(
-            "The team is {} agents: give 1 to 5.",
-            ask.team.len()
-        ));
+    let team = team(c, &ask.team, &ask.lead)?;
+    Ok(Proposal {
+        name,
+        folder,
+        team,
+        chat: chat_name,
+        brief: brief.to_string(),
+        made: None,
+    })
+}
+
+/// A new project's name as saved, or why it can't be: not a name, or another project's.
+pub(super) fn project_name(c: &rusqlite::Connection, name: &str) -> Result<String, Error> {
+    let name = gathr::projects::name(name).map_err(|why| Error::Refused(why.into()))?;
+    if gathr::projects::taken(c, name)? {
+        return Err(Error::Refused(format!(
+            "A project is called {name} already: give another name."
+        )));
+    }
+    Ok(name.to_string())
+}
+
+/// A project's team from 1 to 5 of the person's agents by name, `lead` leading and listed first; or what is wrong.
+pub(super) fn team(
+    c: &rusqlite::Connection,
+    names: &[String],
+    lead: &str,
+) -> Result<Vec<Seat>, Error> {
+    let refuse = |why: String| Err(Error::Refused(why));
+    if names.is_empty() || names.len() > gathr::team::MOST {
+        return refuse(format!("The team is {} agents: give 1 to 5.", names.len()));
     }
     let agents = gathr::agents::list(c)?;
     let by_name = |name: &str| {
@@ -287,7 +337,7 @@ fn proposal(
         agents.iter().find(|a| a.name.to_lowercase() == name)
     };
     let mut team: Vec<Seat> = Vec::new();
-    for name in &ask.team {
+    for name in names {
         let Some(agent) = by_name(name) else {
             let all: Vec<&str> = agents.iter().map(|a| a.name.as_str()).collect();
             return refuse(format!(
@@ -298,23 +348,16 @@ fn proposal(
         if team.iter().any(|s| s.agent == agent.id) {
             return refuse(format!("{} is in the team twice.", agent.name));
         }
-        let lead = by_name(&ask.lead).is_some_and(|l| l.id == agent.id);
+        let leads = by_name(lead).is_some_and(|l| l.id == agent.id);
         team.push(Seat {
             agent: agent.id.clone(),
-            lead,
+            lead: leads,
         });
     }
     if !team.iter().any(|s| s.lead) {
-        return refuse(format!("The lead, {}, isn't in the team.", ask.lead));
+        return refuse(format!("The lead, {lead}, isn't in the team."));
     }
     // The lead first, as a project lists its team.
     team.sort_by_key(|s| !s.lead);
-    Ok(Proposal {
-        name: name.to_string(),
-        folder,
-        team,
-        chat: chat_name,
-        brief: brief.to_string(),
-        made: None,
-    })
+    Ok(team)
 }

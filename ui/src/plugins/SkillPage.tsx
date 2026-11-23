@@ -2,6 +2,7 @@ import { BookOpen, ChevronLeft } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure, type Skill } from '../api';
+import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { Markdown } from '../components/Markdown';
 import { Switch } from '../components/Switch';
@@ -41,7 +42,10 @@ export function SkillPage({ skill, onBack, onFailure, onEnable, onRemove }: Prop
           {skill.problem ? (
             <p className="plugin-problem">{skill.problem}</p>
           ) : (
-            <p className="muted">{skill.description}</p>
+            <p className="muted">
+              {skill.description}
+              <AddedBy app={skill.added_by} />
+            </p>
           )}
         </div>
         <div className="screen-actions">

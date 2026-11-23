@@ -1,6 +1,9 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
+import type { Added } from './components/AddedBy';
 import type { Deletable, DeleteCounts } from './deleting';
+import type { MemoryPlace, MemoryShown } from './memory/places';
+import type { Connect } from './plugins/ConnectApp';
 import type { ProposedAgent, ProposedProject } from './room/Proposal';
 import type { Schedule, ScheduleShown } from './scheduled/schedule';
 
@@ -218,7 +221,7 @@ export interface FrictionReport {
   where: string | null;
 }
 
-export interface Project {
+export interface Project extends Added {
   id: string;
   name: string;
   folder: string;
@@ -386,7 +389,7 @@ export interface BackgroundChoice {
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
-export interface Agent {
+export interface Agent extends Added {
   id: string;
   name: string;
   account: string;
@@ -512,7 +515,7 @@ export interface AppState {
 }
 
 /** A folder in the Skills folder: its SKILL.md's description, or why it can't be read. */
-export interface Skill {
+export interface Skill extends Added {
   name: string;
   description: string | null;
   path: string;
@@ -520,32 +523,10 @@ export interface Skill {
   problem: string | null;
 }
 
-/** A place in Memory: `you`, `project:<id>`, `agent:<id>` or `tool:<id>`, with how many notes it holds. */
-export interface MemoryPlace {
-  id: string;
-  kind: 'you' | 'project' | 'agent' | 'tool';
-  name: string;
-  count: number;
-}
-
-/** A note: who added it (an agent's name, `You`, or nobody for a line written in the file) and when. */
-export interface MemoryNote {
-  text: string;
-  by: string | null;
-  when: string | null;
-}
-
-export interface MemoryShown {
-  id: string;
-  name: string;
-  path: string;
-  notes: MemoryNote[];
-}
-
 const memoryPath = (place: string) => `/api/memory/${encodeURIComponent(place)}`;
 
 /** A tool on the web, or on this PC (`kind: 'pc'`, no link): never its key or a variable's value. */
-export interface WebTool {
+export interface WebTool extends Added {
   id: string;
   name: string;
   link: string;
@@ -907,8 +888,8 @@ export const api = {
   deleteSchedule: (id: string) => call<unknown>('DELETE', `/api/schedules/${id}`),
   /** A run at once: the next time stays. */
   runSchedule: (id: string) => call<{ chat: string; turn: string }>('POST', `/api/schedules/${id}/run`),
-  /** Every tool on the web, each enabled one's state asked of it now. */
-  tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
+  /** Every tool, each enabled one's state asked of it now; and what an AI app on this PC runs to connect. */
+  tools: () => call<{ tools: WebTool[]; connect: Connect | null }>('GET', '/api/tools'),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */
   tool: (id: string) =>
     call<
