@@ -407,6 +407,10 @@
 .room-steps {
   padding: 0 12px 8px;
 }
+/* A card that is only its steps line, as a running turn's is before its words, holds the line in its middle. */
+.room-card > .room-steps:first-child:last-child {
+  padding-block: 5px;
+}
 .room-work {
   display: inline-flex;
   align-items: center;
