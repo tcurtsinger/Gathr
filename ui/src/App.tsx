@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Agents } from './agents/Agents';
 import {
+  type Account,
   type Agent,
   api,
   type Chat,
@@ -178,6 +179,20 @@ export function App() {
       if (event.type === 'agents' || event.type === 'lagged') load();
     });
   }, []);
+
+  // Accounts, for an agent that can't run: its account is signed out.
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  useEffect(() => {
+    const load = () => api.accounts().then(setAccounts, quiet);
+    load();
+    return listen((event) => {
+      if (event.type === 'accounts' || event.type === 'lagged') load();
+    });
+  }, []);
+  const signedOut = (agent: string) => {
+    const account = accounts.find((a) => a.id === agents.find((x) => x.id === agent)?.account);
+    return account?.login === 'signed_out' ? account.name : undefined;
+  };
 
   // The person's name and assistant, for a new chat's greeting: read again as Settings closes, as Agents changes the
   // assistant, and when agents change (the first agent added, or the assistant deleted, moves it).
@@ -393,6 +408,8 @@ export function App() {
     onStart: start,
     onNewProject: () => setNewProject(true),
     onAgents: () => setOpened('agents'),
+    signedOut,
+    onSignIn: () => openSettings('engines'),
     pauses: pauses.pauses,
     onPause: pauses.act,
     onRename: (opener: HTMLElement | null) => setRenaming({ chat, opener }),
@@ -417,6 +434,7 @@ export function App() {
           setOpened(open);
         }}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
+        signedOut={agents.some((a) => signedOut(a.id))}
         update={{
           ready: readyVersion(appUpdate.app),
           updating: appUpdate.app?.state === 'updating',
@@ -462,11 +480,12 @@ export function App() {
             mine && {
               agent: mine,
               open: ownChat ? ownChat.id === selected : !!fresh?.assistant,
-              mark: ownChat?.mark,
+              mark: ownChat?.mark ?? (signedOut(mine.id) ? 'cant_run' : null),
               onOpen: openAssistant,
             }
           }
           onDeleteProject={askDelete}
+          onNewProject={() => setNewProject(true)}
           onProjectSettings={(project, opener) =>
             setSettings({
               page: 'projects',

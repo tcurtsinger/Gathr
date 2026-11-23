@@ -1,6 +1,7 @@
+import { LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Engine, Failure } from '../api';
+import { api, downloading, type Engine, Failure } from '../api';
 import { useCard } from '../components/Corner';
 import { EngineLogo } from '../components/EngineLogo';
 import { Accounts, engines } from './Accounts';
@@ -57,19 +58,28 @@ function Program({ id, name }: { id: string; name: string }) {
       : copy?.checked && copy.version && !copy.failed
         ? 'Up to date'
         : '';
-  const version = copy?.version ?? (engine.found ? '' : 'Not installed');
+  // Its first copy downloading is said in the line, muted, never as a failure.
+  const fetching = downloading(engine.why_not_found);
+  const version = copy?.version ?? (engine.found || fetching ? '' : 'Not installed');
   return (
     <Row
       name={<span id={title}>{name}</span>}
       lead={<EngineLogo engine={id} className="engine-logo" />}
       line={
-        <>
-          {version}
-          {version && status && ' · '}
-          <span role="status">{status}</span>
-        </>
+        fetching ? (
+          <span className="engine-fetching" role="status">
+            <LoaderCircle aria-hidden="true" />
+            Downloading
+          </span>
+        ) : (
+          <>
+            {version}
+            {version && status && ' · '}
+            <span role="status">{status}</span>
+          </>
+        )
       }
-      after={engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
+      after={!fetching && engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
     >
       {copy?.state !== 'off' && (
         <Button type="button" variant="outline" aria-describedby={title} disabled={checking} onClick={check}>

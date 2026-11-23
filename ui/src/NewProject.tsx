@@ -3,12 +3,12 @@ import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
 import { useCard } from './components/Corner';
 import { Dialog } from './components/Dialog';
-import { Dropdown } from './components/Dropdown';
-import { Switch } from './components/Switch';
 import type { Proposing } from './room/Proposal';
+import { FolderField } from './settings/FolderField';
+import type { Seat } from './settings/Projects';
+import { Team } from './settings/ProjectTeam';
+import { Row } from './settings/Row';
 import './new-project.css';
-
-const MOST = 5;
 
 interface Props {
   open: boolean;
@@ -20,12 +20,14 @@ interface Props {
   onCreated: (project: Project) => void;
 }
 
-/** A project: its name, its folder and its team of up to five, one of them the lead (0028). */
+/**
+ * A project: its name, its folder and its team of up to five, one of them the lead (0028), in the rows and team
+ * editor of Settings > Projects.
+ */
 export function NewProject({ open, agents, projects, proposal, onClose, onCreated }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState('');
-  const [team, setTeam] = useState<string[]>([]);
-  const [lead, setLead] = useState('');
+  const [seats, setSeats] = useState<Seat[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
   // What a proposal filled in, and cleared again once its form closes.
   const [filled, setFilled] = useState<Proposing | null>(null);
@@ -34,24 +36,20 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
     setFilled(proposal ?? null);
     setName(p?.name ?? '');
     setFolder(p?.folder ?? '');
-    setTeam(p?.team.map((s) => s.agent) ?? []);
-    setLead(p?.team.find((s) => s.lead)?.agent ?? '');
+    const lead = p?.team.find((s) => s.lead)?.agent ?? p?.team[0]?.agent;
+    setSeats(
+      p?.team.map((s) => ({ agent: s.agent, role: s.agent === lead ? 'supervisor' : 'member' })) ?? [],
+    );
     setFailure(null);
   }
   useCard(open ? failure : null);
-  const supervisor = team.includes(lead) ? lead : team[0];
   const taken = projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
-  const ready = name.trim() && folder.trim() && team.length > 0 && !taken;
-  const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
+  const ready = name.trim() && folder.trim() && seats.length > 0 && !taken;
 
   const create = (e: FormEvent) => {
     e.preventDefault();
     if (!ready) return;
-    const roles = team.map((agent) => ({
-      agent,
-      role: agent === supervisor ? ('supervisor' as const) : ('member' as const),
-    }));
-    const asked = { name: name.trim(), folder: folder.trim(), members: roles };
+    const asked = { name: name.trim(), folder: folder.trim(), members: seats };
     if (proposal) {
       api.makeProject(proposal.message, asked).then(onClose, setFailure);
       return;
@@ -59,59 +57,38 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
     api.addProject(asked).then((project) => {
       setName('');
       setFolder('');
-      setTeam([]);
+      setSeats([]);
       setFailure(null);
       onCreated(project);
     }, setFailure);
   };
 
   return (
-    <Dialog open={open} title="New project" onClose={onClose} className="new-project">
-      <form onSubmit={create}>
-        <label className="agent-field">
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        {taken && <p className="muted">Name already used</p>}
-        <label className="agent-field">
-          Folder
-          <input value={folder} onChange={(e) => setFolder(e.target.value)} required spellCheck={false} />
-        </label>
-        <fieldset className="agent-field">
-          <legend>
-            Agents{' '}
-            <small>
-              {team.length} of {MOST}
-            </small>
-          </legend>
-          {agents.map((a) => {
-            const on = team.includes(a.id);
-            return (
-              <div key={a.id} className="new-project-agent">
-                <span id={`project-agent-${a.id}`}>{a.name}</span>
-                <Switch
-                  on={on}
-                  labelledBy={`project-agent-${a.id}`}
-                  disabled={!on && team.length >= MOST}
-                  onChange={() => setTeam(on ? team.filter((id) => id !== a.id) : [...team, a.id])}
-                />
-              </div>
-            );
-          })}
-        </fieldset>
-        {team.length > 1 && (
-          <div className="agent-field">
-            <label htmlFor="new-project-lead">Lead</label>
-            <Dropdown
-              id="new-project-lead"
-              value={supervisor}
-              onChange={setLead}
-              choices={team.map((id) => ({ value: id, label: nameOf(id) }))}
+    <Dialog open={open} title="New project" onClose={onClose} className="new-project" noHeader closeIcon>
+      <form className="settings-col" onSubmit={create}>
+        <header className="settings-head">
+          <h3>New project</h3>
+        </header>
+        <div className="settings-rows settings-top">
+          <Row
+            name={<label htmlFor="new-project-name">Name</label>}
+            line={taken ? 'Name already used' : undefined}
+          >
+            <input
+              id="new-project-name"
+              value={name}
+              maxLength={80}
+              onChange={(e) => setName(e.target.value)}
+              required
             />
-          </div>
-        )}
-        <footer className="agent-actions">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          </Row>
+          <Row name={<label htmlFor="new-project-folder">Folder</label>}>
+            <FolderField id="new-project-folder" title="Project folder" value={folder} onChange={setFolder} />
+          </Row>
+        </div>
+        <Team seats={seats} agents={agents} onChange={setSeats} />
+        <footer className="settings-foot">
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={!ready}>

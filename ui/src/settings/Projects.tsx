@@ -8,6 +8,7 @@ import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
+import { FolderField } from './FolderField';
 import { Team } from './ProjectTeam';
 import { Page, Row } from './Row';
 import './projects.css';
@@ -189,12 +190,11 @@ function ProjectPage({ project, agents, saved, onBack, onSaved, onDeleted }: Pag
             />
           </Row>
           <Row name={<label htmlFor="project-folder">Folder</label>}>
-            <input
+            <FolderField
               id="project-folder"
-              className="project-folder"
+              title="Project folder"
               value={fields.folder}
-              spellCheck={false}
-              onChange={(e) => edit({ folder: e.target.value })}
+              onChange={(folder) => edit({ folder })}
             />
           </Row>
         </div>

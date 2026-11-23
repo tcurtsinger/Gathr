@@ -1,4 +1,4 @@
-import { CircleAlert, X } from 'lucide-react';
+import { CircleAlert, LoaderCircle, X } from 'lucide-react';
 import {
   type RefObject,
   useEffect,
@@ -14,7 +14,8 @@ import type { Failure } from '../api';
 import { IconButton } from './IconButton';
 import './corner.css';
 
-type Told = Pick<Failure, 'error' | 'why' | 'ref'>;
+/** `calm`: something under way, not a failure (an engine downloading), shown with a turning mark. */
+type Told = Pick<Failure, 'error' | 'why' | 'ref'> & { calm?: boolean };
 interface Action {
   label: string;
   run: () => void;
@@ -91,8 +92,12 @@ export function Corner({ onReference }: { onReference: (ref: string) => void }) 
   useEffect(() => () => host.remove(), [host]);
   return createPortal(
     [...shown].map(([key, { failure, action }]) => (
-      <div key={key} className="corner-card" role="alert">
-        <CircleAlert className="corner-mark" aria-hidden="true" />
+      <div key={key} className="corner-card" role={failure.calm ? 'status' : 'alert'}>
+        {failure.calm ? (
+          <LoaderCircle className="corner-mark corner-calm" aria-hidden="true" />
+        ) : (
+          <CircleAlert className="corner-mark" aria-hidden="true" />
+        )}
         <div className="corner-words">
           <strong>{failure.error}</strong>
           {failure.why && <span>{failure.why}</span>}

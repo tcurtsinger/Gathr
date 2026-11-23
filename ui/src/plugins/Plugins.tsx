@@ -221,50 +221,52 @@ export function Plugins({ at }: { at?: PluginAt }) {
                 Skills
               </button>
             </div>
-            <div className="chatlist">
-              <section>
-                <h2>Installed</h2>
-                {nothing && <p className="sidebar-empty">Nothing yet</p>}
-                {shownTools.map((t) => (
-                  <div
-                    key={`t-${t.id}`}
-                    className="chatrow"
-                    data-current={t.id === pickedTool || undefined}
-                    data-disabled={!t.enabled || undefined}
-                  >
-                    <button
-                      type="button"
-                      className="chat-link"
-                      aria-current={t.id === pickedTool ? 'page' : undefined}
-                      onClick={() => openTool(t.id)}
+            {/* Nothing installed: the page says so, once. */}
+            {!nothing && (
+              <div className="chatlist">
+                <section>
+                  <h2>Installed</h2>
+                  {shownTools.map((t) => (
+                    <div
+                      key={`t-${t.id}`}
+                      className="chatrow"
+                      data-current={t.id === pickedTool || undefined}
+                      data-disabled={!t.enabled || undefined}
                     >
-                      <Plug aria-hidden="true" className="plugins-nav-icon" />
-                      <span>{t.name}</span>
-                      {flag(t)}
-                    </button>
-                  </div>
-                ))}
-                {shownSkills.map((s) => (
-                  <div
-                    key={`s-${s.name}`}
-                    className="chatrow"
-                    data-current={s.name === pickedSkill || undefined}
-                    data-disabled={!s.enabled || undefined}
-                  >
-                    <button
-                      type="button"
-                      className="chat-link"
-                      aria-current={s.name === pickedSkill ? 'page' : undefined}
-                      onClick={() => openSkill(s.name)}
+                      <button
+                        type="button"
+                        className="chat-link"
+                        aria-current={t.id === pickedTool ? 'page' : undefined}
+                        onClick={() => openTool(t.id)}
+                      >
+                        <Plug aria-hidden="true" className="plugins-nav-icon" />
+                        <span>{t.name}</span>
+                        {flag(t)}
+                      </button>
+                    </div>
+                  ))}
+                  {shownSkills.map((s) => (
+                    <div
+                      key={`s-${s.name}`}
+                      className="chatrow"
+                      data-current={s.name === pickedSkill || undefined}
+                      data-disabled={!s.enabled || undefined}
                     >
-                      <BookOpen aria-hidden="true" className="plugins-nav-icon" />
-                      <span>{s.name}</span>
-                      {s.problem && dot('danger', 'Can’t be read')}
-                    </button>
-                  </div>
-                ))}
-              </section>
-            </div>
+                      <button
+                        type="button"
+                        className="chat-link"
+                        aria-current={s.name === pickedSkill ? 'page' : undefined}
+                        onClick={() => openSkill(s.name)}
+                      >
+                        <BookOpen aria-hidden="true" className="plugins-nav-icon" />
+                        <span>{s.name}</span>
+                        {s.problem && dot('danger', 'Can’t be read')}
+                      </button>
+                    </div>
+                  ))}
+                </section>
+              </div>
+            )}
           </>
         }
       >
@@ -354,9 +356,16 @@ export function Plugins({ at }: { at?: PluginAt }) {
             </div>
             {nothing ? (
               <div className="screen-empty">
-                <h2>Nothing installed yet</h2>
-                <p className="muted">A tool lets agents use an app, like an issue tracker.</p>
-                <p className="muted">A skill is instructions an agent reads when a task needs them.</p>
+                <h2>Nothing installed</h2>
+                <p className="muted">
+                  {
+                    {
+                      all: 'Tools let agents use apps. Skills are instructions they follow.',
+                      tools: 'Tools let agents use apps, like an issue tracker.',
+                      skills: 'Skills are instructions agents follow when a task needs them.',
+                    }[kind]
+                  }
+                </p>
               </div>
             ) : (
               <>

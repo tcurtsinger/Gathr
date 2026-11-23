@@ -28,3 +28,22 @@
   display: flex;
   gap: 12px;
 }
+/* A new chat's agent can't run: its account is signed out. */
+.new-cant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 25%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--destructive) 7%, var(--background));
+  font-size: 13.5px;
+}
+.new-cant .mark {
+  --mark: 12px;
+  --behind: color-mix(in oklab, var(--destructive) 7%, var(--background));
+}
+.new-cant span {
+  flex: 1;
+}

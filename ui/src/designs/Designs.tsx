@@ -49,17 +49,20 @@ export function Designs({ onChat }: { onChat: (chat: string, design: Design, pag
       name="Designs"
       nav={
         <>
-          <div className="sidebar-actions">
-            <button
-              type="button"
-              className="navbutton"
-              aria-current={!picked ? 'page' : undefined}
-              onClick={() => pick()}
-            >
-              <DesignsMark />
-              All designs
-            </button>
-          </div>
+          {/* All designs is a choice only beside its projects. */}
+          {!!parts?.length && (
+            <div className="sidebar-actions">
+              <button
+                type="button"
+                className="navbutton"
+                aria-current={!picked ? 'page' : undefined}
+                onClick={() => pick()}
+              >
+                <DesignsMark />
+                All designs
+              </button>
+            </div>
+          )}
           {parts && parts.length > 0 && (
             <div className="chatlist">
               <section>
@@ -93,7 +96,7 @@ export function Designs({ onChat }: { onChat: (chat: string, design: Design, pag
         />
       ) : (
         <>
-          <h1>{part ? nameOf(part) : 'Designs'}</h1>
+          {!!parts?.length && <h1>{part ? nameOf(part) : 'Designs'}</h1>}
           {parts?.length === 0 ? (
             <div className="screen-empty">
               <h2>No designs yet</h2>

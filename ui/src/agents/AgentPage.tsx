@@ -1,7 +1,6 @@
-import { ChevronLeft } from 'lucide-react';
-import { type ReactNode, useEffect, useId, useState } from 'react';
+import { type ReactNode, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
+import { type Account, type Agent, type Approvals, api, downloading, type Failure, type Model } from '../api';
 import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { useCard } from '../components/Corner';
@@ -23,7 +22,10 @@ interface Props {
   saved: boolean;
   /** Change, on an agent the assistant proposed: Add's form filled in with it, and Save adds it from there. */
   proposal?: ProposingAgent | null;
+  /** Add's Cancel. */
   onBack: () => void;
+  /** Makes it the assistant, which answers chats with no project. */
+  onAssistant: () => void;
   onSaved: (agent: Agent) => void;
   /** What the delete couldn't remove yet, if anything. */
   onDeleted: (left: Failure | null) => void;
@@ -54,7 +56,7 @@ const modes: [Approvals, string, string][] = [
  * the engine), the account's models and their efforts, and Approvals, saved together with Save.
  */
 export function AgentPage(props: Props) {
-  const { agent, accounts, assistant, saved, proposal, onBack, onSaved, onDeleted } = props;
+  const { agent, accounts, assistant, saved, proposal, onBack, onAssistant, onSaved, onDeleted } = props;
   // Only the fields edited here, over the agent as saved, so a save from elsewhere shows in
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
@@ -80,7 +82,14 @@ export function AgentPage(props: Props) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const models = useModels(account);
   useCard(failure);
-  useCard(models.failure);
+  // An engine still downloading has no models yet: a calm card that says so, not a failure.
+  const why = models.failure?.why;
+  const waiting = downloading(why);
+  const calm = useMemo(
+    () => (waiting ? { error: why ?? '', why: 'Models show when it’s done.', ref: null, calm: true } : null),
+    [waiting, why],
+  );
+  useCard(waiting ? calm : models.failure);
   const id = useId();
 
   const list = models.list ?? [];
@@ -154,10 +163,6 @@ export function AgentPage(props: Props) {
 
   return (
     <form className="agent-page" aria-labelledby={`${id}title`} onSubmit={submit}>
-      <button type="button" className="screen-back" onClick={onBack}>
-        <ChevronLeft aria-hidden="true" />
-        Agents
-      </button>
       <header className="screen-head">
         <FaceFields
           id={agent?.id ?? ''}
@@ -179,6 +184,11 @@ export function AgentPage(props: Props) {
         </div>
         {agent && (
           <div className="screen-actions">
+            {!assistant && (
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onAssistant}>
+                Make assistant
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"

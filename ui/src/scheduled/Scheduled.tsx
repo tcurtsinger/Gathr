@@ -48,7 +48,6 @@ export function Scheduled({ at, onAt, onChat }: Props) {
       name="Scheduled"
       nav={
         <div className="chatlist scheduled-nav">
-          {list?.length === 0 && <p className="muted scheduled-none">Nothing scheduled</p>}
           {list?.map((s) => (
             <div
               key={s.id}
@@ -71,6 +70,12 @@ export function Scheduled({ at, onAt, onChat }: Props) {
       }
     >
       {open && <Page key={open.id} schedule={open} onChat={onChat} onFailure={setFailure} />}
+      {list?.length === 0 && (
+        <div className="screen-empty">
+          <h2>Nothing scheduled</h2>
+          <p className="muted">Ask an agent to do something on a schedule.</p>
+        </div>
+      )}
     </Screen>
   );
 }

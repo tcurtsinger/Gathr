@@ -9,3 +9,13 @@ export interface Ipc {
 export function desktop(): Ipc | undefined {
   return (window as { __TAURI_INTERNALS__?: Ipc }).__TAURI_INTERNALS__;
 }
+
+/** The system's folder picker: the folder picked, or null when closed without one. Only in the desktop window. */
+export function pickFolder(title: string, from: string | null): Promise<string | null> {
+  const window = desktop();
+  if (!window) return Promise.reject(new Error('No desktop window'));
+  const options = { directory: true, defaultPath: from, title, canCreateDirectories: true };
+  return window
+    .invoke('plugin:dialog|open', { options })
+    .then((picked) => (typeof picked === 'string' ? picked : null));
+}
