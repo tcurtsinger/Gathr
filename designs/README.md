@@ -13,7 +13,12 @@ gone. All fixtures are invented. Actions are local simulations.
 
 No page here shows the chat as it is now (the room, rebuilt 2026-11-20): system.html's Conversation and Recovery,
 `chat-states/` and the chats drawn behind Settings are the chat that was replaced. The room's own preview is
-`ui/room.html`, a made-up chat with its sidebar: `npm run dev` in `ui/`, then `/room.html` (`#light` for light).
+`ui/room.html`, a made-up chat with its sidebar and a message an outside app sent: `npm run dev` in `ui/`, then
+`/room.html` (`#light` for light).
+
+`notices/` holds assistant-ui's and shadcn's licences and a notice for each icon or logo the window uses from
+elsewhere, with its source, its licence and what was changed: the rail's Memory and Designs marks, Settings' Background
+and Connect marks, Changes' mark and the engines' logos.
 
 `components.css` retains the four historical imports the older pages below use, then imports `system-reference.css` for the current portable reference.
 That page demonstrates static anatomy, not substitute React implementations.
