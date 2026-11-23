@@ -320,13 +320,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         data-found={holds(card, ctx.found)}
         aria-label={ctx.people.name(agent)}
       >
-        {ctx.solo ? (
-          <header className="room-head">
-            <span className="room-grow" />
-            <span className="room-solo-name">{ctx.people.name(agent)}</span>
-            <State card={card} needs={needs} solo />
-          </header>
-        ) : (
+        {!ctx.solo && (
           <header className="room-head">
             <b>{ctx.people.name(agent)}</b>
             {ctx.people.lead(agent) && <span className="room-tag">Lead</span>}
@@ -350,8 +344,16 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         {rest.length > 0 && <Steps steps={rest} running={running} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
+      {ctx.solo && (running || needs) && (
+        <div className="room-bar room-live">
+          <b className="room-who-name">{ctx.people.name(agent)}</b>
+          <State card={card} needs={needs} />
+        </div>
+      )}
       {!running && (
         <Bar
+          who={ctx.solo ? agent : undefined}
+          state={ctx.solo && card.turn.status !== 'done' && <State card={card} />}
           time={card.turn.ended ?? card.turn.created}
           text={card.text ?? ''}
           said={card.said}
@@ -366,9 +368,9 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
 
 /**
  * At the head's right: "Working · 2m" while it runs, "Needs you" while it waits on an approval, a check and how long it
- * took once done. `solo`: the mark alone while it runs, the time alone once done.
+ * took once done. In a chat with one agent, under the card, after its name.
  */
-function State({ card, needs, solo }: { card: Card; needs?: boolean; solo?: boolean }) {
+function State({ card, needs }: { card: Card; needs?: boolean }) {
   const running = working(card) && !needs;
   const now = useNow(running);
   const { status, created, ended } = card.turn;
@@ -377,14 +379,14 @@ function State({ card, needs, solo }: { card: Card; needs?: boolean; solo?: bool
     return (
       <span className="room-state live">
         <StateMark state="needs" size={12} />
-        {!solo && 'Needs you'}
+        Needs you
       </span>
     );
   if (running)
     return (
       <span className="room-state live">
         <StateMark state="working" size={12} spin />
-        {!solo && <>Working · {since(now - began)}</>}
+        Working · {since(now - began)}
       </span>
     );
   if (status !== 'done')
@@ -395,7 +397,7 @@ function State({ card, needs, solo }: { card: Card; needs?: boolean; solo?: bool
     );
   return (
     <span className="room-state">
-      {!solo && <Check aria-hidden="true" />}
+      <Check aria-hidden="true" />
       {ended && created ? since(Date.parse(ended) - began, true) : ''}
     </span>
   );
@@ -591,6 +593,10 @@ interface BarProps {
   said: Message[];
   /** An agent's last words: what the person's own thumbs-up goes on. Unset on the person's own message. */
   last?: Message;
+  /** In a chat with one agent: the agent whose card it is, named before the time. */
+  who?: string;
+  /** Before the time: how a turn that didn't finish ended. */
+  state?: ReactNode;
   ctx: Ctx;
 }
 
@@ -599,7 +605,7 @@ interface BarProps {
  * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
+function Bar({ time, scheduled, from, text, said, last, who: agent, state, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -618,6 +624,8 @@ function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
   if (!time && !text && !press && !given.length) return null;
   return (
     <div className="room-bar">
+      {agent && <b className="room-who-name">{ctx.people.name(agent)}</b>}
+      {state}
       {from ? (
         <span className="room-time room-from">
           <Face agent={ctx.people.face(from)} size={16} />

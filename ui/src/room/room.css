@@ -131,7 +131,7 @@
 .room-you {
   align-self: flex-end;
   max-width: 76%;
-  padding: 10px 14px;
+  padding: 7px 14px;
   border-radius: 16px;
   background: var(--accent-surface);
   overflow-wrap: anywhere;
@@ -256,13 +256,9 @@
 .room-grow {
   flex: 1;
 }
-/* A chat with one agent: the card keeps its fill, not its frame; its name sits small by the state at the right. */
+/* A chat with one agent: the card keeps its fill, not its frame, and has no head; its name is under it, by the time. */
 .room-card[data-solo]:not([data-needs]) {
   border-color: transparent;
-}
-.room-solo-name {
-  color: var(--muted-foreground);
-  font-size: 12.5px;
 }
 .room-state {
   display: inline-flex;
@@ -291,17 +287,11 @@
 .room-card > .room-body:last-child {
   padding-bottom: 13px;
 }
-/* With one agent, the name and state float at the card's top right and the words start beside them. */
-.room-card[data-solo] {
-  display: flow-root;
-}
-.room-card[data-solo] > .room-head {
-  float: right;
-  min-height: 0;
-  padding: 11px 18px 4px 12px;
-}
 .room-card[data-solo] > .room-body {
-  padding-top: 11px;
+  padding-top: 9px;
+}
+.room-card[data-solo] > .room-body:last-child {
+  padding-bottom: 9px;
 }
 /* Words said while the turn still runs read as a remark until it ends. */
 .room-card[data-live] > .room-body,
@@ -443,6 +433,18 @@
 .room-bar .room-time {
   margin-right: 5px;
   font-size: inherit;
+}
+/* The agent's name before the time, in a chat with one agent; while it works, the state follows it. */
+.room-who-name {
+  margin-right: 6px;
+  color: color-mix(in oklab, var(--foreground) 80%, var(--background));
+  font-weight: 600;
+}
+.room-bar .room-state {
+  margin-right: 6px;
+}
+.room-live {
+  margin-top: 5px;
 }
 /* A scheduled run's words: Scheduled's mark and when they were due, where the time is. */
 .room-bar .room-scheduled {
