@@ -16,6 +16,17 @@
   margin: 0 0 10px;
   color: var(--danger);
 }
+/* Each account's and each engine's logo before its words; in the Engine dropdown, before its name. */
+.engine-logo {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.engine-choice-logo {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
 /* Add or Rename, over the list. */
 .account-form {
   display: grid;

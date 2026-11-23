@@ -24,7 +24,7 @@
   flex-shrink: 0;
   color: var(--muted-foreground);
 }
-/* A choice with a face before its name: the Assistant setting. */
+/* A choice with a face or a logo before its name: the Assistant setting, an account's Engine. */
 .dropdown-choice {
   display: inline-flex;
   align-items: center;

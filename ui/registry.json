@@ -28,6 +28,11 @@
       "sha256": "54ad55954b266d525df4cbf987978457e5a72ee5d867bb952f43b4368e35c60a"
     },
     {
+      "path": "components/assistant-ui/elements/logos.tsx",
+      "url": "https://github.com/assistant-ui/assistant-ui/blob/7730e8cac04cc049dcc4bab3bcfa94e7fb89d33f/packages/ui/src/components/react/assistant-ui/elements/logos.tsx",
+      "sha256": "63ecebfd780689f9af364ea107398dbaf0fc116df06989a8ce4a81d9cd6bea51"
+    },
+    {
       "path": "components/assistant-ui/elements/math-block.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/math-block.tsx",
       "sha256": "6b4784e13df658fef0a0ede10c867aa7e995aa42736d314af6fa9163c06f96e8"

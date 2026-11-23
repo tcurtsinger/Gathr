@@ -12,6 +12,7 @@ import { ConfirmRemove } from '../components/ConfirmRemove';
 import { useCard } from '../components/Corner';
 import { DialogMenuContent } from '../components/DialogMenu';
 import { Dropdown } from '../components/Dropdown';
+import { EngineLogo } from '../components/EngineLogo';
 import { IconButton } from '../components/IconButton';
 import { listen } from '../live';
 import { Group, Row } from './Row';
@@ -136,7 +137,11 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
           value={engine}
           disabled={!!account}
           onChange={setEngine}
-          choices={engines.map(([id, label]) => ({ value: id, label }))}
+          choices={engines.map(([id, label]) => ({
+            value: id,
+            label,
+            icon: <EngineLogo engine={id} className="engine-choice-logo" />,
+          }))}
         />
       </div>
       <label className="account-field">
@@ -221,6 +226,7 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
       <Row
         name={<span id={name}>{account.name}</span>}
         line={`${engineName(account.engine)} · ${state}`}
+        lead={<EngineLogo engine={account.engine} className="engine-logo" />}
         after={
           <>
             {failed && <SignInFailed account={id} failed={failed} onFailure={onFailure} />}

@@ -38,9 +38,20 @@
 .agent-meta {
   flex: none;
   margin-left: auto;
-  padding-right: 6px;
   color: var(--muted-foreground);
   font-size: 12.5px;
+}
+/* The engine's logo at the row's end, in the same place on every row. */
+.agent-engine {
+  display: flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+}
+.agent-engine svg {
+  width: 100%;
+  height: 100%;
 }
 .agent-page .screen-title h1 {
   display: flex;

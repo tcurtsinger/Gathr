@@ -165,6 +165,8 @@ floating surfaces 16px; ComposerBar 24px with 10px padding. The person's bubble 
 
 The window uses the recorded official registry components, wrapped from outside: assistant-ui's composer
 and approval card, and shadcn's Button and dropdown menu. Do not build lookalikes in `ui/`.
+assistant-ui's Claude and OpenAI logos (`EngineLogo.tsx`) say which engine an account, a program or an agent is on,
+and which app sent words for the person; the Claude mark keeps its colour, the OpenAI mark takes the text's.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
 `ui/registry.json` records each adaptation with its original and adapted hash and why:
 Button today. Retain source

@@ -127,6 +127,17 @@ turn(
   ['Edit', 'Bash'],
 );
 turn('ann', 19, 0.2, words(pr), ['Merged #291.'], ['Bash']);
+// Words an AI app outside Gathr sent for the person: drawn under its logo, as "Claude".
+messages.push({
+  id: 'u2',
+  turn: null,
+  time: at(20),
+  role: 'user',
+  kind: 'text',
+  app: 'Claude Code',
+  body: 'Is the export on main yet? I want to try it from here.',
+});
+turn('mira', 20.2, 0.3, '', ['Yes, #291 is merged. The button is next.'], []);
 const bo = turn('bo', 23, null, '', [], ['Read', 'Read', 'Edit', 'Edit', 'Bash']);
 
 const questions: Question[] = [
