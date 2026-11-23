@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fails when a tracked source file is over the limits in AGENTS.md:
 # 1,000 lines, and 200 characters a line. ui/src/registry is upstream code kept as published,
-# held to it by scripts/registry.check.mjs instead (0030). Any tracked text file with a NUL byte
-# fails too, and so does an AGENTS.md over 32,768 bytes.
+# held to it by scripts/registry.check.mjs instead (0030). The agent skills in .claude/skills and
+# .agents/skills are upstream too, installed by their own tool, and are left out. Any tracked text
+# file with a NUL byte fails too, and so does an AGENTS.md over 32,768 bytes.
 set -euo pipefail
 
 status=0
@@ -17,7 +18,7 @@ while IFS= read -r file; do
     echo "$report"
     status=1
   fi
-done < <(git ls-files '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.css' '*.html' '*.sh' ':!ui/src/registry/')
+done < <(git ls-files '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.css' '*.html' '*.sh' ':!ui/src/registry/' ':!.claude/skills/' ':!.agents/skills/')
 
 # A NUL byte in a text file makes tools read it as binary and refuse it (S35). One perl for all.
 nul=$(git ls-files -z '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.css' '*.html' '*.sh' \
