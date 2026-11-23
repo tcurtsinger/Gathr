@@ -14,7 +14,8 @@ fn verdict(author: &str) -> String {
         "If it holds up, call react with message \"answer\", then end your turn with only NO_REPLY: that thumbs-up \
          is your whole check, so write nothing else, not even what you checked. If something in it is wrong, \
          missing or claimed without evidence, say what in a few lines with your evidence, start with REPLY on a \
-         line of its own to comment on {author}'s message."
+         line of its own to comment on {author}'s message. Object only to what would mislead the person: wording \
+         you would have put differently is not a reason."
     )
 }
 

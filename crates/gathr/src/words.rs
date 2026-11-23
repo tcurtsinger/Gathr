@@ -7,7 +7,7 @@ mod counted;
 pub use counted::{Counted, counted};
 
 pub const CARRY_ON: i64 = 2;
-pub const CHECK: i64 = 4;
+pub const CHECK: i64 = 5;
 pub const LAST_WORD: i64 = 2;
 pub const REPLY: i64 = 3;
 pub const PICKED: i64 = 1;
