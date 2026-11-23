@@ -142,15 +142,16 @@
   width: 16px;
   height: 16px;
 }
-:is(.chatrow, .project-row):is(:hover, :focus-within, :has(.row-icon[data-state="open"])) .row-icon {
+/* Keyboard focus shows them, as hover does; a click leaves focus on the row but not :focus-visible. */
+:is(.chatrow, .project-row):is(:hover, :has(:focus-visible), :has(.row-icon[data-state="open"])) .row-icon {
   width: 24px;
   opacity: 1;
 }
-:is(.chatrow, .project-row):is(:hover, :focus-within, :has(.row-icon[data-state="open"]))
+:is(.chatrow, .project-row):is(:hover, :has(:focus-visible), :has(.row-icon[data-state="open"]))
   .row-icon:last-child {
   margin-right: 5px;
 }
-.sidebar .chatrow:is(:hover, :focus-within, :has(.row-icon[data-state="open"])) .chat-link {
+.sidebar .chatrow:is(:hover, :has(:focus-visible), :has(.row-icon[data-state="open"])) .chat-link {
   padding-right: 4px;
 }
 /* The assistant's row, under Search: its face, its name, its chat's mark; lit while its chat is open. */
