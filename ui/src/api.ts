@@ -68,7 +68,7 @@ export interface Message {
   scheduled?: string;
   /** A project's brief, drawn as the person's: the assistant that wrote it. */
   from?: string;
-  /** Words an AI app outside Gathr sent for the person, drawn as theirs: the app's name. */
+  /** Words an AI app outside Gathr sent for the person, drawn under the app's logo and brand: the name it gave. */
   app?: string;
 }
 

@@ -36,8 +36,8 @@ pub enum Opened {
     /// The brief the person's assistant wrote for a project it proposed, sent as the person made it (`proposals`):
     /// Gathr's line says who wrote it, then the words, drawn as the person's.
     Brief,
-    /// Words an AI app outside Gathr sent for the person (`from_app`): Gathr's line names the app, then the words, drawn as
-    /// the person's.
+    /// Words an AI app outside Gathr sent for the person (`from_app`): Gathr's line names the app, then the words, drawn
+    /// under the app's logo and brand.
     App,
     Person,
     Teammate,

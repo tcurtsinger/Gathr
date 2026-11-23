@@ -3,8 +3,8 @@ import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useStat
 import { Button } from '@/components/ui/button';
 import { api, type Member, type Message, type Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
-import { ConnectMark } from '../components/ConnectMark';
 import { DesignsMark } from '../components/DesignsMark';
+import { AppLogo, appName } from '../components/EngineLogo';
 import { Face, type FaceOf } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { fileName, OpenFile, parts, split } from '../components/files';
@@ -164,9 +164,10 @@ function holds(item: Item, message?: string) {
 
 /**
  * The person's message: a bubble at the right, its files' tiles under the words, with its replies under it when it has
- * any. Files alone sit without a bubble. Its bar is under it.
+ * any. Files alone sit without a bubble. Its bar is under it. Words an app sent for them are drawn as `Outside` does.
  */
 function You({ said, ctx }: { said: Said; ctx: Ctx }) {
+  if (said.message.app) return <Outside said={said} app={said.message.app} ctx={ctx} />;
   const { words: all, files } = split(said.message.body as string);
   const made = ctx.notes.find((n) => n.id === said.message.id);
   const words = made ? (readNote(all)?.words ?? '') : all;
@@ -188,11 +189,34 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
         time={said.message.time}
         scheduled={said.message.scheduled}
         from={said.message.from}
-        app={said.message.app}
         text={words}
         said={[said.message]}
         ctx={ctx}
       />
+      {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
+    </div>
+  );
+}
+
+/**
+ * Words an AI app outside Gathr sent for the person (the owner's ask, 2026-11-22): drawn as an agent's main message,
+ * under the app's logo and its brand, "Claude" or "ChatGPT", or the name another app gave.
+ */
+function Outside({ said, app, ctx }: { said: Said; app: string; ctx: Ctx }) {
+  const body = said.message.body as string;
+  const name = appName(app);
+  return (
+    <div className="room-item room-turn">
+      <span className="room-who">
+        <AppLogo app={app} className="room-logo" />
+      </span>
+      <article className="room-card" data-found={holds(said, ctx.found)} aria-label={name}>
+        <header className="room-head">
+          <b>{name}</b>
+        </header>
+        <Words className="room-body" text={body} chat={ctx.chat} names={ctx.people.names} />
+      </article>
+      <Bar time={said.message.time} text={split(body).words} said={[said.message]} ctx={ctx} />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
@@ -203,8 +227,8 @@ interface WordsProps {
   className: string;
   chat: string;
   names: string[];
-  /** Whose words: a file link that isn't a full path is in its folder. */
-  agent: string;
+  /** Whose words: a file link that isn't a full path is in its folder. None for an app's. */
+  agent?: string;
 }
 
 /** An agent's words: markdown, with each picture or file it names as a tile where it stands. */
@@ -532,8 +556,6 @@ interface BarProps {
   scheduled?: string;
   /** A project's brief: the assistant that wrote it, said with its face in place of the time. */
   from?: string;
-  /** Words an AI app sent for the person: the app, said with Connect's mark in place of the time. */
-  app?: string;
   /** The words Copy takes; none, no Copy. */
   text: string;
   /** The messages whose thumbs-ups are counted. */
@@ -548,7 +570,7 @@ interface BarProps {
  * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, scheduled, from, app, text, said, last, ctx }: BarProps) {
+function Bar({ time, scheduled, from, text, said, last, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -571,11 +593,6 @@ function Bar({ time, scheduled, from, app, text, said, last, ctx }: BarProps) {
         <span className="room-time room-from">
           <Face agent={ctx.people.face(from)} size={16} />
           From {ctx.people.name(from)}
-        </span>
-      ) : app ? (
-        <span className="room-time room-from">
-          <ConnectMark className="room-bar-icon" />
-          From {app}
         </span>
       ) : scheduled ? (
         <span className="room-time room-scheduled">
@@ -631,9 +648,10 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
   }
   // A reply that waits for an approval is never folded away.
   const open = opened || replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
-  const authors = [
-    ...new Set(replies.map((r) => (r.kind === 'said' ? 'You' : ctx.people.name(r.turn.agent ?? '')))),
-  ];
+  // The person is "You"; an app that sent words for them, its brand.
+  const by = (r: Item) =>
+    r.kind === 'card' ? ctx.people.name(r.turn.agent ?? '') : r.message.app ? appName(r.message.app) : 'You';
+  const authors = [...new Set(replies.map(by))];
   const last = replies.at(-1) as Item;
   const n = replies.length;
   return (
@@ -659,6 +677,22 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
 
 /** One reply in a thread: a small picture, the name and time, the words. */
 function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
+  const app = item.kind === 'said' && item.message.app;
+  if (item.kind === 'said' && app) {
+    const body = item.message.body as string;
+    return (
+      <div className="room-reply" data-found={holds(item, ctx.found)}>
+        <AppLogo app={app} className="room-reply-logo" />
+        <div>
+          <div className="room-line">
+            <b>{appName(app)}</b> <span className="room-time">{clock(item.message.time)}</span>
+          </div>
+          <Words className="room-said" text={body} chat={ctx.chat} names={ctx.people.names} />
+          <Bar text={split(body).words} said={[item.message]} ctx={ctx} />
+        </div>
+      </div>
+    );
+  }
   if (item.kind === 'said') {
     const { words, files } = split(item.message.body as string);
     return (

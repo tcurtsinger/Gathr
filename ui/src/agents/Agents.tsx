@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { type Account, type Agent, api, type Failure, type Model } from '../api';
 import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
+import { EngineLogo } from '../components/EngineLogo';
 import { Face } from '../components/Face';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
@@ -80,6 +81,7 @@ export function Agents({ at, onAssistant }: Props) {
     );
   };
   const accountName = (id: string) => accounts?.find((a) => a.id === id)?.name ?? '';
+  const engineOf = (id: string) => accounts?.find((a) => a.id === id)?.engine ?? '';
   const ready = agents !== null && accounts !== null;
   const tag = <small className="agent-tag">Assistant</small>;
 
@@ -191,6 +193,10 @@ export function Agents({ at, onAssistant }: Props) {
                       <span className="agent-meta">
                         {accountName(a.account)}
                         {listed && ` · ${chosen(listed, a.model)}`}
+                      </span>
+                      {/* The engine's logo, at the row's end: the owner's pick, so the rows' logos line up. */}
+                      <span className="agent-engine">
+                        <EngineLogo engine={engineOf(a.account)} />
                       </span>
                     </button>
                   </li>

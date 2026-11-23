@@ -216,6 +216,12 @@
   top: 9px;
   left: -44px;
 }
+/* An outside app's message: its logo where an agent's picture is, at the picture's size. */
+.room-logo {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
 .room-rule {
   position: absolute;
   top: 44px;
@@ -540,6 +546,11 @@
   gap: 0 9px;
 }
 .room-reply > .face {
+  margin-top: 2px;
+}
+.room-reply-logo {
+  width: 20px;
+  height: 20px;
   margin-top: 2px;
 }
 .room-line {

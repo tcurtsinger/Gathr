@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Engine, Failure } from '../api';
 import { useCard } from '../components/Corner';
+import { EngineLogo } from '../components/EngineLogo';
 import { Accounts, engines } from './Accounts';
 import { Group, Page, Row } from './Row';
 import './engines.css';
@@ -60,6 +61,7 @@ function Program({ id, name }: { id: string; name: string }) {
   return (
     <Row
       name={<span id={title}>{name}</span>}
+      lead={<EngineLogo engine={id} className="engine-logo" />}
       line={
         <>
           {version}

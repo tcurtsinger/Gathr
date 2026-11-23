@@ -1,0 +1,11 @@
+The Claude and OpenAI logos (ui/src/registry/components/assistant-ui/elements/logos.tsx)
+
+assistant-ui's logos element, unchanged, from:
+https://github.com/assistant-ui/assistant-ui/blob/7730e8cac04cc049dcc4bab3bcfa94e7fb89d33f/packages/ui/src/components/react/assistant-ui/elements/logos.tsx
+
+Changes: none. The window uses ClaudeLogo and OpenAILogo (ui/src/components/EngineLogo.tsx), scaled to the size of an
+icon; the OpenAI logo takes the window's text colour, as the file draws it.
+
+Licence: MIT, as assistant-ui.txt beside this notice states.
+
+The Claude and OpenAI logos are trademarks of their owners, shown only to say which provider an engine or app is.

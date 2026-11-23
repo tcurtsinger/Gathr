@@ -7,7 +7,7 @@ import './dropdown.css';
 export interface Choice {
   value: string;
   label: string;
-  /** Before the label, in the list and closed: an agent's face. */
+  /** Before the label, in the list and closed: an agent's face, an engine's logo. */
   icon?: ReactNode;
 }
 
