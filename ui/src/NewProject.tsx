@@ -3,15 +3,12 @@ import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
 import { useCard } from './components/Corner';
 import { Dialog } from './components/Dialog';
-import { desktop, pickFolder } from './desktop';
 import type { Proposing } from './room/Proposal';
+import { FolderField } from './settings/FolderField';
 import type { Seat } from './settings/Projects';
 import { Team } from './settings/ProjectTeam';
 import { Row } from './settings/Row';
 import './new-project.css';
-
-/** A picker that fails leaves the field to type in. */
-const quiet = () => {};
 
 interface Props {
   open: boolean;
@@ -48,8 +45,6 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
   useCard(open ? failure : null);
   const taken = projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
   const ready = name.trim() && folder.trim() && seats.length > 0 && !taken;
-  // The system's folder picker is in the desktop window only; a browser has the field.
-  const picker = !!desktop();
 
   const create = (e: FormEvent) => {
     e.preventDefault();
@@ -88,25 +83,7 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
             />
           </Row>
           <Row name={<label htmlFor="new-project-folder">Folder</label>}>
-            <input
-              id="new-project-folder"
-              className="project-folder"
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-              required
-              spellCheck={false}
-            />
-            {picker && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  pickFolder('Project folder', folder || null).then((p) => p && setFolder(p), quiet)
-                }
-              >
-                Choose…
-              </Button>
-            )}
+            <FolderField id="new-project-folder" title="Project folder" value={folder} onChange={setFolder} />
           </Row>
         </div>
         <Team seats={seats} agents={agents} onChange={setSeats} />

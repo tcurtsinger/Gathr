@@ -1,0 +1,40 @@
+/* A project's folder (FolderField.tsx) in the desktop window: a field that opens the system's folder picker. */
+.folder-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 260px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--input);
+  background: var(--field);
+  color: var(--foreground);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.folder-field:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 28%, transparent);
+}
+.folder-field[data-empty] {
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+}
+.folder-field svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+.folder-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#project-folder.folder-field {
+  width: 240px;
+}
