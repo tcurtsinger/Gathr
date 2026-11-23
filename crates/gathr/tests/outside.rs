@@ -7,6 +7,7 @@ mod common;
 use common::{first_token, held_recording, recording, rows, team};
 use gathr::http;
 use serde_json::{Value, json};
+use std::path::{Path, PathBuf};
 
 /// `tools/list` at `/api/mcp` under the 2026-07-28 revision, with `token` if one is given.
 fn list(port: u16, token: Option<&str>) -> http::Response {
@@ -90,10 +91,22 @@ fn call(port: u16, token: &str, tool: &str, arguments: Value) -> (String, bool) 
     (text.to_string(), result["isError"] == true)
 }
 
+/// `signed_in` played twice, each turn with a working note before its last words: "Hi!", then NO_REPLY.
+fn noted(dir: &Path) -> PathBuf {
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let block = |t: &str| format!(r#"{{\"type\":\"text\",\"text\":\"{t}\"}}"#);
+    let noted = |last: &str| format!("[{},{}]", block("Looking at the beds."), block(last));
+    let one = format!("[{}]", block("Hi!"));
+    let turns = [noted("Hi!"), noted("NO_REPLY")].map(|n| frames.trim_end().replace(&one, &n));
+    let file = dir.join("noted.jsonl");
+    std::fs::write(&file, turns.join("\n") + "\n").unwrap();
+    file
+}
+
 #[test]
 fn one_send_makes_one_message_and_one_turn_and_a_read_makes_none() {
     let data = common::TempDir::new();
-    let (service, _, _) = team(&data.0, &recording("signed_in"), &[]);
+    let (service, _, _) = team(&data.0, &noted(&data.0), &[]);
     let (port, token) = (service.info.port, service.info.token.clone());
     let made = || {
         let sql = "SELECT (SELECT count(*) FROM messages WHERE role = 'user') AS messages,
@@ -109,6 +122,10 @@ fn one_send_makes_one_message_and_one_turn_and_a_read_makes_none() {
     let (sent, failed) = call(port, &token, "send", json!({ "words": "Plan the beds" }));
     assert!(!failed, "{sent}");
     assert!(sent.ends_with(": done.\n\nLead: Hi!"), "{sent}");
+    assert!(
+        !sent.contains("Looking at the beds."),
+        "a working note: {sent}"
+    );
     let once = (json!(1), json!(1), json!("Garden Planner"));
     assert_eq!(made(), once);
 
@@ -118,4 +135,14 @@ fn one_send_makes_one_message_and_one_turn_and_a_read_makes_none() {
         assert!(!failed, "{read}");
     }
     assert_eq!(made(), once, "a read starts nothing");
+
+    // Neither a working note nor the empty last words NO_REPLY leaves is read back as said.
+    let (again, failed) = call(
+        port,
+        &token,
+        "send",
+        json!({ "words": "And the paths?", "chat": chat }),
+    );
+    assert!(!failed, "{again}");
+    assert_eq!(again, format!("Chat {chat}: done."));
 }
