@@ -222,29 +222,10 @@
   width: 28px;
   height: 28px;
 }
-.room-rule {
-  position: absolute;
-  top: 44px;
-  bottom: -18px;
-  left: -30.75px;
-  width: 1.5px;
-  border-radius: 2px;
-  background: color-mix(in oklab, var(--foreground) 14%, transparent);
-}
 .room-card {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: color-mix(in oklab, var(--foreground) 3%, var(--background));
-}
-.room-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 18px;
-}
-.room-head b {
-  font-weight: 650;
 }
 .room-tag {
   padding: 1px 7px;
@@ -256,9 +237,13 @@
 .room-grow {
   flex: 1;
 }
-/* A chat with one agent: the card keeps its fill, not its frame, and has no head; its name is under it, by the time. */
-.room-card[data-solo]:not([data-needs]) {
+/* An agent's card keeps its fill, not its frame, and has no head: its name is under it. A lead's card has a faint
+   green frame, one waiting on the person the blue one (below). */
+.room-card:not(.room-question, [data-needs]) {
   border-color: transparent;
+}
+.room-card[data-lead]:not([data-needs], [data-open]) {
+  border-color: color-mix(in oklab, var(--free) 40%, var(--border));
 }
 .room-state {
   display: inline-flex;
@@ -283,14 +268,11 @@
   color: color-mix(in oklab, var(--foreground) 86%, var(--background));
   font-size: 15px;
 }
-/* The card ends right after its words. */
-.room-card > .room-body:last-child {
-  padding-bottom: 13px;
-}
-.room-card[data-solo] > .room-body {
+/* The card ends right after its words, which start right at its top. */
+.room-card > .room-body:first-child {
   padding-top: 9px;
 }
-.room-card[data-solo] > .room-body:last-child {
+.room-card > .room-body:last-child {
   padding-bottom: 9px;
 }
 /* Words said while the turn still runs read as a remark until it ends. */
@@ -418,7 +400,8 @@
   gap: 1px;
   margin: 3px 0 0 10px;
   color: var(--muted-foreground);
-  font-size: 13px;
+  /* The words stand as tall as the 12px icons beside them. */
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .room-you + .room-bar,
@@ -467,8 +450,8 @@
   color: inherit;
 }
 .room-bar-icon {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .room-thumb {
   position: relative;
@@ -533,9 +516,7 @@
 
 /* Replies, tucked under the message they answer, behind one line. */
 .room-thread {
-  margin: 6px 0 0 18px;
-  padding-left: 14px;
-  border-left: 1.5px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+  margin: 6px 0 0 4px;
 }
 .room-fold {
   display: inline-flex;
@@ -556,29 +537,27 @@
 .room-fold span {
   color: var(--muted-foreground);
 }
-/* A folded thread's first lines: who replied and what they said, one line each; a click opens it. */
+/* A folded thread's first lines: each reply's face and what it said, one line each; a click opens it at that reply. */
 .room-peek {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  width: 100%;
-  padding: 4px 8px 2px;
-  border-radius: 8px;
-  text-align: left;
-}
-.room-peek:hover {
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  gap: 1px;
 }
 .room-peek-line {
   display: grid;
-  grid-template-columns: 20px auto minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
+  width: 100%;
+  min-height: 0;
+  padding: 2px 8px;
+  border-radius: 8px;
   font-size: 13.5px;
   line-height: 20px;
+  text-align: left;
 }
-.room-peek-line b {
-  font-weight: 650;
+.room-peek-line:hover {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 .room-peek-line > span:last-child {
   overflow: hidden;
