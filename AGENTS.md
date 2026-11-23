@@ -2,7 +2,7 @@
 
 Gathr is an open-source desktop app for working with your own AI agents, from different providers (Claude Code, Codex and more), on your own computer: a chat where you and your agents work like a team.
 
-**Status, 2026-11-20: the chat and the team layer were started over, and the old ones are deleted.** A chat is a room: messages, replies folded under the message they answer, reactions, a board of the work, and questions to the person. Gathr starts no turn and writes no message by itself, except the team's check of the lead's plan or answer, and what the person had an agent schedule. Under it, kept as it was: the engine drivers, sign-in and logins, storage, updates and releases, approvals, search, diagnostics.
+**Status, 2026-11-20: the chat and the team layer were started over, and the old ones are deleted.** A chat is a room: messages, replies folded under the message they answer, reactions, a board of the work, and questions to the person. Gathr starts no turn and writes no message by itself, except the team's check of the lead's plan or answer, what the person had an agent schedule, and a carry-on for a turn that Stop now or an update cut short. What an AI app the person connected sends comes in as the person's own message. Under it, kept as it was: the engine drivers, sign-in and logins, storage, updates and releases, approvals, search, diagnostics.
 
 `docs/archive/` is how Gathr was built before that day: the old `AGENTS.md`, the charter and its promises, the truth map, the scenarios, the testing guide and every numbered decision. It is history. Code comments cite decisions by number, and they are there to read. **Nothing in it is a rule, and nobody keeps it up to date.** If a habit comes from there and isn't on this page, it is gone.
 
