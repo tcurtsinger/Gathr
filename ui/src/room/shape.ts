@@ -96,14 +96,17 @@ export function shape(s: RoomState): (Item | Asked | Line)[] {
     const newest = said.at(-1);
     const moved = mine.findLast((m) => m.kind === 'tool' || m.kind === 'text') !== newest;
     const last = !streaming && newest && !(open(turn) && moved) ? newest : undefined;
-    const text = streaming || ((last?.body as string | undefined) ?? '');
+    // While the turn runs, its newest words stay in the card until the next words replace them (the owner's pick,
+    // 2026-11-23); the words before them are notes in the steps.
+    const shown = streaming ? undefined : (last ?? (open(turn) ? newest : undefined));
+    const text = streaming || ((shown?.body as string | undefined) ?? '');
     const blocks = mine.flatMap((m) =>
       m.kind === 'block' && typeof m.body === 'object' ? [{ ...(m.body as Block), message: m.id }] : [],
     );
     if (!text && !blocks.length && turn.status === 'done') continue;
     const steps = mine.flatMap((m): Step[] => {
       if (m.kind === 'tool') return [m.body as ToolBody];
-      return m.kind === 'text' && m !== last && m.body ? [{ note: m.body as string }] : [];
+      return m.kind === 'text' && m !== shown && m.body ? [{ note: m.body as string }] : [];
     });
     const at = Math.max(time(turn.created ?? mine[0]?.time), opener.get(turn.id) ?? 0);
     cards.set(turn.id, { kind: 'card', id: turn.id, turn, text, said, last, steps, blocks, at, replies: [] });
