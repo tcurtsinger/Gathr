@@ -356,7 +356,10 @@ impl AppUpdates {
         let mut shown = self.shown();
         shown.checking = false;
         shown.checked_us = Some(ids::now_us());
-        if !keeps_failure {
+        // A check that fails while a release is ready changes nothing shown: Update still installs
+        // the one ready, and the next check tries again. Its event keeps why.
+        let quiet = failed.is_some() && shown.ready.is_some();
+        if !keeps_failure && !quiet {
             shown.failed = failed;
         }
         ready
