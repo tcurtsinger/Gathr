@@ -485,7 +485,6 @@ export function App() {
             }
           }
           onDeleteProject={askDelete}
-          onNewProject={() => setNewProject(true)}
           onProjectSettings={(project, opener) =>
             setSettings({
               page: 'projects',
