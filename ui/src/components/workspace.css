@@ -77,6 +77,10 @@
   height: 18px;
   padding: 2px;
 }
+/* A file's close mark shows on the shown tab and the one under the pointer. */
+.workspace-tab[data-file]:not([data-selected="true"]):not(:hover):not(:focus-within) > .workspace-close {
+  visibility: hidden;
+}
 .workspace-tablist svg {
   width: 14px;
   height: 14px;

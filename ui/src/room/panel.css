@@ -4,27 +4,27 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  padding-top: 14px;
+  padding-top: 12px;
 }
 .home h2 {
-  margin: 0 20px 8px;
+  margin: 0 16px 8px;
   color: var(--muted-foreground);
   font-size: 12.5px;
   font-weight: 500;
 }
 .home .board {
-  padding-top: 0;
+  padding: 0 8px 12px;
 }
 
 /* Home's "Find a file" and the tree's "Filter files", with the files they find in place of what is under them. */
 .find-box {
   flex: none;
-  margin: 8px 8px 2px;
+  height: 36px;
+  margin: 12px 16px 4px;
   background: var(--background);
 }
 .home > .find-box {
-  height: 40px;
-  margin: 0 20px 18px;
+  margin: 0 16px 16px;
 }
 .find-rest {
   display: contents;
@@ -37,14 +37,14 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  margin: 6px 8px 12px;
+  margin: 8px 16px 12px;
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 13px;
 }
 .home > .find-list {
-  margin: -10px 20px 16px;
+  margin: -8px 16px 16px;
 }
 .find-list > [role="option"] {
   cursor: default;
@@ -89,6 +89,7 @@
 .find-list [role="option"] > button {
   display: flex;
   flex: none;
+  align-items: center;
   padding: 2px;
   border-radius: 6px;
 }
@@ -103,7 +104,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 20px 20px;
+  margin: 0 16px 20px;
 }
 .home-tile {
   display: flex;
@@ -151,7 +152,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 6px 8px 12px;
+  padding: 4px 10px 12px;
   font-size: 13px;
 }
 .tree > h3 {
@@ -160,9 +161,9 @@
   font-size: 12px;
   font-weight: 500;
 }
-.tree-empty {
-  margin: 10px 6px;
-  color: var(--muted-foreground);
+/* Nothing to filter in a chat with no files yet. */
+.workspace-view:has(> .find-rest > .tree-empty) > .find-box {
+  display: none;
 }
 .tree-row {
   display: flex;
@@ -214,7 +215,7 @@
   gap: 4px;
   align-items: center;
   height: 38px;
-  padding: 0 8px 0 14px;
+  padding: 0 8px 0 16px;
   border-bottom: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 12.5px;

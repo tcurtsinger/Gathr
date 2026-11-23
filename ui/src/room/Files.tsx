@@ -56,6 +56,14 @@ export function Tree({
     />
   );
   const own = [tree.project, tree.shared].flatMap((p) => (p ? [p] : []));
+  if (!own.length && !tree.designs && !tree.agents.length)
+    return (
+      <div className="filetab-none tree-empty">
+        <Folder aria-hidden="true" />
+        <strong>No files</strong>
+        <span>Agents’ files show here.</span>
+      </div>
+    );
   return (
     <div className="tree">
       {tree.project && <h3>Project</h3>}
@@ -63,7 +71,6 @@ export function Tree({
       {tree.designs && <DesignsNode chat={chat} room={room} onOpen={onOpen} />}
       {tree.agents.length > 0 && <h3>Agents</h3>}
       {tree.agents.map((p) => top({ ...p, folder: true }, false, p.agent))}
-      {!own.length && !tree.designs && !tree.agents.length && <p className="tree-empty">No files yet</p>}
     </div>
   );
 }

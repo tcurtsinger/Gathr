@@ -3,7 +3,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: 10px 8px;
   font-size: 13.5px;
 }
 .design-row {
@@ -31,6 +31,11 @@
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.design-by {
+  display: flex;
+  gap: 7px;
+  align-items: center;
 }
 .design-bar > svg {
   width: 14px;

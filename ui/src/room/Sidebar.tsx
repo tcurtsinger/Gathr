@@ -1,4 +1,4 @@
-import { ChevronDown, File as FileIcon, Files, Filter, House, Search, X } from 'lucide-react';
+import { ChevronDown, File as FileIcon, Folder, House, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   DropdownMenu,
@@ -203,7 +203,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
           <div className="workspace-fixed">
             {tab(HOME, <House aria-hidden="true" />, 'Home')}
-            {tab(FILES, <Files aria-hidden="true" />, 'Files')}
+            {tab(FILES, <Folder aria-hidden="true" />, 'Files')}
             {tab(DESIGN, <DesignsMark />, 'Designs')}
             {tab(CHANGES, <ChangesMark />, 'Changes')}
           </div>
@@ -258,23 +258,24 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           >
             <h2>Open</h2>
             <div className="home-tiles">
-              <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
-              <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
               <button type="button" className="home-tile" onClick={() => go(FILES)}>
                 <span className="home-tile-name">
-                  <Files aria-hidden="true" />
+                  <Folder aria-hidden="true" />
                   Files
                 </span>
                 <span className="home-tile-sub">
                   {tree &&
-                    [
+                    ([
                       tree.project?.name ?? (tree.shared ? 'Shared' : ''),
                       agents === 1 ? tree.agents[0].name : agents ? `${agents} agents` : '',
                     ]
                       .filter(Boolean)
-                      .join(' + ')}
+                      .join(' + ') ||
+                      'None yet')}
                 </span>
               </button>
+              <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
+              <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -286,7 +287,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           FILES,
           <Find
             chat={chat}
-            icon={<Filter aria-hidden="true" />}
+            icon={<Search aria-hidden="true" />}
             label="Filter files"
             project={tree?.project?.name}
             changes={changes}

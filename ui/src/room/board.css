@@ -7,7 +7,7 @@
   font-size: 13.5px;
 }
 .board-empty {
-  margin: 0 6px;
+  margin: 0 8px;
   color: var(--muted-foreground);
 }
 .board-line {
