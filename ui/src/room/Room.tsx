@@ -94,12 +94,10 @@ interface Props {
   after?: ReactNode;
   /** At the foot: the message box. */
   children?: ReactNode;
-  /** A chat with one agent: its cards drop their frame, and its name sits small beside the state. */
-  solo?: boolean;
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ chat, project, state, people, acts, found, header, after, children, solo }: Props) {
+export function Room({ chat, project, state, people, acts, found, header, after, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state, found);
   const ctx = {
@@ -111,18 +109,15 @@ export function Room({ chat, project, state, people, acts, found, header, after,
     acts,
     found: found?.message,
     notes: notesOf(state.messages, state.turns),
-    solo,
   };
   return (
     <>
       <div className="room-scroll" ref={scroll}>
         <div className="room-col">
           {header}
-          {items.map((item, i) => {
-            const next = items[i + 1]?.kind;
-            const joined = !solo && (next === 'card' || next === 'question');
+          {items.map((item) => {
             if (item.kind === 'said') return <You key={item.id} said={item} ctx={ctx} />;
-            if (item.kind === 'card') return <Main key={item.id} card={item} joined={joined} ctx={ctx} />;
+            if (item.kind === 'card') return <Main key={item.id} card={item} ctx={ctx} />;
             if (item.kind === 'line')
               return (
                 <p key={item.id} className="room-quiet">
@@ -137,7 +132,6 @@ export function Room({ chat, project, state, people, acts, found, header, after,
                 people={people}
                 onOpen={acts.ask}
                 onAnswer={acts.answer}
-                joined={joined}
               />
             );
           })}
@@ -160,7 +154,6 @@ interface Ctx {
   found?: string;
   /** The chat's notes on designs: a message that begins with one draws it above its words. */
   notes: Made[];
-  solo?: boolean;
 }
 
 /** Whether the item's words hold the message: `data-found` for it. */
@@ -218,12 +211,9 @@ function Outside({ said, app, ctx }: { said: Said; app: string; ctx: Ctx }) {
         <AppLogo app={app} className="room-logo" />
       </span>
       <article className="room-card" data-found={holds(said, ctx.found)} aria-label={name}>
-        <header className="room-head">
-          <b>{name}</b>
-        </header>
         <Words className="room-body" text={body} chat={ctx.chat} names={ctx.people.names} />
       </article>
-      <Bar time={said.message.time} text={split(body).words} said={[said.message]} ctx={ctx} />
+      <Bar name={name} time={said.message.time} text={split(body).words} said={[said.message]} ctx={ctx} />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
@@ -297,37 +287,31 @@ function Picked({ message, words: text }: { message: Message; words: string }) {
   return <span className="room-words">{out}</span>;
 }
 
-/** An agent's main message: its picture in the margin, the card, then its replies folded. */
-function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) {
+/**
+ * An agent's main message: its picture in the margin, the card, its name under it, then its replies folded. The card
+ * has no head: a lead's card has a faint green frame, and one waiting on the person a blue one.
+ */
+function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
   // A turn sent to no agent has none: it is drawn as "An agent".
   const agent = card.turn.agent ?? '';
   const running = working(card);
   // Once the turn ends, the files card is the record of the steps that changed a file: the line holds the rest.
   const rest = running ? card.steps : card.steps.filter((s) => 'note' in s || !s.changed?.length);
-  // A turn that waits on the person's approval says so, as a question does, and its clock stops.
+  // A turn that waits on the person's approval has the blue frame, as a question does, and its clock stops.
   const needs = ctx.approvals.some((a) => a.turn === card.id);
   return (
     <div className="room-item room-turn">
       <span className="room-who">
         <Face agent={ctx.people.face(agent)} size={28} />
       </span>
-      {joined && <span className="room-rule" aria-hidden="true" />}
       <article
         className="room-card"
         data-live={running || undefined}
         data-needs={needs || undefined}
-        data-solo={ctx.solo || undefined}
+        data-lead={ctx.people.lead(agent) || undefined}
         data-found={holds(card, ctx.found)}
-        aria-label={ctx.people.name(agent)}
+        aria-label={needs ? `${ctx.people.name(agent)}, needs you` : ctx.people.name(agent)}
       >
-        {!ctx.solo && (
-          <header className="room-head">
-            <b>{ctx.people.name(agent)}</b>
-            {ctx.people.lead(agent) && <span className="room-tag">Lead</span>}
-            <span className="room-grow" />
-            <State card={card} needs={needs} />
-          </header>
-        )}
         {card.text && (
           <Words
             className="room-body"
@@ -344,17 +328,16 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         {rest.length > 0 && <Steps steps={rest} running={running} />}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
-      {ctx.solo && (running || needs) && (
+      {running && (
         <div className="room-bar room-live">
           <b className="room-who-name">{ctx.people.name(agent)}</b>
-          <State card={card} needs={needs} />
+          {!needs && <State card={card} />}
         </div>
       )}
       {!running && (
         <Bar
-          who={ctx.solo ? agent : undefined}
-          state={ctx.solo && card.turn.status !== 'done' && <State card={card} />}
-          time={card.turn.ended ?? card.turn.created}
+          name={ctx.people.name(agent)}
+          state={card.turn.status !== 'done' && <State card={card} />}
           text={card.text ?? ''}
           said={card.said}
           last={card.last}
@@ -366,22 +349,12 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
   );
 }
 
-/**
- * At the head's right: "Working · 2m" while it runs, "Needs you" while it waits on an approval, a check and how long it
- * took once done. In a chat with one agent, under the card, after its name.
- */
-function State({ card, needs }: { card: Card; needs?: boolean }) {
-  const running = working(card) && !needs;
+/** Under the card, after the agent's name: "Working · 2m" while it runs, or why it stopped short. */
+function State({ card }: { card: Card }) {
+  const running = working(card);
   const now = useNow(running);
-  const { status, created, ended } = card.turn;
+  const { status, created } = card.turn;
   const began = created ? Date.parse(created) : now;
-  if (needs)
-    return (
-      <span className="room-state live">
-        <StateMark state="needs" size={12} />
-        Needs you
-      </span>
-    );
   if (running)
     return (
       <span className="room-state live">
@@ -389,16 +362,9 @@ function State({ card, needs }: { card: Card; needs?: boolean }) {
         Working · {since(now - began)}
       </span>
     );
-  if (status !== 'done')
-    return (
-      <span className="room-state">
-        {status === 'stopped' ? 'Stopped' : status === 'waiting_sign_in' ? 'Waiting for sign-in' : 'Failed'}
-      </span>
-    );
   return (
     <span className="room-state">
-      <Check aria-hidden="true" />
-      {ended && created ? since(Date.parse(ended) - began, true) : ''}
+      {status === 'stopped' ? 'Stopped' : status === 'waiting_sign_in' ? 'Waiting for sign-in' : 'Failed'}
     </span>
   );
 }
@@ -593,19 +559,19 @@ interface BarProps {
   said: Message[];
   /** An agent's last words: what the person's own thumbs-up goes on. Unset on the person's own message. */
   last?: Message;
-  /** In a chat with one agent: the agent whose card it is, named before the time. */
-  who?: string;
+  /** Under a card: who said it, first. */
+  name?: string;
   /** Before the time: how a turn that didn't finish ended. */
   state?: ReactNode;
   ctx: Ctx;
 }
 
 /**
- * The thin row under a message (the owner's pick, 2026-11-22): its time, Copy, then the one thumbs-up with its number
- * last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
+ * The thin row under a message (the owner's pick, 2026-11-22): under a card, who said it; the time, on the person's own
+ * words; Copy, then the one thumbs-up with its number last, so a growing number moves nothing. The thumb is filled once the person gave theirs, and who gave one shows
  * while the pointer is on it. On the person's own message the thumb is there only once an agent gave one.
  */
-function Bar({ time, scheduled, from, text, said, last, who: agent, state, ctx }: BarProps) {
+function Bar({ time, scheduled, from, text, said, last, name, state, ctx }: BarProps) {
   const [copied, setCopied] = useState(false);
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
@@ -621,10 +587,10 @@ function Bar({ time, scheduled, from, text, said, last, who: agent, state, ctx }
       },
       () => undefined,
     );
-  if (!time && !text && !press && !given.length) return null;
+  if (!name && !time && !text && !press && !given.length) return null;
   return (
     <div className="room-bar">
-      {agent && <b className="room-who-name">{ctx.people.name(agent)}</b>}
+      {name && <b className="room-who-name">{name}</b>}
       {state}
       {from ? (
         <span className="room-time room-from">
@@ -675,11 +641,13 @@ function Asks({ turn, agent, ctx }: { turn: string; agent: string; ctx: Ctx }) {
 }
 
 /**
- * Replies to a message, tucked under it. Folded, each reply shows its first line (the first and last of a longer
- * thread), so a review that changed the plan is read without opening it; then "Open thread · 3 replies · 9:21".
+ * Replies to a message, tucked under it. Folded, each reply shows its face and first line (the first and last of a
+ * longer thread), so a review that changed the plan is read without opening it; a click on a line opens the thread
+ * at that reply. Open, "Hide replies" at the foot folds it again.
  */
 function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
   const [opened, setOpen] = useState(false);
+  const own = useRef<HTMLDivElement>(null);
   // A search hit on one of the replies opens them.
   const [seen, setSeen] = useState<string>();
   if (ctx.found !== seen) {
@@ -687,19 +655,23 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
     if (replies.some((r) => holds(r, ctx.found))) setOpen(true);
   }
   // A reply that waits for an approval is never folded away.
-  const open = opened || replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
-  // The person is "You"; an app that sent words for them, its brand.
-  const by = (r: Item) =>
-    r.kind === 'card' ? ctx.people.name(r.turn.agent ?? '') : r.message.app ? appName(r.message.app) : 'You';
-  const last = replies.at(-1) as Item;
-  const n = replies.length;
-  const peek = n > 2 ? [replies[0], last] : replies;
+  const waits = replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
+  const open = opened || waits;
+  const peek = replies.length > 2 ? [replies[0], replies.at(-1) as Item] : replies;
+  const show = (id: string) => {
+    setOpen(true);
+    requestAnimationFrame(() =>
+      own.current
+        ?.querySelector(`[data-reply="${id}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+    );
+  };
   return (
-    <div className="room-thread">
+    <div className="room-thread" ref={own}>
       {!open && (
-        <button type="button" className="room-peek" onClick={() => setOpen(true)}>
+        <div className="room-peek">
           {peek.map((r) => (
-            <span key={r.id} className="room-peek-line">
+            <button key={r.id} type="button" className="room-peek-line" onClick={() => show(r.id)}>
               {r.kind === 'card' ? (
                 <Face agent={ctx.people.face(r.turn.agent ?? '')} size={20} />
               ) : r.message.app ? (
@@ -707,27 +679,22 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
               ) : (
                 <span />
               )}
-              <b>{by(r)}</b>
               <span>{firstLine(r)}</span>
-            </span>
+            </button>
           ))}
-        </button>
+        </div>
       )}
-      <button type="button" className="room-fold" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <b>{open ? 'Hide replies' : 'Open thread'}</b>
-        {!open && (
-          <span>
-            {n} {n === 1 ? 'reply' : 'replies'} ·{' '}
-            {clock(last.kind === 'said' ? last.message.time : last.turn.created)}
-          </span>
-        )}
-      </button>
       {open && (
         <div className="room-replies">
           {replies.map((r) => (
             <Reply key={r.id} item={r} ctx={ctx} />
           ))}
         </div>
+      )}
+      {open && !waits && (
+        <button type="button" className="room-fold" aria-expanded onClick={() => setOpen(false)}>
+          <b>Hide replies</b>
+        </button>
       )}
     </div>
   );
@@ -743,13 +710,13 @@ function firstLine(r: Item) {
   );
 }
 
-/** One reply in a thread: a small picture, the name and time, the words. */
+/** One reply in a thread: a small picture, the name (and the time, on the person's own), the words. */
 function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
   const app = item.kind === 'said' && item.message.app;
   if (item.kind === 'said' && app) {
     const body = item.message.body as string;
     return (
-      <div className="room-reply" data-found={holds(item, ctx.found)}>
+      <div className="room-reply" data-reply={item.id} data-found={holds(item, ctx.found)}>
         <AppLogo app={app} className="room-reply-logo" />
         <div>
           <div className="room-line">
@@ -764,7 +731,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
   if (item.kind === 'said') {
     const { words, files } = split(item.message.body as string);
     return (
-      <div className="room-reply mine" data-found={holds(item, ctx.found)}>
+      <div className="room-reply mine" data-reply={item.id} data-found={holds(item, ctx.found)}>
         <span />
         <div>
           <div className="room-line">
@@ -785,17 +752,15 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
   const running = working(item);
   const needs = ctx.approvals.some((a) => a.turn === item.id);
   return (
-    <div className="room-reply" data-found={holds(item, ctx.found)}>
+    <div className="room-reply" data-reply={item.id} data-found={holds(item, ctx.found)}>
       <Face agent={ctx.people.face(agent)} size={20} />
       <div>
         <div className="room-line">
           <b>{ctx.people.name(agent)}</b>{' '}
           {needs ? (
             <span className="room-state live">Needs you</span>
-          ) : running ? (
-            <span className="room-state live">Working</span>
           ) : (
-            <span className="room-time">{clock(item.turn.created)}</span>
+            running && <span className="room-state live">Working</span>
           )}
         </div>
         {item.text && (

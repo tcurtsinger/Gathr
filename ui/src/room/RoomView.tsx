@@ -119,8 +119,8 @@ export function RoomView(props: Props) {
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
   const mine = own ? agents.find((a) => a.id === props.you.assistant) : undefined;
-  // Who a message that names nobody can go to, picked by the box's chip: the chat's agents, the lead tagged.
-  const choices = members.map((m) => ({ id: m.agent, name: m.name, lead: m.role === 'supervisor' }));
+  // Who a message that names nobody can go to, picked by the box's chip: the chat's agents, the lead marked green.
+  const choices = members.map((m) => ({ id: m.agent, name: m.name, lead: team.lead(m.agent) }));
 
   const send = (
     text: string,
@@ -232,7 +232,6 @@ export function RoomView(props: Props) {
           people={team}
           acts={acts}
           found={props.found}
-          solo={members.length === 1}
           header={
             fresh && (
               <div className="room-greeting">

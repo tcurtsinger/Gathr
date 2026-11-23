@@ -9,7 +9,6 @@ import { Face } from '../components/Face';
 import { PathTiles } from '../components/FileTile';
 import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
-import { StateMark } from '../components/StateMark';
 import { clock, type People, Words } from './Room';
 import '../components/popover-panel.css';
 
@@ -26,18 +25,16 @@ export type OnAnswer = (
 
 /**
  * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open, its
- * choices as rows to pick and Answer (or, with no `onAnswer`, Answer, which opens the questions panel on it).
- * Answered, the answer sits under it; closed, it says so.
+ * choices as rows to pick and Answer (or, with no `onAnswer`, Answer, which opens the questions panel on it). Its
+ * blue frame says it waits on the person. Answered, the answer sits under it; the asker's name is under the card.
  */
 export function QuestionCard(props: {
   question: Question;
   people: People;
   onOpen: (id: number) => void;
   onAnswer?: OnAnswer;
-  /** Whether a line runs down from its picture to the next card. */
-  joined?: boolean;
 }) {
-  const { question: q, people, onOpen, onAnswer, joined } = props;
+  const { question: q, people, onOpen, onAnswer } = props;
   const open = waits(q);
   const answer = split(q.words ?? '');
   return (
@@ -45,26 +42,12 @@ export function QuestionCard(props: {
       <span className="room-who">
         <Face agent={people.face(q.agent)} size={28} />
       </span>
-      {joined && <span className="room-rule" aria-hidden="true" />}
-      <article className="room-card room-question" data-open={open || undefined} aria-label={q.name}>
-        <header className="room-head">
-          <b>{q.name}</b>
-          {people.lead(q.agent) && <span className="room-tag">Lead</span>}
-          <span className="room-grow" />
-          {open ? (
-            <span className="room-state live">
-              <StateMark state="needs" size={12} />
-              Needs you
-            </span>
-          ) : q.closed ? (
-            <span className="room-state">Closed</span>
-          ) : (
-            <span className="room-state">
-              <Check aria-hidden="true" />
-              Answered
-            </span>
-          )}
-        </header>
+      <article
+        className="room-card room-question"
+        data-open={open || undefined}
+        data-lead={people.lead(q.agent) || undefined}
+        aria-label={open ? `${q.name}, needs you` : q.name}
+      >
         <Words className="room-body" text={q.question} chat={q.chat} names={people.names} agent={q.agent} />
         {open && onAnswer ? (
           <Choose question={q} onAnswer={onAnswer} />
@@ -90,6 +73,19 @@ export function QuestionCard(props: {
           </div>
         )}
       </article>
+      <div className="room-bar">
+        <b className="room-who-name">{q.name}</b>
+        {q.closed ? (
+          <span className="room-state">Closed</span>
+        ) : (
+          !open && (
+            <span className="room-state">
+              <Check aria-hidden="true" />
+              Answered
+            </span>
+          )
+        )}
+      </div>
     </div>
   );
 }

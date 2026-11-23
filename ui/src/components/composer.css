@@ -80,14 +80,23 @@
   gap: 2px;
 }
 .composer-pick {
-  gap: 4px;
+  gap: 6px;
   max-width: 220px;
-  height: 32px;
-  padding: 0 8px 0 4px;
+  height: 30px;
+  padding: 0 8px 0 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
   font-size: 13px;
+}
+/* The chosen one's face and name, centred with the chevron: Radix's value span is inline, so it sat low. */
+.composer-pick > span {
+  display: inline-flex;
+  align-items: center;
+}
+/* The lead chosen: the faint green of a lead's card. */
+.composer-pick[data-lead] {
+  border-color: color-mix(in oklab, var(--free) 45%, var(--border));
 }
 .composer-pick-who {
   display: inline-flex;
@@ -97,10 +106,6 @@
 }
 .composer-pick-who b {
   font-weight: 550;
-}
-.composer-pick-who small {
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 .composer-who {
   min-width: 0;
