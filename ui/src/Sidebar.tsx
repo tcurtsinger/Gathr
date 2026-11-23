@@ -34,8 +34,9 @@ export function Sidebar(props: Props) {
   const { archived, projects, selected, onSelect, onNew, actions, assistant } = props;
   // The assistant's chat is its row, in no list.
   const chats = props.chats.filter((c) => !c.assistant);
-  // Projects start open, Archived folded; the person's fold of one holds while the window is open.
+  // Projects and Chats start open, Archived folded; the person's fold of one holds while the window is open.
   const [folded, setFolded] = useState<Set<string>>(new Set());
+  const [chatsOpen, setChatsOpen] = useState(true);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const plain = chats.filter((c) => !c.project || !projects.some((p) => p.id === c.project));
   const row = (c: Chat) => (
@@ -145,8 +146,21 @@ export function Sidebar(props: Props) {
         })}
         {plain.length > 0 && (
           <section>
-            {projects.length > 0 && <h2>Chats</h2>}
-            {plain.map(row)}
+            {/* With no projects, Chats is the only list and has no header to fold it by. */}
+            {projects.length > 0 && (
+              <h2>
+                <button
+                  type="button"
+                  className="list-header"
+                  aria-expanded={chatsOpen}
+                  onClick={() => setChatsOpen(!chatsOpen)}
+                >
+                  Chats
+                  {!chatsOpen && <span className="nav-count">{plain.length}</span>}
+                </button>
+              </h2>
+            )}
+            {(chatsOpen || projects.length === 0) && plain.map(row)}
           </section>
         )}
         <section>
