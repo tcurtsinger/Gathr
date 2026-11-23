@@ -26,7 +26,7 @@ export function Background() {
   const none = listed && !listed.auto && !picked;
   return (
     <Page title="Background">
-      {saved && listed && (
+      {saved && (
         <div className="settings-rows">
           <Row
             name={<label htmlFor="background-model">Model</label>}
@@ -40,16 +40,23 @@ export function Background() {
             <Dropdown
               id="background-model"
               aria-describedby="background-line"
-              value={picked ? key(picked) : AUTO}
+              value={picked ? key(picked) : listed ? AUTO : ''}
+              // The accounts' engines list their models in a moment: until then, the pick as saved.
+              disabled={!listed}
+              placeholder="Loading"
               onChange={(v) => {
-                const choice = listed.choices.find((c) => key(c) === v);
+                const choice = listed?.choices.find((c) => key(c) === v);
                 save({ background_model: choice ? { account: choice.account, model: choice.model } : null });
               }}
               choices={[
-                { value: AUTO, label: listed.auto ? named(listed.auto) : 'None' },
-                ...listed.choices.map((c) => ({ value: key(c), label: named(c) })),
+                ...(listed
+                  ? [
+                      { value: AUTO, label: listed.auto ? named(listed.auto) : 'None' },
+                      ...listed.choices.map((c) => ({ value: key(c), label: named(c) })),
+                    ]
+                  : []),
                 // A pick whose account is signed out now, or no longer lists it: as it was saved.
-                ...(picked && !listed.choices.some((c) => key(c) === key(picked))
+                ...(picked && !listed?.choices.some((c) => key(c) === key(picked))
                   ? [{ value: key(picked), label: picked.model }]
                   : []),
               ]}

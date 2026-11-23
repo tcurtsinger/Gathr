@@ -51,31 +51,47 @@ impl Choice {
     }
 }
 
-/// Every model of every signed-in account, accounts in the order they were added.
-async fn choices(s: &State, trace: &str) -> Vec<Choice> {
+/// Every model of every signed-in account, accounts in the order they were added. Each account
+/// asks its own engine, so they ask at once: the list takes the slowest one's time, not their sum.
+async fn choices(s: &Arc<State>, trace: &str) -> Vec<Choice> {
     let listed = s.writer.call(|c| gathr::accounts::list(c)).await;
+    let asks: Vec<_> = listed
+        .and_then(Result::ok)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|account| {
+            let (s, trace) = (s.clone(), trace.to_string());
+            tokio::spawn(async move { of(&s, &trace, account).await })
+        })
+        .collect();
     let mut all = Vec::new();
-    for account in listed.and_then(Result::ok).unwrap_or_default() {
-        let login = s.chats.login_status(&account.folder(&s.data)).await.0;
-        if !matches!(login, Login::SignedIn | Login::Stale) {
-            continue;
-        }
-        let Ok(list) = crate::models::list(s, trace, &account).await else {
-            continue;
-        };
-        for m in list["models"].as_array().into_iter().flatten() {
-            let Some(model) = m["id"].as_str() else {
-                continue;
-            };
-            all.push(Choice {
+    for ask in asks {
+        all.extend(ask.await.unwrap_or_default());
+    }
+    all
+}
+
+/// The account's models, none while it is signed out or its engine doesn't answer.
+async fn of(s: &State, trace: &str, account: Account) -> Vec<Choice> {
+    let login = s.chats.login_status(&account.folder(&s.data)).await.0;
+    if !matches!(login, Login::SignedIn | Login::Stale) {
+        return Vec::new();
+    }
+    let Ok(list) = crate::models::list(s, trace, &account).await else {
+        return Vec::new();
+    };
+    let models = list["models"].as_array().into_iter().flatten();
+    models
+        .filter_map(|m| {
+            let model = m["id"].as_str()?;
+            Some(Choice {
                 account: account.clone(),
                 model: model.to_string(),
                 name: m["name"].as_str().unwrap_or(model).to_string(),
                 resolved: m["resolved"].as_str().map(String::from),
-            });
-        }
-    }
-    all
+            })
+        })
+        .collect()
 }
 
 /// Settings' choice: `{"auto", "choices"}`, Gathr's own pick (null when there's none) and every
@@ -89,7 +105,7 @@ pub async fn listed(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Tra
 
 /// The model the background runs on: the person's pick while its account is signed in and lists
 /// it, else, with no pick, Gathr's own; none when nothing fits.
-async fn model(s: &State, trace: &str) -> Option<Choice> {
+async fn model(s: &Arc<State>, trace: &str) -> Option<Choice> {
     let picked = s.writer.call(|c| titles::model(c)).await?.ok()?;
     let mut all = choices(s, trace).await.into_iter();
     match picked {
@@ -106,7 +122,7 @@ pub fn after_send(s: &Arc<State>, chat: &str, message: &str, trace: &str) {
     tokio::spawn(async move { name(&s, &chat, &message, &trace).await });
 }
 
-async fn name(s: &State, chat: &str, message: &str, trace: &str) {
+async fn name(s: &Arc<State>, chat: &str, message: &str, trace: &str) {
     let (id, said) = (chat.to_string(), message.to_string());
     let first = s.writer.call(move |c| titles::first(c, &id, &said)).await;
     // Not the chat's first message, or its title isn't its first line's: one try per chat.
