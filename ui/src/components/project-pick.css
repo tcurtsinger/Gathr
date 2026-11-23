@@ -1,10 +1,15 @@
-/* A new chat's project, above the composer (the prototype's notch). */
+/* A new chat's project and agent, above the composer (the prototype's notch). */
+.new-picks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 0 0 8px 12px;
+}
 .project-pick {
   display: flex;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
-  margin: 0 0 8px 12px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
@@ -17,4 +22,9 @@
   border: 0;
   background: transparent;
   font-size: 13px;
+}
+/* The agent's face stands where the project's folder does. */
+.project-pick .dropdown-choice {
+  display: flex;
+  gap: 12px;
 }

@@ -20,6 +20,7 @@ export function ProjectPick({
       <Folder aria-hidden="true" />
       <Dropdown
         aria-label="Project"
+        side="top"
         value={project ?? ''}
         onChange={(v) => (v === 'new' ? onNewProject() : onProject(v))}
         choices={[

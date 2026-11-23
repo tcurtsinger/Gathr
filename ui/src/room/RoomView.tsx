@@ -15,6 +15,7 @@ import {
   type ReplyTarget,
   type Settings,
 } from '../api';
+import { AgentPick } from '../components/AgentPick';
 import { ChatMenu } from '../components/ChatMenu';
 import { Composer, type Person } from '../components/Composer';
 import { useCard } from '../components/Corner';
@@ -102,9 +103,16 @@ export function RoomView(props: Props) {
   // A new chat with no project: a message that names nobody goes to the assistant.
   const assistant = fresh && !chat.project ? agents.find((a) => a.id === props.you.assistant) : undefined;
   const who = nameable(members, agents, !chat.project, assistant, !own);
-  const to = recipients(picks, who, members, state, assistant);
   // Who a new chat's message goes to, by itself: the assistant, or the project's lead.
-  const ahead = fresh ? recipients([], who, members, state, assistant)[0] : undefined;
+  const usual = fresh ? recipients([], who, members, state, assistant)[0] : undefined;
+  // The agent picked for it instead, beside its project.
+  const [chosen, setChosen] = useState<string>();
+  const to = recipients(picks, who, members, state, assistant, chosen);
+  const ahead = fresh ? recipients([], who, members, state, assistant, chosen)[0] : undefined;
+  // The picker lists the usual one first, the others by name.
+  const pickable = usual
+    ? [usual, ...who.filter((w) => w.id !== usual.id).sort((a, b) => a.name.localeCompare(b.name))]
+    : [];
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   // Closed by itself in the assistant's chat, where a guest stays for one subject.
   const sidebar = !fresh && (props.sidebar ?? (!own && state.members.length > 1));
@@ -255,12 +263,17 @@ export function RoomView(props: Props) {
           ) : (
             <>
               {fresh && !own && (
-                <ProjectPick
-                  project={chat.project}
-                  projects={props.projects}
-                  onProject={props.onProject}
-                  onNewProject={props.onNewProject}
-                />
+                <div className="new-picks">
+                  <ProjectPick
+                    project={chat.project}
+                    projects={props.projects}
+                    onProject={props.onProject}
+                    onNewProject={props.onNewProject}
+                  />
+                  {ahead && pickable.length > 1 && (
+                    <AgentPick agent={ahead.id} agents={pickable} onAgent={setChosen} />
+                  )}
+                </div>
               )}
               {!fresh && run.state !== 'running' && (
                 <p className="room-run" role="status">
@@ -369,8 +382,18 @@ function nameable(
   ];
 }
 
-/** Who gets the message: each agent it names, else the lead, else the agent that spoke last, else the assistant. */
-function recipients(picks: Picked[], who: Person[], members: Member[], state: RoomState, assistant?: Agent) {
+/**
+ * Who gets the message: each agent it names, else the one picked for a new chat, else the lead, else the agent that
+ * spoke last, else the assistant.
+ */
+function recipients(
+  picks: Picked[],
+  who: Person[],
+  members: Member[],
+  state: RoomState,
+  assistant?: Agent,
+  chosen?: string,
+) {
   const named = [...picks].sort((a, b) => a.at - b.at);
   const each = named.filter((p, i) => named.findIndex((q) => q.id === p.id) === i);
   if (each.length)
@@ -378,7 +401,8 @@ function recipients(picks: Picked[], who: Person[], members: Member[], state: Ro
   const lead = members.find((m) => m.role === 'supervisor');
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
   const one = lead?.agent ?? (members.length === 1 ? members[0].agent : (last ?? assistant?.id));
-  const person = who.find((w) => w.id === one);
+  // A pick the project's team doesn't have, after the project changed, counts for nothing.
+  const person = who.find((w) => w.id === chosen) ?? who.find((w) => w.id === one);
   return person ? [{ id: person.id, name: person.name }] : [];
 }
 

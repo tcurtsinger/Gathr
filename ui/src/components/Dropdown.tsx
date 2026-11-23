@@ -19,6 +19,8 @@ type Props = Omit<ComponentProps<'button'>, 'value' | 'onChange' | 'children'> &
   placeholder?: string;
   /** What the closed dropdown reads instead of the chosen choice's label. */
   shown?: ReactNode;
+  /** Above the field rather than below: the pickers over the message box. With no room there, it turns by itself. */
+  side?: 'top';
 };
 
 // Radix keeps '' for "nothing chosen", so a choice whose value is '' goes by this inside.
@@ -44,6 +46,7 @@ export function Dropdown({
   onChange,
   placeholder,
   shown,
+  side,
   disabled,
   className,
   ...trigger
@@ -67,6 +70,7 @@ export function Dropdown({
       <Select.Portal container={host ?? undefined}>
         <Select.Content
           position="popper"
+          side={side}
           sideOffset={4}
           className={list}
           // Enter picks on keydown; left to go on, it presses whatever has focus next, such as the
