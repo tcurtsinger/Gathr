@@ -114,6 +114,17 @@
 .room-foot:has(> .composer:first-child) {
   margin-top: -26px;
 }
+/* What scrolls behind the box fades out just above it instead of being cut by its edge. */
+.room-foot:has(> .composer:first-child)::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 16px;
+  background: linear-gradient(transparent, var(--background));
+  content: "";
+  pointer-events: none;
+}
 .room-scroll:has(+ .room-foot > .composer:first-child) {
   padding-bottom: 42px;
 }
@@ -138,6 +149,11 @@
 }
 .room-words {
   white-space: pre-wrap;
+}
+/* Words wrap without leaving one short word alone on the last line. */
+.room-you,
+.room-card > .room-body {
+  text-wrap: pretty;
 }
 /* A note on a design: its pin's number, the design and option, and the part, quiet above the person's words. */
 .room-note {
@@ -408,41 +424,45 @@
 .room-work[aria-expanded="true"] svg {
   rotate: 90deg;
 }
+/* Each step a row: its tool in a column of its own, what it ran lined up after it, and a failed step's output under
+   its command. */
 .room-step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  gap: 3px 10px;
+  align-items: baseline;
   margin: 2px 0 4px;
   padding: 0 6px 0 23px;
   list-style: none;
   color: var(--muted-foreground);
   font-size: 12.5px;
 }
-.room-step-list li {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+.room-step-list li,
 .room-step-name {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
+  display: contents;
 }
-.room-step-list li.room-note {
+.room-step-name > :only-child {
+  grid-column: 1 / -1;
+}
+.room-step-list li.room-step-note {
+  display: block;
+  grid-column: 1 / -1;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 .room-step-list li[data-status="error"] > .room-step-name {
   color: var(--danger);
 }
-/* A failed step's first line of output, under it, whole. */
+/* A failed step's first line of output, under its command, whole. */
 .room-step-list .room-step-out {
+  grid-column: 2;
   overflow: visible;
   color: var(--muted-foreground);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .room-step-list code {
+  min-width: 0;
   overflow: hidden;
   font-size: 12px;
   text-overflow: ellipsis;

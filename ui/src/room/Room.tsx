@@ -469,7 +469,7 @@ function Steps({ steps, running, failed }: { steps: Step[]; running: boolean; fa
           {steps.map((s, i) =>
             'note' in s ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
-              <li key={i} className="room-note">
+              <li key={i} className="room-step-note">
                 {s.note}
               </li>
             ) : (

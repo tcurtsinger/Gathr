@@ -107,8 +107,13 @@ export function Chart({
 
       {...props}
     >
-      <div className="flex items-baseline justify-between gap-2 text-[12.5px]">
-        {title && <span className="text-[13px] font-medium">{title}</span>}
+      <div
+        className={cn(
+          "flex text-[12.5px]",
+          title ? "flex-col gap-0.5" : "items-baseline justify-between gap-2",
+        )}
+      >
+        {title && <span className="text-[13px] font-medium text-balance">{title}</span>}
         <span className="text-muted-foreground">{label}</span>
       </div>
 
