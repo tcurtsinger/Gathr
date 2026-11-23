@@ -1,14 +1,6 @@
-import {
-  Activity,
-  Cpu,
-  Flag,
-  Folder,
-  type LucideIcon,
-  SlidersHorizontal,
-  Sparkles,
-  Users,
-} from 'lucide-react';
+import { Activity, Cpu, Flag, Folder, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
 import { useState } from 'react';
+import { BackgroundMark } from '../components/BackgroundMark';
 import { Dialog } from '../components/Dialog';
 import { Background } from './Background';
 import { Diagnostics } from './Diagnostics';
@@ -40,13 +32,13 @@ interface Props {
   onClose: () => void;
 }
 
-const groups: [string, [Page, string, LucideIcon][]][] = [
+const groups: [string, [Page, string, LucideIcon | typeof BackgroundMark][]][] = [
   [
     'App',
     [
       ['general', 'General', SlidersHorizontal],
       ['engines', 'Engines', Cpu],
-      ['background', 'Background', Sparkles],
+      ['background', 'Background', BackgroundMark],
     ],
   ],
   [
