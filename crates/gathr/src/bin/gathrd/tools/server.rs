@@ -211,17 +211,20 @@ fn rows(
 ) -> Result<Vec<Row>, String> {
     let said = gathr::room::SAID;
     let query = format!(
-        "SELECT m.id, m.role, a.name, m.body, m.kind FROM messages m \
+        "SELECT m.id, m.role, a.name, m.body, m.kind, f.app FROM messages m \
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id \
+         LEFT JOIN from_app f ON f.message_id = m.id \
          WHERE m.chat_id = ?1 AND (m.kind = 'block' OR (m.kind = 'text' AND {said})) {filter} \
          ORDER BY m.ts DESC, m.id DESC LIMIT {limit}"
     );
     let row = |r: &rusqlite::Row| {
         let role: String = r.get(1)?;
         let name: Option<String> = r.get(2)?;
-        let author = match role.as_str() {
-            "user" => "person".to_string(),
-            "gathr" => "Gathr".to_string(),
+        let app: Option<String> = r.get(5)?;
+        let author = match (role.as_str(), app) {
+            ("user", Some(app)) => gathr::from_app::speaker(&app),
+            ("user", None) => "person".to_string(),
+            ("gathr", _) => "Gathr".to_string(),
             _ => name.unwrap_or_else(|| "agent".to_string()),
         };
         let (body, kind): (String, String) = (r.get(3)?, r.get(4)?);

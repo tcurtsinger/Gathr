@@ -181,6 +181,10 @@ fn a_members_first_turn_hears_the_last_30_lines_others_cut_and_a_long_line_cappe
         )
         .unwrap();
     seed.say(Some(&asked), "user", "text", "Which way is north?");
+    // Words an AI app outside Gathr sent: the app's, never the person's.
+    let sent = seed.say(Some(&asked), "user", "text", "Sent from outside.");
+    let sql = "INSERT INTO from_app (message_id, app) VALUES (?1, 'Garden Planner')";
+    seed.conn.execute(sql, [&sent]).unwrap();
 
     let turn = say_to(&service, &chat, &ann, "Start");
     let capped = format!(
@@ -188,7 +192,7 @@ fn a_members_first_turn_hears_the_last_30_lines_others_cut_and_a_long_line_cappe
         "x".repeat(1494),
         "x".repeat(400)
     );
-    let fillers: Vec<String> = (3..=27).map(|n| format!("Person: Filler {n}.")).collect();
+    let fillers: Vec<String> = (4..=27).map(|n| format!("Person: Filler {n}.")).collect();
     let block = [
         "Recent lines in this chat:".to_string(),
         fillers.join("\n"),
@@ -197,11 +201,12 @@ fn a_members_first_turn_hears_the_last_30_lines_others_cut_and_a_long_line_cappe
         "Bo: @Ann can you check it? The scale is off too.".to_string(),
         "Gathr: A task is done:\n- #1 Bo, Draw the map: done".to_string(),
         "Person: Which way is north?".to_string(),
+        "Garden Planner (an outside AI agent, not the person): Sent from outside.".to_string(),
         CUT.to_string(),
     ]
     .join("\n");
     let read = read_once(&data.0, &turn, &format!("{block}\n\nStart"));
-    assert!(!read.contains("Filler 2."), "past the last 30: {read}");
+    assert!(!read.contains("Filler 3."), "past the last 30: {read}");
     ended(&service, &chat, &turn);
     let counted = heard(&data.0, &turn);
     assert_eq!(

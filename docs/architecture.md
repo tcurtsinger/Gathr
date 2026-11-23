@@ -84,9 +84,10 @@ brief there as their message ("From" the assistant under it), whose turn (`opene
 message would. An agent it proposes is a block of kind `agent`; Add agent adds it, in one transaction and once only.
 Words an AI app outside Gathr sends (`send` at `/api/mcp`) are the person's message, sent by their route, with the
 app's name kept in `from_app`; a turn they open is `opened` `app`, and the agent reads one line of Gathr's naming the
-app before them (`replies::line`). The window draws them as the app's, under its logo and name: "Claude" or "Codex"
-for those apps; another keeps the name it gave, under OpenAI's logo for a ChatGPT or OpenAI app, else Connect's mark
-(`ui/src/components/EngineLogo.tsx`).
+app before them (`replies::line`); every agent hears them as the app's, another AI agent and not the person, in its
+catch-up, `read_chat`, a check and a reply's line (`from_app::speaker`). The window draws them as the app's, under its
+logo and name: "Claude" or "Codex" for those apps; another keeps the name it gave, under OpenAI's logo for a ChatGPT or
+OpenAI app, else Connect's mark (`ui/src/components/EngineLogo.tsx`).
 Scheduled work (`schedules.rs`, `gathrd/scheduled.rs`, migrations 0079 and 0080): what an agent scheduled, with a short
 name, comes into its chat at its time, on this PC's clock (read through SQLite), as a message to that agent drawn as
 the person's ("Scheduled" and its time), and starts its turn. The service looks as it starts and every 30 seconds, and

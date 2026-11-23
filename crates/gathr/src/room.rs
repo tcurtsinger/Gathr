@@ -4,7 +4,8 @@
 //! without the lines it said and read there. Never the message that opened the turn, a tool row,
 //! an agent's working note (`SAID`) or Gathr's copy of a message. The lead hears every line whole;
 //! a member hears whole the person's lines, Gathr's, the lead's and those that name it, and another
-//! member's cut to its first sentence. A whole line is capped as `read_chat` caps it.
+//! member's cut to its first sentence. A whole line is capped as `read_chat` caps it. Words an AI app outside Gathr
+//! sent (`from_app`) are heard whole, as the person's are, but as the app's, never the person's.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -138,6 +139,8 @@ struct Line {
     body: String,
     agent: Option<String>,
     name: Option<String>,
+    /// The AI app outside Gathr that sent a message of the person's role (`from_app`).
+    app: Option<String>,
 }
 
 /// The agent's started turns in `chat` but `turn`.
@@ -223,12 +226,13 @@ fn lines(
              THEN 'Closed unanswered when the chat was archived.' WHEN q.answered_ts IS NULL
              THEN 'Not answered yet.' ELSE 'They answered: '
              || concat_ws('. ', 'Picked: ' || q.pick, 'Their words: ' || q.words) END,
-             NULL, NULL, coalesce(q.answered_ts, q.asked_ts) AS ts
+             NULL, NULL, NULL, coalesce(q.answered_ts, q.asked_ts) AS ts
          FROM questions q LEFT JOIN agents a ON a.id = q.agent
          WHERE q.chat_id = ?1 AND q.agent != ?3 AND (?4 IS NULL OR coalesce(q.answered_ts, q.asked_ts) > ?4)
          UNION ALL
-         SELECT m.id, m.role, m.body, t.agent_id, a.name, m.ts FROM messages m
+         SELECT m.id, m.role, m.body, t.agent_id, a.name, f.app, m.ts FROM messages m
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
+         LEFT JOIN from_app f ON f.message_id = m.id
          WHERE m.chat_id = ?1 AND m.kind = 'text' AND m.copy_of IS NULL
            AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
            AND {SAID} AND m.turn_id IS NOT ?2
@@ -252,6 +256,7 @@ fn lines(
             body: r.get(2)?,
             agent: r.get(3)?,
             name: r.get(4)?,
+            app: r.get(5)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -270,11 +275,13 @@ fn whole(line: &Line, me: &Member, lead: Option<&Member>, team: &[Member]) -> bo
             .any(|m| m.agent == me.agent)
 }
 
-fn speaker(line: &Line) -> &str {
-    match line.role.as_str() {
-        "user" => "Person",
-        "gathr" => "Gathr",
-        _ => line.name.as_deref().unwrap_or("An agent"),
+/// Who said a line: an AI app outside Gathr by its name, never as the person.
+fn speaker(line: &Line) -> String {
+    match (line.role.as_str(), &line.app) {
+        ("user", Some(app)) => crate::from_app::speaker(app),
+        ("user", None) => "Person".into(),
+        ("gathr", _) => "Gathr".into(),
+        _ => line.name.clone().unwrap_or_else(|| "An agent".into()),
     }
 }
 
