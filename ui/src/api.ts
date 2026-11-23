@@ -3,9 +3,9 @@
 import type { Added } from './components/AddedBy';
 import type { Deletable, DeleteCounts } from './deleting';
 import type { MemoryPlace, MemoryShown } from './memory/places';
-import type { Connect } from './plugins/ConnectApp';
 import type { ProposedAgent, ProposedProject } from './room/Proposal';
 import type { Schedule, ScheduleShown } from './scheduled/schedule';
+import type { Connect } from './settings/Connect';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -378,6 +378,8 @@ export interface Settings {
   assistant?: string | null;
   /** The background model the person picked; null for Gathr's own pick. */
   background_model?: { account: string; model: string } | null;
+  /** Settings > Connect: what an AI app on this PC runs; null with no command line here. Read only. */
+  connect?: Connect | null;
 }
 
 /** A model the background can run on: one of a signed-in account's. */
@@ -888,8 +890,8 @@ export const api = {
   deleteSchedule: (id: string) => call<unknown>('DELETE', `/api/schedules/${id}`),
   /** A run at once: the next time stays. */
   runSchedule: (id: string) => call<{ chat: string; turn: string }>('POST', `/api/schedules/${id}/run`),
-  /** Every tool, each enabled one's state asked of it now; and what an AI app on this PC runs to connect. */
-  tools: () => call<{ tools: WebTool[]; connect: Connect | null }>('GET', '/api/tools'),
+  /** Every tool on the web, each enabled one's state asked of it now. */
+  tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */
   tool: (id: string) =>
     call<

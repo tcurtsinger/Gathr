@@ -1,0 +1,10 @@
+Connect's mark in Settings (ui/src/components/ConnectMark.tsx)
+
+"Connect" from the collection Round Filled Action Icons by Shannon E. Thomas, as SVG Repo has it:
+https://www.svgrepo.com/svg/412184/connect
+
+Changes: none to the drawing. It is shown in the window's own text colour, scaled to the size of an icon.
+
+Licence: Creative Commons Attribution (CC BY), as SVG Repo states for this icon:
+https://www.svgrepo.com/page/licensing/#CC%20Attribution
+The set's own page was not found, so SVG Repo's statement and credit are what is followed here.
