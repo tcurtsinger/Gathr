@@ -12,6 +12,47 @@
 .shown-block {
   min-width: 0;
 }
+/* Every block in the card's one inset (theme.css; the owner's pick, 2026-11-23): the window's background, a hairline,
+   the inset's corners. Flow, math and a diagram take the card's text width; charts in a row share it. */
+.shown-block
+  > :is(
+    [data-slot="data-table"],
+    [data-slot="chart"],
+    [data-slot="math-block"],
+    [data-slot="diagram"],
+    .shown-flow
+  ) {
+  border: 1px solid var(--inset-border);
+  border-radius: var(--inset-radius);
+  background: var(--background);
+}
+/* Words in the words' face: mono is for code. */
+.shown
+  :is([data-slot="data-table"], [data-slot="chart"], [data-slot="math-block"], [data-slot="diagram"])
+  .font-mono {
+  font-family: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0;
+}
+.shown [data-slot="data-table"] td {
+  font-size: 13.5px;
+}
+/* Math reads down the left, each step upright at 16px with its note under it. */
+.shown [data-slot="math-block"] {
+  align-items: flex-start;
+  max-width: none;
+}
+.shown [data-slot="math-block"] > div {
+  align-items: flex-start;
+}
+.shown [data-slot="math-block"] :is(.font-serif, .text-center) {
+  text-align: left;
+}
+.shown [data-slot="math-block"] .font-serif {
+  font-family: inherit;
+  font-size: 16px;
+  font-style: normal;
+}
 .shown-title {
   margin: 0 0 6px 2px;
   color: var(--muted-foreground);

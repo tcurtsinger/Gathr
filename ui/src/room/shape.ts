@@ -218,6 +218,7 @@ const COUNTED: Record<string, [string, string]> = {
   Bash: ['Ran', 'command'],
   Shell: ['Ran', 'command'],
   PowerShell: ['Ran', 'command'],
+  WebFetch: ['Fetched', 'page'],
 };
 
 /**

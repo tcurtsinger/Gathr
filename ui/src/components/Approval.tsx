@@ -45,7 +45,7 @@ export function AskApproval({
       ref={card}
       state={sending ? 'running' : 'request'}
       statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
-      title={`Allow ${tool}?`}
+      title={titleOf(tool)}
       command={command}
       data-approval={a.request}
       description={
@@ -60,6 +60,19 @@ export function AskApproval({
     />
   );
 }
+
+/** What an engine's own tools ask, in plain words (the owner's pick, 2026-11-23); any other is "Allow <tool>?". */
+const TITLES: Record<string, string> = {
+  Bash: 'Run a command?',
+  Shell: 'Run a command?',
+  PowerShell: 'Run a command?',
+  Edit: 'Edit a file?',
+  MultiEdit: 'Edit a file?',
+  NotebookEdit: 'Edit a file?',
+  Write: 'Write a file?',
+  WebFetch: 'Fetch a page?',
+};
+const titleOf = (tool: string) => TITLES[tool] ?? `Allow ${tool}?`;
 
 /** Gathr's tools that ask as the agent's Approvals say, in plain words, with what each would add. */
 const ADDS: Record<string, [string, 'command' | 'folder']> = {

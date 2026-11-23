@@ -8,7 +8,9 @@
     {
       "path": "components/assistant-ui/elements/chart.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/chart.tsx",
-      "sha256": "6e5d7ec1f1ef5bb077f3d28a5639375c877e6ced1c355951724dc354c2a7ba12"
+      "sha256": "6e5d7ec1f1ef5bb077f3d28a5639375c877e6ced1c355951724dc354c2a7ba12",
+      "adapted": "ca0adf3da2df9ff147d586bb1f3d2ff9dec3824171de2b6aff3a4ade6c3d5c63",
+      "why": "The owner's pick of 2026-11-23: a chart's name heads it with its label quiet after, the change says what it is measured against (\"vs Oct\"), the points' names show first and last under it and beside the high point, the words are in the sans face, and the light theme's green and red are a shade darker to read on white."
     },
     {
       "path": "components/assistant-ui/elements/composer.tsx",
@@ -19,8 +21,8 @@
       "path": "components/assistant-ui/elements/data-table.tsx",
       "url": "https://github.com/assistant-ui/assistant-ui/blob/75283e18d212b886ba4b490b02ba3bab87b5499c/packages/ui/src/components/react/assistant-ui/elements/data-table.tsx",
       "sha256": "8b2b3ba77ea50b1daf79355526fdb4669522cee5e38538c4a1e9a10f69fa19fe",
-      "adapted": "450be8a0bfce3abb6db5423bb73dbdbc841a54defd95fdb70f3eb0ae202a2f1d",
-      "why": "The owner asked that a date column sort by date and an empty cell stay blank and sort last: the date's title attribute is gone (Gathr shows no hover text) and an empty value draws nothing."
+      "adapted": "d1552f6a3d529a50259c4c9780c35976ef9ee19c0e7dd1e3cb083682c2631fbe",
+      "why": "The owner asked that a date column sort by date and an empty cell stay blank and sort last: the date's title attribute is gone (Gathr shows no hover text) and an empty value draws nothing. The change column's green and red are a shade darker in the light theme, to read on white (2026-11-23)."
     },
     {
       "path": "components/assistant-ui/elements/diagram.tsx",

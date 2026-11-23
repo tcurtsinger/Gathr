@@ -1,5 +1,5 @@
+import { Check } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { mono, paper } from '@/components/assistant-ui/elements/surfaces';
 import type { Block } from '../api';
 
 type Node = NonNullable<Block['flow']>['nodes'][number];
@@ -28,9 +28,9 @@ function place(nodes: Node[]) {
   });
 }
 
-// The registry's flow graph's look, as published.
+// The registry's flow graph's look, but a step that's done reads as done, with a check, not as greyed out.
 const look = {
-  done: 'border-foreground/10 bg-foreground/[0.04] text-muted-foreground',
+  done: 'border-foreground/10 bg-foreground/[0.04] text-foreground/80',
   active: 'text-foreground/90 border-blue-500/30 bg-blue-500/10 dark:border-blue-400/30',
   pending: 'border-border text-muted-foreground border-dashed',
 };
@@ -73,9 +73,9 @@ export function Flow({ nodes }: { nodes: Node[] }) {
     }),
   );
   const cols = Math.max(...places.map((p) => p.col)) + 1;
-  // As wide as its columns, up to the card's width, past which it scrolls.
+  // In the card's one inset (shown.css), its columns in the middle; wider than the card, it scrolls.
   return (
-    <div className={`${paper} w-fit max-w-full overflow-x-auto rounded-2xl p-4`}>
+    <div className="shown-flow flex w-full overflow-x-auto p-4 [justify-content:safe_center]">
       <div
         ref={grid}
         className="relative grid w-max items-center gap-x-[18px] gap-y-[28px]"
@@ -89,10 +89,11 @@ export function Flow({ nodes }: { nodes: Node[] }) {
         {nodes.map((n, i) => (
           <div
             key={n.id}
-            className={`relative flex min-h-[30px] items-center justify-center rounded-xl border px-2 py-1.5 text-center text-[11.5px] leading-tight wrap-anywhere ${look[n.state ?? 'pending']}`}
+            className={`relative flex min-h-[30px] items-center justify-center gap-1 rounded-xl border px-2 py-1.5 text-center text-[12.5px] leading-tight wrap-anywhere ${look[n.state ?? 'pending']}`}
             style={{ gridColumn: places[i].col + 1, gridRow: places[i].row + 1 }}
           >
-            <span className={mono}>{n.label}</span>
+            {n.state === 'done' && <Check aria-hidden className="size-3 flex-none" />}
+            <span>{n.label}</span>
           </div>
         ))}
       </div>

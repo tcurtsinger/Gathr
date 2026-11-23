@@ -20,7 +20,8 @@ use super::server::{Tools, caller_of};
 
 const MOST_BYTES: usize = 100_000;
 const TABLE: &str = "table is {columns: [{key, label, as?}], rows: [{<key>: value}]}";
-const CHART: &str = "chart is {label, value, points: [numbers], change?, style?}";
+const CHART: &str =
+    "chart is {label, value, points: [numbers], labels?: [a name per point], change?, vs?, style?}";
 const FLOW: &str = "flow is {nodes: [{id, label, after?: [ids], state?}]}";
 const MATH: &str = "math is {label?, steps: [{expression, note?}]}";
 const DIAGRAM: &str =
@@ -125,13 +126,20 @@ pub enum As {
 pub struct Chart {
     /// At most 60 characters.
     label: String,
-    /// The headline, at most 24 characters: "16.8 pts".
+    /// The headline, at most 24 characters, saying which point it is when it is one: "1,240 in Nov".
     value: String,
     /// 2 to 500.
     points: Vec<f64>,
+    /// A name for each point, in order, at most 12 characters each: "Jan", "Feb". The first and last show under
+    /// the chart, and the high point's beside it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    labels: Option<Vec<String>>,
     /// At most 16 characters: "+3.7".
     #[serde(skip_serializing_if = "Option::is_none")]
     change: Option<String>,
+    /// What `change` is measured against, at most 16 characters: "Oct", "last year". Shown as "vs Oct".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vs: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     style: Option<Style>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -413,12 +421,24 @@ fn check_chart(chart: &Chart) -> Result<(), String> {
     if long(&chart.label, 60)
         || long(&chart.value, 24)
         || chart.change.as_deref().is_some_and(|c| long(c, 16))
+        || chart.vs.as_deref().is_some_and(|v| long(v, 16))
     {
-        return Err("label is at most 60 characters, value 24, change 16.".into());
+        return Err("label is at most 60 characters, value 24, change and vs 16.".into());
     }
     let n = chart.points.len();
     if !(2..=500).contains(&n) {
         return Err(format!("{n} points: give 2 to 500."));
+    }
+    if let Some(labels) = &chart.labels {
+        if labels.len() != n {
+            return Err(format!(
+                "{} labels for {n} points: give one for each point.",
+                labels.len()
+            ));
+        }
+        if labels.iter().any(|l| long(l, 12)) {
+            return Err("Each label is at most 12 characters.".into());
+        }
     }
     Ok(())
 }
