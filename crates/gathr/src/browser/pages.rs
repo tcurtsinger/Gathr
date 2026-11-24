@@ -96,6 +96,8 @@ pub(crate) struct Actor {
     cursor: String,
     /// The newest place the mouse moved to over a page, by its id, not yet asked about.
     pointing: Option<(String, f64, f64)>,
+    /// A mouse button is held, as the person's last mouse event said: no pointer is asked for meanwhile.
+    held: bool,
     agent: String,
     acked: Instant,
 }
@@ -128,6 +130,7 @@ impl Actor {
             line: None,
             cursor: ARROW.into(),
             pointing: None,
+            held: false,
             agent: String::new(),
             acked: Instant::now(),
         };
@@ -212,7 +215,8 @@ impl Actor {
                     page.asking = false;
                 }
                 let shown = self.shown_page();
-                if shown.is_some_and(|p| p.id == id && p.dialog.is_none())
+                if !self.held
+                    && shown.is_some_and(|p| p.id == id && p.dialog.is_none())
                     && let Some(cursor) = cursor
                 {
                     self.point(&cursor);
@@ -276,6 +280,9 @@ impl Actor {
             self.point(ARROW);
             self.fit();
             return self.publish();
+        }
+        if kind == "mouse" {
+            self.held = message["buttons"].as_u64().unwrap_or_default() != 0;
         }
         let (Some(cdp), Some(page)) = (self.cdp(), self.shown_page()) else {
             return;
@@ -379,7 +386,7 @@ impl Actor {
         else {
             return;
         };
-        if page.asking || page.dialog.is_some() {
+        if self.held || page.asking || page.dialog.is_some() {
             return;
         }
         let Some((id, x, y)) = self.pointing.take().filter(|(id, ..)| *id == page.id) else {
