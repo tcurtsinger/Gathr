@@ -130,6 +130,8 @@ export function BrowserTile({ onOpen }: { onOpen: () => void }) {
 const MODIFIERS = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
   (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 const BUTTONS = ['left', 'middle', 'right', 'back', 'forward'];
+/** The same, in the order of `buttons`' bits. */
+const HELD = ['left', 'right', 'middle', 'back', 'forward'];
 
 /**
  * The shown page's live picture at its real pixels. The page is laid out at this box's size, so a wider panel
@@ -214,29 +216,36 @@ function Screen({
     });
   }, [page]);
 
-  // The wheel, as the page's own, never scrolling the panel; summed to one a frame.
+  // The wheel, as the page's own, never scrolling the panel. The browser scrolls a wheel sent to it the
+  // whole way at once, with no glide, so what is left to scroll goes a part each frame.
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    let summed: { x: number; y: number; dx: number; dy: number; modifiers: number } | null = null;
+    let left: { x: number; y: number; dx: number; dy: number; modifiers: number } | null = null;
+    let next = 0;
+    const part = (d: number) => (Math.abs(d) <= 4 ? d : d * 0.3);
+    const step = () => {
+      if (!left) return;
+      const [dx, dy] = [part(left.dx), part(left.dy)];
+      left.dx -= dx;
+      left.dy -= dy;
+      say({ type: 'wheel', ...left, dx, dy });
+      if (left.dx || left.dy) next = requestAnimationFrame(step);
+      else left = null;
+    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       if (still.current) return;
       const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? el.clientHeight : 1;
-      const { x, y } = at(el, e);
-      if (summed) {
-        summed.dx += e.deltaX * unit;
-        summed.dy += e.deltaY * unit;
-        return;
-      }
-      summed = { x, y, dx: e.deltaX * unit, dy: e.deltaY * unit, modifiers: MODIFIERS(e) };
-      requestAnimationFrame(() => {
-        if (summed) say({ type: 'wheel', ...summed });
-        summed = null;
-      });
+      const [dx, dy] = [(left?.dx ?? 0) + e.deltaX * unit, (left?.dy ?? 0) + e.deltaY * unit];
+      if (!left) next = requestAnimationFrame(step);
+      left = { ...at(el, e), dx, dy, modifiers: MODIFIERS(e) };
     };
     el.addEventListener('wheel', wheel, { passive: false });
-    return () => el.removeEventListener('wheel', wheel);
+    return () => {
+      cancelAnimationFrame(next);
+      el.removeEventListener('wheel', wheel);
+    };
   }, [box]);
 
   // Presses counted into double and triple clicks, as the page expects them; moves sent once a frame.
@@ -245,7 +254,9 @@ function Screen({
   const mouse = (event: string, e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch' || stopped) return;
     const { x, y } = at(e.currentTarget, e);
-    const button = event === 'mouseMoved' ? 'none' : (BUTTONS[e.button] ?? 'none');
+    // A move names the button held, as the browser drags a scroll bar's thumb only then.
+    const held = HELD.find((_, i) => e.buttons & (1 << i)) ?? 'none';
+    const button = event === 'mouseMoved' ? held : (BUTTONS[e.button] ?? 'none');
     const c = clicks.current;
     if (event === 'mousePressed') {
       const again =
