@@ -707,9 +707,10 @@
   flex-direction: column;
   gap: 6px;
 }
+/* The label takes what it needs, up to near half the row; the words after it wrap, so the two never overlap. */
 .room-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 16px fit-content(45%) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-height: 42px;
@@ -742,9 +743,14 @@
 .room-row[data-own]:not([aria-pressed="true"]) > i {
   border-style: dashed;
 }
+.room-row > span,
+.room-row small {
+  overflow-wrap: anywhere;
+}
 .room-row small {
   color: var(--muted-foreground);
   font-size: 12.5px;
+  line-height: 1.4;
 }
 .room-choose-foot {
   display: flex;
