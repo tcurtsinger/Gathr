@@ -1,4 +1,4 @@
-/* The Browser tab: the address row, a line about what isn't built yet, then the page live. */
+/* The Browser tab: the address row, a line about what isn't built yet, then the page live and its own dialog. */
 .browser {
   position: relative;
   display: flex;
@@ -49,6 +49,37 @@
   font-size: 12.5px;
   translate: -50% 0;
   pointer-events: none;
+}
+/* The page and its own dialog over it. */
+.browser-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+/* A page's own dialog: the look of the window's confirm, over the top of the page's box. */
+.dialog.browser-question {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100% - 64px));
+  max-height: calc(100% - 40px);
+  box-shadow: 0 10px 24px #0003;
+  translate: -50% 0;
+}
+.browser-question .confirm-body {
+  min-height: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.browser-question input {
+  width: calc(100% - 48px);
+  margin: 8px 24px 0;
 }
 .browser-page {
   position: relative;

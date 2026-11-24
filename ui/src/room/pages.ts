@@ -8,6 +8,15 @@ export interface BrowserPage {
   loading: boolean;
   back: boolean;
   forward: boolean;
+  /** The page's own dialog, waiting for the person's answer; the page is stopped meanwhile. */
+  dialog: PageDialog | null;
+}
+
+export interface PageDialog {
+  kind: 'alert' | 'confirm' | 'prompt' | 'beforeunload';
+  message: string;
+  /** A prompt's text as the page gave it. */
+  value: string;
 }
 
 export interface BrowserState {
@@ -24,6 +33,7 @@ const NONE: BrowserState = { running: false, missing: null, pages: [], shown: nu
 let state = NONE;
 const heard = new Set<() => void>();
 const drawn = new Set<(frame: Blob) => void>();
+const pointed = new Set<(cursor: string) => void>();
 let socket: WebSocket | null = null;
 let retryMs = 250;
 /** What the tab last said of itself, said again after the socket comes back. */
@@ -46,6 +56,7 @@ function connect() {
     }
     const said = JSON.parse(m.data);
     if (said.type === 'selection') selection = said.text;
+    if (said.type === 'cursor') for (const point of pointed) point(said.value);
     if (said.type !== 'state') return;
     state = said;
     for (const heed of heard) heed();
@@ -80,6 +91,14 @@ export function onFrame(draw: (frame: Blob) => void) {
   drawn.add(draw);
   return () => {
     drawn.delete(draw);
+  };
+}
+
+/** Calls `point` with each pointer the shown page shows where the mouse is, as the page said it (a CSS cursor). */
+export function onCursor(point: (cursor: string) => void) {
+  pointed.add(point);
+  return () => {
+    pointed.delete(point);
   };
 }
 
