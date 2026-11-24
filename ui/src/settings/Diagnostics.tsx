@@ -99,7 +99,8 @@ function Turns({ chat: open, turn }: Omit<Props, 'reference'>) {
   // A turn the filters hide isn't shown beside a list it isn't in.
   const current = shown.find((t) => t.id === picked);
   const who = (id: string | null) => agents.find((a) => a.id === id);
-  const count = list
+  // None yet says so under the toolbar: no count beside it.
+  const count = list?.length
     ? shown.length === list.length
       ? `${list.length} turn${list.length === 1 ? '' : 's'}`
       : `${shown.length} of ${list.length} turns`

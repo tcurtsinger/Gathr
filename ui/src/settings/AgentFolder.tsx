@@ -1,7 +1,9 @@
+import { X } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
 import { useCard } from '../components/Corner';
+import { IconButton } from '../components/IconButton';
 import { desktop, pickFolder } from '../desktop';
 import { report } from '../report';
 import { Row } from './Row';
@@ -98,12 +100,12 @@ export function AgentFolder() {
           onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setTyped(e.target.value)}
         />
-        <Button type="button" variant="ghost" onClick={close}>
-          Cancel
-        </Button>
         <Button type="submit" disabled={saving || !typed.trim()}>
           {saving ? 'Saving' : 'Save'}
         </Button>
+        <IconButton type="button" aria-label="Cancel" className="settings-more" onClick={close}>
+          <X />
+        </IconButton>
       </span>
       <small id="agent-folder-scope">Applies to new work only.</small>
     </form>
@@ -116,7 +118,9 @@ export function AgentFolder() {
     >
       {typed === null && (
         <>
-          <code className="agent-folder-now">{folder}</code>
+          <code className="agent-folder-now path-tail">
+            <span>{folder}</span>
+          </code>
           <Button type="button" variant="outline" ref={change} aria-busy={saving} onClick={pick}>
             Change
           </Button>

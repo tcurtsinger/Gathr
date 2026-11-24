@@ -4,7 +4,7 @@ import { Page, Row } from './Row';
 import { CopyButton } from './SignIn';
 import { useSettings } from './saved';
 
-/** What an AI app on this PC runs to connect: Gathr's command line and its arguments. */
+/** What an AI app on this computer runs to connect: Gathr's command line and its arguments. */
 export type Connect = { program: string; args: string[] };
 
 type App = 'claude' | 'codex' | 'other';
@@ -19,7 +19,7 @@ const apps: { value: App; label: string }[] = [
 const word = (text: string) => (/^[\w./:\\-]+$/.test(text) ? text : `"${text}"`);
 
 /**
- * Settings > Connect: the one line to run so an AI app on this PC can use Gathr. It adds Gathr's command line as an
+ * Settings > Connect: the one line to run so an AI app on this computer can use Gathr. It adds Gathr's command line as an
  * MCP server for all the app's projects (Claude Code's user scope; Codex's own config). Another app gets the program
  * and its arguments.
  */
@@ -42,10 +42,7 @@ export function Connect() {
     </div>
   );
   return (
-    <Page
-      title="Connect"
-      line="Let an AI app on this PC send work to your team and add skills, tools, agents and projects."
-    >
+    <Page title="Connect" line="Let an AI app on this computer send your team work and add to Gathr.">
       {saved && (
         <>
           <div className="settings-rows">
@@ -54,7 +51,7 @@ export function Connect() {
               line={
                 app === 'other'
                   ? 'Give the app this program and its arguments as an MCP server.'
-                  : 'Run this line in a terminal on this PC.'
+                  : 'Run this line in a terminal on this computer.'
               }
               lineId="connect-line"
             >
@@ -68,7 +65,7 @@ export function Connect() {
             </Row>
           </div>
           {!connect ? (
-            <p className="connect-note">Gathr’s command line isn’t on this PC.</p>
+            <p className="connect-note">Gathr’s command line isn’t on this computer.</p>
           ) : app === 'other' ? (
             <>
               {give(connect.program, 'Program')}

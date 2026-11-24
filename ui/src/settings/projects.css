@@ -61,12 +61,40 @@
   width: 240px;
 }
 .settings-col .project-lead {
-  width: 160px;
+  width: 240px;
   min-width: 0;
 }
-.settings-col .project-add {
-  width: 140px;
+/* Add agent: drawn as the outlined Add at the top of Engines and Projects, its list the agents not on the team. */
+.settings-col .dropdown.project-add {
+  justify-self: start;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--foreground);
 }
-.project-add[data-placeholder] > span {
-  color: var(--muted);
+.settings-col .project-add > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-col .project-add > svg {
+  display: none;
+}
+.settings-col .project-add > span svg {
+  width: 14px;
+  height: 14px;
+  margin-left: -3px;
+}
+.settings-col .project-add:hover {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+/* A path cut at its start in the list. */
+.project-open code.path-tail {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

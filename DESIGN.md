@@ -77,7 +77,8 @@ background, surface to card, text to foreground, danger to destructive.
 
 Hanken Grotesk Variable, self-hosted under the SIL Open Font License 1.1, then
 Hanken Grotesk and the platform sans-serif. The unmodified Latin variable file
-comes from `@fontsource-variable/hanken-grotesk` 5.3.0; the face exposes weights
+comes from the fontsource `hanken-grotesk` 5.3.0 package, kept as
+`designs/fonts/hanken-grotesk-latin-wght-normal.woff2` and declared in `designs/tokens.css`; the face exposes weights
 300 to 700. Other scripts use fallback fonts. No remote font requests.
 The base is 15px at weight 450 and line-height 1.6. An agent's card: its name 650, its words 15px; a reply
 14.5px under a 13.5px line of name and time; the person's bubble at the base size; the message box 16px; chat rows
@@ -174,7 +175,7 @@ assistant-ui's Claude and OpenAI logos (`EngineLogo.tsx`) say which engine an ac
 and which app sent words for the person; the Claude mark keeps its colour, the OpenAI mark takes the text's. They are
 16px at the end of an agent's row on the Agents screen and beside an engine in the new account's dropdown, 20px before
 an account's or a program's row in Engines.
-Gathr's one dropdown (`components/Dropdown.tsx`, Radix Select): closed, a field with the chosen value and a chevron;
+Gathr's one dropdown (`ui/src/components/Dropdown.tsx`, Radix Select): closed, a field with the chosen value and a chevron;
 open, a list drawn as the More menu is, the chosen row highlighted, with no check. A choice can carry a face or a logo
 before its label.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
@@ -207,19 +208,19 @@ apart.
 - **Words an outside app sent** (Connect's `send`) are the same card under the app's logo, 28px (20px on a reply), and
   its brand as the name: "Claude", "Codex", or the name another app gave (`EngineLogo.tsx`'s `AppLogo`, Connect's
   mark for an app that is neither).
-- **What an agent showed** with `show` (`room/Shown.tsx`) sits under its words and above the kept lines: a
+- **What an agent showed** with `show` (`ui/src/room/Shown.tsx`) sits under its words and above the kept lines: a
   table as assistant-ui's Data table (a click on a header sorts, dates by date, empty cells blank and last; a
   link as its name, or its address without the scheme, cut in the middle), a chart as its Chart (charts in a
   row sit side by side; its title heads it with its label quiet after, then the value, the change and "vs Oct";
   with a name per point, the first and last under it and the high point's beside it), a flow as Gathr's own boxes
-  (`room/Flow.tsx`: laid out by what follows what, 120px wide, each growing down to hold its words, centred on its
+  (`ui/src/room/Flow.tsx`: laid out by what follows what, 120px wide, each growing down to hold its words, centred on its
   row and in the card; a done step has a check), math as its Math block, down the left, upright
   (`^` and `_` raised and lowered), a diagram in its Diagram frame (mermaid drawn by beautiful-mermaid in the
   window's colours, or a picture file; only ever an `<img>`, zoom 50% to 300%, Expand opens it large; mermaid
   that doesn't draw shows as its source, quietly) or a page in its sealed frame at the card's width, drawn only
   while on or near the screen, with Open at its top right; each but a chart or a diagram with its title as a quiet
   12.5px line above. Flow, math and a diagram are the card's text width. A project or an agent the assistant proposes is a framed card there too
-  (`room/Proposal.tsx`, 12px corners): the project's name over its folder in mono, a row per agent with its 20px
+  (`ui/src/room/Proposal.tsx`, 12px corners): the project's name over its folder in mono, a row per agent with its 20px
   face, or the agent's 28px face, name and description, then Account and Model; then Make project or Add agent and
   Change, which give way, once used, to a quiet line like a kept line's, "Made project Garden app" or "Added agent
   Kit".
@@ -234,7 +235,7 @@ apart.
   a failed one in the danger colour with its first line of output under it (a failed turn's list starts open).
   Gathr's own calls the card already shows (a kept line, a shown block, a proposal) and the engine's tool search
   are neither counted nor listed, and an MCP tool reads "espn · get roster", never `mcp__…`. A card with nothing
-  else to list has no line. The card of the files a turn changed (`room/FilesCard.tsx`) shows once the turn
+  else to list has no line. The card of the files a turn changed (`ui/src/room/FilesCard.tsx`) shows once the turn
   ends, under its words and what it showed, and the steps it shows leave this line: Changes' mark, "Edited 3
   files" with lines added and removed, View changes (a small outline Button), then a row per file, its folders
   muted and its name in the foreground, the first three, then "Show 2 more files" (Show fewer once open). With one
@@ -305,7 +306,7 @@ as the text it is. A link opens in the person's browser; a link to a file opens 
 tab. A file in a message is a square tile where it stands: a picture cropped to fill it opens large in a box, any
 other file opens as a tab. An @Name of the chat's agents in an agent's words is blue.
 
-The chat's sidebar (`room/Sidebar.tsx`) is tabs: Home, always first and never closed, with Find file at its
+The chat's sidebar (`ui/src/room/Sidebar.tsx`) is tabs: Home, always first and never closed, with Find file at its
 top, then Open (the Files, Designs and Changes tiles, Changes with its count of changed files once read)
 and the Board (To do, Doing in blue, In review in `review`, Done in `free`; No work yet). Files, Designs and
 Changes, once opened, then a tab per open file or design, each with its close X; a tab is at most 180px, the
@@ -395,14 +396,14 @@ Restore asks nothing; its failure shows in a corner card.
 
 Settings is the centred dialog (0023), laid out as the owner's pick A of 2026-11-21 ("flat rows"): at most 1024
 by 760px, 32px horizontal and 48px vertical clearance, no header bar. A left column (220 to 240px, a shade off the
-dialog) has the word Settings at its top, then the pages in three groups under quiet 12px headings, each with a
+dialog) has the word Settings at its top, then the pages in three groups under 12px muted headings, each with a
 16px icon, lucide's but for Background (fontaudio's automation-4p, `BackgroundMark.tsx`) and Connect (`ConnectMark.tsx`):
 App (General, Engines, Background, Connect), Team (Teamwork, Projects) and Diagnostics (Turns, Friction).
 The rail's cog opens Settings at Engines. A
 28px X (the shared icon button, named Close Settings) floats 12px from the dialog's top and right. Each page is a
 550px column centred in the content side: a 24px regular-weight title with one muted line under it, then each
 setting as a row between hairlines, its name and one muted line at the left and one compact 28px control at the
-right. There is no ? Help in these pages: what it said is the line under the setting. Escape/the X return focus
+right; its menus and dropdown lists open at 13px with 14px icons, the size of those controls. There is no ? Help in these pages: what it said is the line under the setting. Escape/the X return focus
 and preserve the chat's draft and position.
 
 General has Your name, then Theme (System, the default, follows the system's setting; Light or Dark), applied at
@@ -447,8 +448,10 @@ its name is the chosen mode's sentence. The window has no ? Help anywhere. Switc
 accessible immediate setting, with pending save and referenced failure states.
 
 Projects lists the projects, each row its folder and its team's faces; a row opens the project's own page, with a
-back link to the list, as a tool's page in Plugins. A project's page has its name, folder and default team in one
-draft, Delete (the outlined danger Button) at the title's right, and Cancel and Save at its foot. A project's
+back link to the list, as a tool's page in Plugins. A project's page has Name, Folder and Lead as rows, then its
+default team, each change saved as it is made, with Delete (the outlined danger Button) at the title's right. Add
+agent is an outlined "+ Add agent" under the team, opening the agents not on it; it is gone when the team has five or
+every agent is on it. A path that doesn't fit is cut at its start, so its end shows. A project's
 More in the sidebar has Settings, which opens that project's page, then Delete after a separator. An
 agent's page has Delete at the right of its header.
 

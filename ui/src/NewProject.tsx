@@ -6,7 +6,7 @@ import { Dialog } from './components/Dialog';
 import type { Proposing } from './room/Proposal';
 import { FolderField } from './settings/FolderField';
 import type { Seat } from './settings/Projects';
-import { Team } from './settings/ProjectTeam';
+import { Lead, Team } from './settings/ProjectTeam';
 import { Row } from './settings/Row';
 import './new-project.css';
 
@@ -86,6 +86,7 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
           <Row name={<label htmlFor="new-project-folder">Folder</label>}>
             <FolderField id="new-project-folder" title="Project folder" value={folder} onChange={setFolder} />
           </Row>
+          <Lead seats={seats} agents={agents} onChange={setSeats} />
         </div>
         <Team seats={seats} agents={agents} onChange={setSeats} />
         <footer className="settings-foot">

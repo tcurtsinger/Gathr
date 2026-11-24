@@ -1,5 +1,5 @@
 import { FolderOpen } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { desktop, pickFolder } from '../desktop';
 import { report } from '../report';
 import './folder-field.css';
@@ -21,15 +21,27 @@ interface Props {
 export function FolderField({ id, value, title, onChange, onCommit }: Props) {
   const [typing, setTyping] = useState(() => !desktop());
   const picking = useRef(false);
+  // Away from the field, the path shows its end, which tells folders apart.
+  const field = useRef<HTMLInputElement>(null);
+  const toEnd = () => {
+    const input = field.current;
+    if (input && document.activeElement !== input) input.scrollLeft = input.scrollWidth;
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scrolls again for each new path
+  useLayoutEffect(toEnd, [value, typing]);
 
   if (typing) {
     return (
       <input
+        ref={field}
         id={id}
         className="project-folder"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={(e) => onCommit?.(e.target.value)}
+        onBlur={(e) => {
+          onCommit?.(e.target.value);
+          toEnd();
+        }}
         onKeyDown={(e) => e.key === 'Enter' && onCommit?.(e.currentTarget.value)}
         placeholder="Folder path"
         required
@@ -63,7 +75,9 @@ export function FolderField({ id, value, title, onChange, onCommit }: Props) {
   return (
     <button type="button" id={id} className="folder-field" data-empty={value ? undefined : ''} onClick={pick}>
       <FolderOpen aria-hidden />
-      <span className="folder-path">{value || 'Choose a folder'}</span>
+      <span className={value ? 'folder-path path-tail' : 'folder-path'}>
+        <span>{value || 'Choose a folder'}</span>
+      </span>
     </button>
   );
 }
