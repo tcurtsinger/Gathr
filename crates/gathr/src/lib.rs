@@ -37,6 +37,7 @@ pub mod launch;
 pub mod likes;
 pub mod memory;
 pub mod notice;
+pub mod nudge;
 pub mod open_check;
 pub mod pauses;
 pub mod pc_tools;

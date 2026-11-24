@@ -239,6 +239,10 @@ checked by the teammates who took no part, before the person relies on it.
 @Name, the question you will ask and where its pages are, and call ask_person once they have answered. A small \
 yes or no needs no look.";
 
+/// For a team chat's lead alone.
+const LEAD: &str = "- When a teammate reports to you and work is left, make sure someone is on it before your turn \
+ends: do it, or name who does with @Name.";
+
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.
 const ROOM: &str = "- Only your last words in a turn are posted as your message; what you write before them stays \
 in your steps. So @Name, REPLY and anything a teammate must read go in your last words.
@@ -246,6 +250,8 @@ in your steps. So @Name, REPLY and anything a teammate must read go in your last
 thumbs-up, then write only NO_REPLY. Never write a message to say that you reacted or that you agree.
 - A thumbs-up wakes nobody. When a teammate is waiting on your answer or your result, write it to them with @Name.
 - Keep your line on the board current with set_board_line: what you work on, and its state.
+- You only work during a turn: when it ends you stop until someone wakes you. So never end on what you will do \
+next: do it in this turn. If what is left is a teammate's, name them with @Name.
 - Keep your messages brief. Be friendly and professional.
 - Don't push fixes for edge cases nobody has hit, and don't change things over wording or semantics.
 - A reply, a rebuttal or a reported defect needs a strong argument: say what is wrong and show why.
@@ -376,6 +382,9 @@ pub fn text(facts: &Facts) -> String {
         lines.push(ROOM_TEAM.to_string());
         if facts.standing.is_none() {
             lines.push(ROOM_LEAD.to_string());
+        }
+        if facts.role == Some(Role::Supervisor) {
+            lines.push(LEAD.to_string());
         }
     }
     lines.extend([ROOM.to_string(), unavailable]);
