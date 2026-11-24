@@ -5,8 +5,8 @@ import { PageQuestion } from './PageQuestion';
 import { onCursor, onFrame, say, selected, useBrowser } from './pages';
 import './browser.css';
 
-/** How long the tab's size settles before the page is laid out again at it. */
-const SETTLE = 150;
+/** The shortest time between two sizes sent while the tab's size changes, as a panel is dragged. */
+const STEP = 50;
 const BLANK = 'about:blank';
 /** The pointers the page box shows as a page says them; anything else, a page's own picture among them, is the arrow. */
 const CURSORS = new Set(
@@ -162,23 +162,36 @@ function Screen({
     [box],
   );
 
-  // The tab's size and whether it shows: sent once it settles, and when it shows or hides.
+  // The tab's size and whether it shows: sent as it changes, at most once a step, and when it shows or hides.
   useEffect(() => {
     const el = box.current;
     if (!el) return;
     let wait: ReturnType<typeof setTimeout> | undefined;
+    let told = 0;
     const tell = () => {
+      told = performance.now();
       const [width, height] = [el.clientWidth, el.clientHeight];
       const sized = width >= 50 && height >= 50;
       const visible = sized && open && document.visibilityState === 'visible';
       say({ type: 'view', visible, ...(sized && { width, height, ratio: devicePixelRatio }) });
     };
-    const settle = () => {
-      clearTimeout(wait);
-      wait = setTimeout(tell, SETTLE);
+    const resized = () => {
+      // Until a frame at the new size comes, the tab past the page's picture is the page's own colour.
+      const shown = canvas.current;
+      const at = shown?.height
+        ? shown.getContext('2d')?.getImageData(0, shown.height - 1, 1, 1).data
+        : undefined;
+      if (at) el.style.setProperty('--page', `rgb(${at[0]} ${at[1]} ${at[2]})`);
+      wait ??= setTimeout(
+        () => {
+          wait = undefined;
+          tell();
+        },
+        Math.max(0, told + STEP - performance.now()),
+      );
     };
     tell();
-    const seen = new ResizeObserver(settle);
+    const seen = new ResizeObserver(resized);
     seen.observe(el);
     document.addEventListener('visibilitychange', tell);
     return () => {

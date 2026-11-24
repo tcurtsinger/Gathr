@@ -16,6 +16,8 @@ use crate::writer::Writer;
 
 /// The shortest time between two frames of the live picture: at most about 60 a second.
 const FRAME: Duration = Duration::from_millis(16);
+/// How long the page's size stays the same before its picture is asked for again at that size.
+const SETTLED: Duration = Duration::from_millis(100);
 const DOWNLOADS: &str = "Downloads aren't built yet";
 const UPLOADS: &str = "Uploads aren't built yet";
 const BLANK: &str = "about:blank";
@@ -86,8 +88,8 @@ pub(crate) struct Actor {
     watchers: Watchers,
     /// The window that acted last: its tab's size is the page's.
     sizer: Option<u64>,
-    /// The page whose picture is sent, by its session, at what size.
-    casting: Option<(String, Size)>,
+    /// The page whose picture is sent, by its session.
+    casting: Option<String>,
     /// The address the next page to open goes to, shown: a new page's, or one the person opened with
     /// none open.
     opening: Option<String>,
@@ -100,6 +102,8 @@ pub(crate) struct Actor {
     held: bool,
     agent: String,
     acked: Instant,
+    /// How many times the shown page was given a new size: an older size's settling is told apart.
+    resizes: u64,
 }
 
 impl Actor {
@@ -133,6 +137,7 @@ impl Actor {
             held: false,
             agent: String::new(),
             acked: Instant::now(),
+            resizes: 0,
         };
         actor.publish();
         actor
@@ -222,6 +227,16 @@ impl Actor {
                     self.point(&cursor);
                 }
                 self.ask();
+            }
+            // A still page may send no frame after its last change of size, or only one drawn
+            // before it was laid out again: the screencast stopped and started sends one at its size.
+            Cmd::Settled(n) => {
+                if let (true, Some(cdp), Some(session)) =
+                    (n == self.resizes, self.cdp(), &self.casting)
+                {
+                    cdp.send("Page.stopScreencast", json!({}), Some(session));
+                    cdp.send("Page.startScreencast", cast(), Some(session));
+                }
             }
             Cmd::Stop(_) | Cmd::Ended(..) => {}
         }
@@ -519,11 +534,7 @@ impl Actor {
                         self.shown = next.map(|p| p.id.clone());
                         self.point(ARROW);
                     }
-                    if self
-                        .casting
-                        .as_ref()
-                        .is_some_and(|(s, _)| *s == gone.session)
-                    {
+                    if self.casting.as_ref() == Some(&gone.session) {
                         self.casting = None;
                     }
                     self.fit();
@@ -560,7 +571,7 @@ impl Actor {
             }
             "Page.navigatedWithinDocument" => look(cdp, &self.said, page),
             "Page.screencastFrame" => {
-                let casting = self.casting.as_ref().is_some_and(|(s, _)| s == session);
+                let casting = self.casting.as_deref() == Some(session);
                 if let (true, Some(frame)) =
                     (casting, decode(params["data"].as_str().unwrap_or_default()))
                 {
@@ -694,25 +705,26 @@ impl Actor {
                 metrics(size),
                 Some(&page.session),
             );
+            self.resizes += 1;
+            let (said, n) = (self.said.clone(), self.resizes);
+            tokio::spawn(async move {
+                tokio::time::sleep(SETTLED).await;
+                let _ = said.send(Cmd::Settled(n));
+            });
         }
         let seen = self.watchers.values().any(|w| w.visible);
         let want = match (seen, self.shown_page(), size) {
-            (true, Some(page), Some(size)) => Some((page.session.clone(), size)),
+            (true, Some(page), Some(_)) => Some(page.session.clone()),
             _ => None,
         };
         if want != self.casting
             && let Some(cdp) = cdp
         {
-            if let Some((session, _)) = &self.casting {
+            if let Some(session) = &self.casting {
                 cdp.send("Page.stopScreencast", json!({}), Some(session));
             }
-            if let Some((session, size)) = &want {
-                let device = |side: u32| (side as f64 * size.ratio).ceil() as u32;
-                let cast = json!({
-                    "format": "jpeg", "quality": 90, "everyNthFrame": 1,
-                    "maxWidth": device(size.width), "maxHeight": device(size.height),
-                });
-                cdp.send("Page.startScreencast", cast, Some(session));
+            if let Some(session) = &want {
+                cdp.send("Page.startScreencast", cast(), Some(session));
             }
             self.casting = want;
         }
@@ -801,6 +813,12 @@ pub(crate) struct Looked {
     url: String,
     back: bool,
     forward: bool,
+}
+
+/// The live picture: with no largest size, each frame is the page's size as it is then, so it keeps
+/// up while the size changes without being started again.
+fn cast() -> Value {
+    json!({ "format": "jpeg", "quality": 90, "everyNthFrame": 1 })
 }
 
 fn metrics(size: Size) -> Value {

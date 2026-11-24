@@ -86,7 +86,7 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--background);
+  background: var(--page, var(--background));
   outline: none;
   cursor: default;
 }
