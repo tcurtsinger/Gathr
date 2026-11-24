@@ -92,7 +92,7 @@ pub(crate) struct Actor {
     casting: Option<String>,
     /// The address the next page to open goes to, shown: a new page's, or one the person opened with
     /// none open.
-    opening: Option<String>,
+    pub(super) opening: Option<String>,
     line: Option<&'static str>,
     /// The pointer the windows were last told, a CSS cursor as the page said it.
     cursor: String,
@@ -343,6 +343,8 @@ impl Actor {
         }
         self.start().await;
         let Some(cdp) = self.cdp() else {
+            // Not running yet: it opens once the browser starts.
+            self.opening = Some(url);
             return;
         };
         self.line = None;
@@ -363,6 +365,13 @@ impl Actor {
             }
         }
         self.publish();
+    }
+
+    /// Opens the address waiting for the browser to start, now that it has.
+    pub(super) fn open_waiting(&mut self) {
+        if let Some(cdp) = self.cdp() {
+            cdp.send("Target.createTarget", json!({ "url": BLANK }), None);
+        }
     }
 
     /// The person's answer to a page's dialog: `accept`, and the text typed for a prompt.

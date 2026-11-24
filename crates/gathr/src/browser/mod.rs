@@ -353,7 +353,25 @@ impl pages::Actor {
             Err(why) => {
                 self.live = None;
                 self.failed(&why);
+                // A browser left running on this profile, by a service that ended without it or by hand,
+                // takes each new one's start and closes it: it is ended, and the start tried again now.
+                let profile = self.profile.clone();
+                let ended = tokio::task::spawn_blocking(move || end_strays(&profile, pid))
+                    .await
+                    .unwrap_or_default();
+                if ended > 0 {
+                    self.writer.record(
+                        Event::point("gathr.browser.stray")
+                            .ok()
+                            .attr("ended", ended as i64),
+                    );
+                    self.restart = Some(Instant::now());
+                }
             }
+        }
+        // An address opened while the browser wasn't running opens now.
+        if self.live.is_some() && self.opening.is_some() {
+            self.open_waiting();
         }
     }
 
@@ -418,3 +436,59 @@ impl pages::Actor {
 
 /// Each window's socket and what it last said of its tab: its size and whether it shows the page.
 pub(crate) type Watchers = HashMap<u64, pages::Watcher>;
+
+/// Ends every browser left running on `profile` other than `ours`, the one just started: the main
+/// process of each, which takes its helpers with it. How many were ended.
+fn end_strays(profile: &Path, ours: u32) -> usize {
+    let profile = profile.to_string_lossy().to_lowercase();
+    let strays: Vec<u32> = processes()
+        .into_iter()
+        .filter(|(pid, line)| {
+            let line = line.to_lowercase();
+            *pid != ours
+                && line.contains(&format!("--user-data-dir={profile}"))
+                && !line.contains("--type=")
+                && !line.contains(RELAY)
+        })
+        .map(|(pid, _)| pid)
+        .collect();
+    for pid in &strays {
+        let mut kill = if cfg!(windows) {
+            let mut kill = std::process::Command::new("taskkill");
+            kill.args(["/F", "/T", "/PID", &pid.to_string()]);
+            kill
+        } else {
+            let mut kill = std::process::Command::new("kill");
+            kill.args(["-9", &pid.to_string()]);
+            kill
+        };
+        crate::platform::no_window(&mut kill);
+        let _ = kill.stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+    strays.len()
+}
+
+/// Every running process's id and command line.
+fn processes() -> Vec<(u32, String)> {
+    let mut list = if cfg!(windows) {
+        let mut list = std::process::Command::new("powershell");
+        let script = "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }";
+        list.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        list
+    } else {
+        let mut list = std::process::Command::new("ps");
+        list.args(["-axww", "-o", "pid=,command="]);
+        list
+    };
+    crate::platform::no_window(&mut list);
+    let Ok(listed) = list.stdin(Stdio::null()).stderr(Stdio::null()).output() else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&listed.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (pid, rest) = line.trim().split_once(' ')?;
+            Some((pid.parse().ok()?, rest.to_string()))
+        })
+        .collect()
+}
