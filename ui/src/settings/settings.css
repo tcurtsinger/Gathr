@@ -53,7 +53,7 @@ html.light :is(.settings-panel, .new-project) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 40px 36px 0;
+  padding: 44px 36px 0;
 }
 :is(.settings-col, .settings-wide) {
   font-size: 13px;
@@ -166,6 +166,17 @@ html.light :is(.settings-panel, .new-project) {
   line-height: 17px;
   overflow-wrap: anywhere;
 }
+/* A path cut at its start, so its end, which tells folders apart, stays: the outer element runs right to left, the
+   path inside it left to right. */
+.path-tail {
+  direction: rtl;
+  text-align: left;
+}
+.path-tail > span {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .setting-control {
   display: flex;
   align-items: center;
@@ -251,6 +262,26 @@ html.light :is(.settings-panel, .new-project) {
   width: 186px;
 }
 
+/* A dropdown whose choice has a face or a logo: the face and name centred in the field, not on its baseline. */
+:is(.settings-col, .settings-wide) .dropdown > span:has(> .dropdown-choice) {
+  display: flex;
+  align-items: center;
+}
+:is(.settings-col, .settings-wide) .dropdown-choice {
+  min-width: 0;
+}
+
+/* Menus and dropdown lists open at the size of the 13px controls they come from. */
+:is(.settings-panel, .new-project) :is([role="menuitem"], [role="option"]) {
+  gap: 8px;
+  padding-block: 5px;
+  font-size: 13px;
+}
+:is(.settings-panel, .new-project) :is([role="menuitem"], [role="option"]) svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another under the row. */
 .agent-folder-now {
   max-width: 150px;
@@ -290,7 +321,7 @@ html.light :is(.settings-panel, .new-project) {
 .settings-pages p {
   margin: 0;
   padding: 14px 10px 4px;
-  color: var(--faint);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;

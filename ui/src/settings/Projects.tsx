@@ -10,7 +10,7 @@ import { DeleteInline } from '../DeleteConfirm';
 import { listen } from '../live';
 import { report } from '../report';
 import { FolderField } from './FolderField';
-import { Team } from './ProjectTeam';
+import { Lead, Team } from './ProjectTeam';
 import { Page, Row } from './Row';
 import './projects.css';
 
@@ -81,7 +81,11 @@ export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }
                     </span>
                   }
                   name={p.name}
-                  line={<code>{p.folder}</code>}
+                  line={
+                    <code className="path-tail">
+                      <span>{p.folder}</span>
+                    </code>
+                  }
                 >
                   <span className="project-faces">
                     {p.members.map((m) => (
@@ -216,6 +220,7 @@ function ProjectPage({ project, agents, onBack, onSaved, onDeleted }: PageProps)
               onCommit={saveFolder}
             />
           </Row>
+          <Lead seats={team} agents={agents} onChange={(seats) => save('team', { members: seats })} />
         </div>
         <Team
           seats={team}
