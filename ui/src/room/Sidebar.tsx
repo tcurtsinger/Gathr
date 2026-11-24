@@ -111,7 +111,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: Home, Files, Designs and Changes always there as icons, then each open file or design. */
+/** The panel beside the chat: Home always there as an icon, then each view, page, file or design opened from it. */
 export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
@@ -143,6 +143,8 @@ interface Item {
   selected: boolean;
   select: () => void;
   close: () => void;
+  /** A browser page's id, for a page's tab. */
+  page?: string;
 }
 
 /** How many file tabs fit in `width`, with room for the "+N" button when not all do. */
@@ -171,7 +173,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const pageKey = (id: string) => `page:${id}`;
   const order = [HOME, FILES, DESIGN, CHANGES, BROWSER, ...browser.pages.map((p) => pageKey(p.id))];
   order.push(...tabs.open.map((f) => f.path));
-  // Files, Designs, Changes and Browser are always tabs; each is drawn once first shown, and kept.
+  // Files, Designs, Changes and Browser are drawn once opened, and kept until their tab closes.
   const go = (at: string) =>
     change(chat, {
       ...tabs,
@@ -181,11 +183,21 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       browser: tabs.browser || at === BROWSER,
       at,
     });
+  // A view's or a file's tab closes; when it was shown, the tab after it shows, or the one before, or Home.
   const close = (keys: string[]) => {
-    const open = tabs.open.filter((f) => !keys.includes(f.path));
-    const i = tabs.open.findIndex((f) => f.path === tabs.at);
-    const at = keys.includes(tabs.at) ? (open[Math.min(i, open.length - 1)]?.path ?? HOME) : tabs.at;
-    change(chat, { ...tabs, open, at });
+    const i = items.findIndex((t) => t.selected);
+    const left = items.filter((t) => !keys.includes(t.key));
+    const next =
+      i >= 0 && keys.includes(items[i].key) ? (left[Math.min(i, left.length - 1)] ?? null) : undefined;
+    if (next?.page) say({ type: 'show', page: next.page });
+    change(chat, {
+      files: tabs.files && !keys.includes(FILES),
+      design: tabs.design && !keys.includes(DESIGN),
+      changes: tabs.changes && !keys.includes(CHANGES),
+      browser: tabs.browser && !keys.includes(BROWSER),
+      open: tabs.open.filter((f) => !keys.includes(f.path)),
+      at: next === undefined ? tabs.at : next === null ? HOME : next.page ? BROWSER : next.key,
+    });
   };
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string) => (
@@ -204,13 +216,13 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     </section>
   );
   const nameOf = (f: Opened) => f.crumbs.at(-1) ?? f.path;
-  const shownPage = browser.pages.some((p) => p.id === browser.shown);
   const pages: Item[] = browser.pages.map((p) => ({
     key: pageKey(p.id),
     icon: <Globe aria-hidden="true" />,
     name: pageName(p),
     where: p.url,
     selected: tabs.at === BROWSER && browser.shown === p.id,
+    page: p.id,
     select: () => {
       say({ type: 'show', page: p.id });
       go(BROWSER);
@@ -226,9 +238,31 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     select: () => go(f.path),
     close: () => close([f.path]),
   }));
-  const items = [...pages, ...files];
+  // Home's tiles open Files, Designs, Changes and Browser as tabs of their own, before the pages and files. Browser's
+  // tab stands for the view only while it has no page, since each page has its own tab.
+  const viewTab = (key: string, on: boolean, icon: ReactNode, name: string): Item[] =>
+    on
+      ? [
+          {
+            key,
+            icon,
+            name,
+            where: '',
+            selected: tabs.at === key,
+            select: () => go(key),
+            close: () => close([key]),
+          },
+        ]
+      : [];
+  const views: Item[] = [
+    ...viewTab(FILES, tabs.files, <Folder aria-hidden="true" />, 'Files'),
+    ...viewTab(DESIGN, tabs.design, <DesignsMark />, 'Designs'),
+    ...viewTab(CHANGES, tabs.changes, <ChangesMark />, 'Changes'),
+    ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe aria-hidden="true" />, 'Browser'),
+  ];
+  const items = [...views, ...pages, ...files];
   const closeAll = (keep?: Item) => {
-    close(files.filter((i) => i !== keep).map((i) => i.key));
+    close([...views, ...files].filter((i) => i !== keep).map((i) => i.key));
     for (const p of pages) if (p !== keep) p.close();
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
@@ -242,19 +276,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     <>
       <div className="workspace-tabs">
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
-          <div className="workspace-fixed">
-            {tab(HOME, <House aria-hidden="true" />, 'Home')}
-            {tab(FILES, <Folder aria-hidden="true" />, 'Files')}
-            {tab(DESIGN, <DesignsMark />, 'Designs')}
-            {tab(CHANGES, <ChangesMark />, 'Changes')}
-            <Tab
-              id={id(BROWSER)}
-              selected={tabs.at === BROWSER && !shownPage}
-              icon={<Globe aria-hidden="true" />}
-              name="Browser"
-              onSelect={() => go(BROWSER)}
-            />
-          </div>
+          <div className="workspace-fixed">{tab(HOME, <House aria-hidden="true" />, 'Home')}</div>
           {items.length > 0 && <i className="workspace-sep" />}
           <div className="workspace-files" ref={strip}>
             {shown.map((i) => (
