@@ -233,7 +233,7 @@ export function NeedsYou(props: {
           {rows.map((r) => (
             <button key={r.key} type="button" className="needs-row" onClick={() => go(r.card)}>
               <span className="needs-face">
-                <Face agent={people.face(r.agent)} size={20} />
+                <Face agent={people.face(r.agent)} size={24} />
               </span>
               <span className="needs-main">
                 <span className="needs-top">

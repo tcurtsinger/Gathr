@@ -4,10 +4,7 @@
   color: var(--foreground);
 }
 
-/* The panel: one block per agent, its bar of how full its conversation is, and what it left running. */
-.popover-panel.agents-panel {
-  width: 360px;
-}
+/* The panel (.popover-panel's width): one block per agent, its bar of how full its conversation is, and what it left running. */
 .agents-block {
   padding: 10px 8px;
 }
@@ -32,8 +29,9 @@
   color: var(--muted-foreground);
   font-size: 12.5px;
 }
+/* Red, as in Settings > Engines. */
 .agents-word[data-needs] {
-  color: var(--attention);
+  color: var(--destructive);
 }
 .agents-meter {
   display: flex;
@@ -89,6 +87,8 @@
 }
 .agents-what {
   min-width: 0;
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

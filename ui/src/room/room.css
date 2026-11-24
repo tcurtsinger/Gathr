@@ -791,12 +791,12 @@
   background: var(--attention);
   box-shadow: 0 0 0 2px var(--shell);
 }
-/* The Needs you panel: a row per open question or approval, which goes to its card. */
-.popover-panel.needs {
-  width: 380px;
+/* The Needs you panel: a row per open question or approval, which goes to its card; the count beside its title. */
+.popover-panel.needs h3 {
+  justify-content: flex-start;
+  gap: 8px;
 }
 .needs-count {
-  margin-left: auto;
   color: var(--muted-foreground);
   font-weight: 450;
   font-variant-numeric: tabular-nums;
@@ -809,7 +809,7 @@
 }
 .needs-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
   width: 100%;
   padding: 8px;
@@ -826,7 +826,7 @@
 .needs-face {
   display: flex;
   flex: none;
-  margin-top: 1px;
+  margin-top: -1px;
 }
 .needs-main {
   display: flex;
@@ -839,7 +839,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 .needs-top b {
   font-weight: 600;
