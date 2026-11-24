@@ -68,8 +68,8 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.workspace-tab:has(.workspace-close) > [role="tab"] {
-  padding-right: 4px;
+.workspace-tab[data-selected="true"] > [role="tab"] {
+  padding-right: 2px;
 }
 .workspace-tab > .workspace-close {
   margin-right: 5px;
@@ -77,9 +77,23 @@
   height: 18px;
   padding: 2px;
 }
-/* A file's close mark shows on the shown tab and the one under the pointer. */
-.workspace-tab[data-file]:not([data-selected="true"]):not(:hover):not(:focus-within) > .workspace-close {
+/* Another tab's close mark shows only under the pointer, over its name's end, so the tab keeps its width. */
+.workspace-tab:not([data-selected="true"]) > .workspace-close {
+  position: absolute;
+  right: 4px;
+  margin: 0;
+}
+.workspace-tab:not([data-selected="true"]):not(:hover):not(:focus-within) > .workspace-close {
   visibility: hidden;
+}
+/* A page still loading. */
+.workspace-tablist .workspace-loading {
+  animation: workspace-spin 0.9s linear infinite;
+}
+@keyframes workspace-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .workspace-tablist svg {
   width: 14px;
@@ -87,7 +101,7 @@
   flex: none;
   stroke-width: 1.5;
 }
-/* Home, Files, Designs and Changes: icons, always in place. */
+/* Home: an icon, always in place. */
 .workspace-fixed {
   display: flex;
   flex: none;
@@ -104,7 +118,7 @@
   align-self: center;
   background: var(--border);
 }
-/* The file tabs: they shrink to fit, and those that don't fit go in the "+N" list (Sidebar.tsx). */
+/* The named tabs: as wide as their names, and those that don't fit go in the "+N" list (Sidebar.tsx). */
 .workspace-files {
   display: flex;
   flex: 1;
@@ -113,8 +127,12 @@
   overflow: hidden;
 }
 .workspace-tab[data-file] {
-  flex: 0 1 150px;
-  min-width: 74px;
+  flex: none;
+}
+/* The last may be cut short to fill what room is left. */
+.workspace-tab[data-file]:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .workspace-more {
   display: flex;
@@ -152,7 +170,7 @@
 }
 .workspace-more-list [role="menuitem"] > small {
   flex: none;
-  max-width: 50%;
+  max-width: 40%;
   margin-left: auto;
   overflow: hidden;
   color: var(--muted-foreground);
@@ -185,4 +203,8 @@
 }
 .workspace-view[hidden] {
   display: none;
+}
+/* Under a tab's close mark, its name fades out. */
+.workspace-tab:not([data-selected="true"]):is(:hover, :focus-within) > [role="tab"] > span {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent calc(100% - 14px));
 }

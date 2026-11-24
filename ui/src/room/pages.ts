@@ -102,12 +102,17 @@ export function onCursor(point: (cursor: string) => void) {
   };
 }
 
+/** A page's site, without its scheme and path: `shop.example.com`. */
+export function site(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
+
 /** A page's name in its tab: its title, else its site. */
 export function pageName(page: BrowserPage) {
   if (page.title && page.title !== page.url) return page.title;
-  try {
-    return new URL(page.url).host || 'New page';
-  } catch {
-    return 'New page';
-  }
+  return site(page.url) || 'New page';
 }
