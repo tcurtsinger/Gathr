@@ -9,6 +9,7 @@ mod api;
 mod app_update;
 mod archive;
 mod board;
+mod browser;
 mod chat_state;
 mod chats;
 mod cleanup;
@@ -76,6 +77,9 @@ struct Args {
 }
 
 fn main() -> ExitCode {
+    if let Some(ended) = gathr::browser::relay() {
+        return ended;
+    }
     let args = Args::parse();
     let data = DataDir::new(args.data.unwrap_or_else(platform::default_data_dir));
     let crash_log = CrashLog::new(data.crash_log());
@@ -227,6 +231,7 @@ async fn serve(
         codex_updates: codex_updates.clone(),
         app: app.clone(),
         sign_ins: sign_ins.clone(),
+        browser: gathr::browser::Browser::new(data.path().join("browser"), writer.clone()),
         models: Default::default(),
         stopping: Default::default(),
         writer: writer.clone(),
@@ -293,7 +298,11 @@ async fn serve(
     app.stop();
     app.stopped();
     sign_ins.cancel_all().await;
-    tokio::join!(chats.close_all(), state.models.closed());
+    tokio::join!(
+        chats.close_all(),
+        state.models.closed(),
+        state.browser.stop()
+    );
     writer
         .record_now(
             Event::point("gathr.service.stop")

@@ -1,4 +1,4 @@
-import { ChevronDown, File as FileIcon, Folder, House, Search, X } from 'lucide-react';
+import { ChevronDown, File as FileIcon, Folder, Globe, House, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   DropdownMenu,
@@ -15,20 +15,26 @@ import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
+import { BrowserTile, BrowserView } from './Browser';
 import { Changes, ChangesTile, useChanges } from './Changes';
 import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
 import { isPage } from './PageFrame';
+import { pageName, say, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
-/** A chat's open tabs, and the one shown: Home, Files, Design, Changes, or a file's or design's path. */
+/**
+ * A chat's open tabs, and the one shown: Home, Files, Design, Changes, Browser, or a file's or design's path. The
+ * browser's pages are the person's one browser's, the same in every chat: Browser shows the page it shows.
+ */
 interface Tabs {
   files: boolean;
   design: boolean;
   changes: boolean;
+  browser: boolean;
   open: Opened[];
   at: string;
 }
@@ -36,7 +42,8 @@ const HOME = 'home';
 const FILES = 'files';
 const DESIGN = 'design';
 const CHANGES = 'changes';
-const FRESH: Tabs = { files: false, design: false, changes: false, open: [], at: HOME };
+const BROWSER = 'browser';
+const FRESH: Tabs = { files: false, design: false, changes: false, browser: false, open: [], at: HOME };
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
 const heard = new Set<() => void>();
@@ -127,6 +134,17 @@ const NARROWEST = 74;
 const GAP = 3;
 const MORE = 44;
 
+/** A page's or a file's tab in the strip after the fixed ones, and its row in the "+N" list. */
+interface Item {
+  key: string;
+  icon: ReactNode;
+  name: string;
+  where: string;
+  selected: boolean;
+  select: () => void;
+  close: () => void;
+}
+
 /** How many file tabs fit in `width`, with room for the "+N" button when not all do. */
 function fitting(count: number, width: number) {
   if (count * (NARROWEST + GAP) - GAP <= width) return count;
@@ -149,14 +167,18 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     seen.observe(el);
     return () => seen.disconnect();
   }, []);
-  const order = [HOME, FILES, DESIGN, CHANGES, ...tabs.open.map((f) => f.path)];
-  // Files, Designs and Changes are always tabs; each is drawn once first shown, and kept.
+  const browser = useBrowser();
+  const pageKey = (id: string) => `page:${id}`;
+  const order = [HOME, FILES, DESIGN, CHANGES, BROWSER, ...browser.pages.map((p) => pageKey(p.id))];
+  order.push(...tabs.open.map((f) => f.path));
+  // Files, Designs, Changes and Browser are always tabs; each is drawn once first shown, and kept.
   const go = (at: string) =>
     change(chat, {
       ...tabs,
       files: tabs.files || at === FILES,
       design: tabs.design || at === DESIGN,
       changes: tabs.changes || at === CHANGES,
+      browser: tabs.browser || at === BROWSER,
       at,
     });
   const close = (keys: string[]) => {
@@ -166,16 +188,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     change(chat, { ...tabs, open, at });
   };
   const id = (key: string) => order.indexOf(key);
-  const tab = (key: string, icon: ReactNode, name: string, file = false) => (
-    <Tab
-      key={key}
-      id={id(key)}
-      selected={tabs.at === key}
-      icon={icon}
-      name={name}
-      onSelect={() => go(key)}
-      onClose={file ? () => close([key]) : undefined}
-    />
+  const tab = (key: string, icon: ReactNode, name: string) => (
+    <Tab key={key} id={id(key)} selected={tabs.at === key} icon={icon} name={name} onSelect={() => go(key)} />
   );
   const view = (key: string, body: ReactNode) => (
     <section
@@ -189,12 +203,39 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       {body}
     </section>
   );
-  // The file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
-  const fits = fitting(tabs.open.length, width);
-  const at = tabs.open.findIndex((f) => f.path === tabs.at);
-  const shown = at < fits ? tabs.open.slice(0, fits) : [...tabs.open.slice(0, fits - 1), tabs.open[at]];
-  const rest = tabs.open.length - shown.length;
   const nameOf = (f: Opened) => f.crumbs.at(-1) ?? f.path;
+  const shownPage = browser.pages.some((p) => p.id === browser.shown);
+  const pages: Item[] = browser.pages.map((p) => ({
+    key: pageKey(p.id),
+    icon: <Globe aria-hidden="true" />,
+    name: pageName(p),
+    where: p.url,
+    selected: tabs.at === BROWSER && browser.shown === p.id,
+    select: () => {
+      say({ type: 'show', page: p.id });
+      go(BROWSER);
+    },
+    close: () => say({ type: 'close', page: p.id }),
+  }));
+  const files: Item[] = tabs.open.map((f) => ({
+    key: f.path,
+    icon: f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />,
+    name: nameOf(f),
+    where: f.crumbs.slice(0, -1).join(' / '),
+    selected: tabs.at === f.path,
+    select: () => go(f.path),
+    close: () => close([f.path]),
+  }));
+  const items = [...pages, ...files];
+  const closeAll = (keep?: Item) => {
+    close(files.filter((i) => i !== keep).map((i) => i.key));
+    for (const p of pages) if (p !== keep) p.close();
+  };
+  // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
+  const fits = fitting(items.length, width);
+  const at = items.findIndex((i) => i.selected);
+  const shown = at < fits ? items.slice(0, fits) : [...items.slice(0, fits - 1), items[at]];
+  const rest = items.length - shown.length;
   const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
   const agents = tree?.agents.length ?? 0;
   return (
@@ -206,12 +247,28 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             {tab(FILES, <Folder aria-hidden="true" />, 'Files')}
             {tab(DESIGN, <DesignsMark />, 'Designs')}
             {tab(CHANGES, <ChangesMark />, 'Changes')}
+            <Tab
+              id={id(BROWSER)}
+              selected={tabs.at === BROWSER && !shownPage}
+              icon={<Globe aria-hidden="true" />}
+              name="Browser"
+              onSelect={() => go(BROWSER)}
+            />
           </div>
-          {tabs.open.length > 0 && <i className="workspace-sep" />}
+          {items.length > 0 && <i className="workspace-sep" />}
           <div className="workspace-files" ref={strip}>
-            {shown.map((f) =>
-              tab(f.path, f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />, nameOf(f), true),
-            )}
+            {shown.map((i) => (
+              <Tab
+                key={i.key}
+                id={id(i.key)}
+                controls={i.key.startsWith('page:') ? id(BROWSER) : undefined}
+                selected={i.selected}
+                icon={i.icon}
+                name={i.name}
+                onSelect={i.select}
+                onClose={i.close}
+              />
+            ))}
           </div>
           {rest > 0 && (
             <DropdownMenu>
@@ -220,26 +277,16 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                 <ChevronDown aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="workspace-more-list">
-                {tabs.open.map((f) => (
-                  <DropdownMenuItem
-                    key={f.path}
-                    data-on={f.path === tabs.at || undefined}
-                    onSelect={() => go(f.path)}
-                  >
-                    {f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />}
-                    <span>{nameOf(f)}</span>
-                    <small>{f.crumbs.slice(0, -1).join(' / ')}</small>
+                {items.map((i) => (
+                  <DropdownMenuItem key={i.key} data-on={i.selected || undefined} onSelect={i.select}>
+                    {i.icon}
+                    <span>{i.name}</span>
+                    <small>{i.where}</small>
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => close(tabs.open.filter((f) => f.path !== tabs.at).map((f) => f.path))}
-                >
-                  Close others
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => close(tabs.open.map((f) => f.path))}>
-                  Close all
-                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => closeAll(items[at])}>Close others</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => closeAll()}>Close all</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -276,6 +323,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
               </button>
               <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
               <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
+              <BrowserTile onOpen={() => go(BROWSER)} />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -307,6 +355,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           />,
         )}
       {tabs.changes && view(CHANGES, <Changes chat={chat} changes={changes} />)}
+      {tabs.browser && view(BROWSER, <BrowserView open={tabs.at === BROWSER} />)}
       {tabs.open.map((f) =>
         view(
           f.path,
@@ -359,6 +408,8 @@ function DesignsTile({
 
 interface TabProps {
   id: number;
+  /** The view it shows, when not its own: a page's tab shows the Browser view. */
+  controls?: number;
   selected: boolean;
   icon: ReactNode;
   name: string;
@@ -367,8 +418,8 @@ interface TabProps {
   onClose?: () => void;
 }
 
-/** One tab: Home, Files, Designs and Changes by their icon, a file by its name with a close mark. */
-function Tab({ id, selected, icon, name, onSelect, onClose }: TabProps) {
+/** One tab: Home, Files, Designs, Changes and Browser by their icon, a page or a file by its name with a close mark. */
+function Tab({ id, controls, selected, icon, name, onSelect, onClose }: TabProps) {
   return (
     <div className="workspace-tab" data-selected={selected} data-file={!!onClose || undefined}>
       <button
@@ -377,7 +428,7 @@ function Tab({ id, selected, icon, name, onSelect, onClose }: TabProps) {
         id={`room-tab-${id}`}
         aria-label={onClose ? undefined : name}
         aria-selected={selected}
-        aria-controls={`room-view-${id}`}
+        aria-controls={`room-view-${controls ?? id}`}
         onClick={onSelect}
       >
         {icon}

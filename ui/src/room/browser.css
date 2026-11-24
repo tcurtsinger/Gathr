@@ -1,0 +1,79 @@
+/* The Browser tab: the address row, a line about what isn't built yet, then the page live. */
+.browser {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.browser-bar {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px 12px 12px;
+}
+.browser-bar > [data-slot="button"] {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--muted-foreground);
+}
+.browser-bar > [data-slot="button"]:disabled {
+  opacity: 0.4;
+}
+.browser-address {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  margin-left: 4px;
+  background: var(--background);
+}
+.browser-address input {
+  font-size: 13px;
+}
+/* Over the page's foot, so the page keeps its size. */
+.browser-line {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  z-index: 1;
+  max-width: calc(100% - 64px);
+  margin: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 12.5px;
+  translate: -50% 0;
+  pointer-events: none;
+}
+.browser-page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 16px 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  outline: none;
+  cursor: default;
+}
+.browser-page[data-empty] {
+  display: flex;
+  border-color: transparent;
+  background: transparent;
+}
+/* It has the keys: a quiet ring, never a bright one. */
+.browser-page:focus {
+  border-color: var(--ring);
+}
+.browser-page > canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
