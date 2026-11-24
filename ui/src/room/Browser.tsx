@@ -273,7 +273,12 @@ function Screen({
       clickCount: event === 'mouseMoved' ? 0 : c.count,
       modifiers: MODIFIERS(e),
     };
-    if (event !== 'mouseMoved') return say(said);
+    if (event !== 'mouseMoved') {
+      // The move waiting for its frame goes first, so a release can't come before the drag's last move.
+      if (moved.current) say(moved.current);
+      moved.current = null;
+      return say(said);
+    }
     if (!moved.current)
       requestAnimationFrame(() => {
         if (moved.current) say(moved.current);
