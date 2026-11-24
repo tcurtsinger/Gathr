@@ -122,8 +122,12 @@ export function App() {
   useCard(restoreFailure);
   useCard(left);
   useCard(updateFailure);
-  // Whether each chat's sidebar is open, as the person left it there.
-  const [sidebars, setSidebars] = useState<Record<string, boolean>>({});
+  // The chat sidebar, closed or open as the person last left it on this computer: never opened by itself.
+  const [sidebar, setSidebar] = useState(() => kept('gathr.sidebar') === 'open');
+  const showSidebar = (open: boolean) => {
+    setSidebar(open);
+    remember('gathr.sidebar', open ? 'open' : undefined);
+  };
   // The message a search hit opened its chat at.
   const [found, setFound] = useState<Found>();
   // The chat list's column, closed or open as the person left it on this computer.
@@ -458,7 +462,7 @@ export function App() {
         <Designs
           onChat={(chat, design, page) => {
             openDesign(chat, design.path, design.name, page);
-            setSidebars((all) => ({ ...all, [chat]: true }));
+            showSidebar(true);
             openChat(chat);
           }}
         />
@@ -521,8 +525,8 @@ export function App() {
                   key={screen.chat.id || 'new'}
                   {...screen}
                   found={found?.chat === screen.chat.id ? found : undefined}
-                  sidebar={sidebars[screen.chat.id]}
-                  onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
+                  sidebar={sidebar}
+                  onSidebar={showSidebar}
                 />
               </ProposalActs.Provider>
             </OpenScheduled.Provider>

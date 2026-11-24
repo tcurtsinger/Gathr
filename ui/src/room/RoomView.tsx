@@ -75,8 +75,8 @@ interface Props {
   onRestore?: () => void;
   /** The message a search hit opened the chat at. */
   found?: Found;
-  /** Whether the sidebar is open, as the person left it in this chat; unset, it opens with more than one agent. */
-  sidebar?: boolean;
+  /** Whether the sidebar is open, as the person last left it. */
+  sidebar: boolean;
   onSidebar: (open: boolean) => void;
   /** Opens the Agents screen. */
   onAgents: () => void;
@@ -121,8 +121,7 @@ export function RoomView(props: Props) {
   // A new chat's agent on a signed-out account can't answer: said over the box, with Sign in.
   const out = ahead && props.signedOut?.(ahead.id);
   const running = Object.values(state.turns).some((t) => t.status === 'running');
-  // Closed by itself in the assistant's chat, where a guest stays for one subject.
-  const sidebar = !fresh && (props.sidebar ?? (!own && state.members.length > 1));
+  const sidebar = !fresh && props.sidebar;
   const unseen = useUnseen(chat.id, state, sidebar || fresh);
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
