@@ -1,7 +1,8 @@
 //! The browser beside the chat: one Edge or Chrome for the person, run by the service without a
 //! window and with a profile of its own under the data folder, so its sign-ins stay. Gathr drives it
 //! over its debugging pipe, never a port any program on the PC could reach. The window's Browser tab
-//! shows the page being shown live and sends the person's mouse and keys back (`pages`).
+//! shows the page being shown live, its pointer and its own dialogs, and sends the person's mouse, keys and
+//! answers back (`pages`).
 
 mod cdp;
 mod pages;
@@ -47,6 +48,10 @@ enum Cmd {
     Ended(u64, String),
     /// A page's title, address and history, as read again.
     Looked(pages::Looked),
+    /// The person's mouse moved over a page, by its id, to this place.
+    Moved(String, f64, f64),
+    /// The pointer a page shows where the mouse is, as it answered.
+    Pointed(String, Option<String>),
 }
 
 impl Browser {

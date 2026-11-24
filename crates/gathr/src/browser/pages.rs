@@ -1,6 +1,6 @@
 //! The browser's pages as the windows see them: its tabs, the one shown, its live picture at the
-//! tab's size, and the person's mouse and keys. Nothing of a page (its address, title or words) is
-//! recorded or stored: it goes only to the windows.
+//! tab's size, its pointer and its own dialogs, and the person's mouse, keys and answers. Nothing of a
+//! page (its address, title, words or a dialog's) is recorded or stored: it goes only to the windows.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -18,6 +18,11 @@ use crate::writer::Writer;
 const FRAME: Duration = Duration::from_millis(33);
 const DOWNLOADS: &str = "Downloads aren't built yet";
 const UPLOADS: &str = "Uploads aren't built yet";
+const BLANK: &str = "about:blank";
+const ARROW: &str = "default";
+/// What pointer a page shows at a place: what it computes there, looking into same-origin frames and
+/// open shadow roots, which a look from the document stops at.
+const CURSOR: &str = include_str!("cursor.js");
 
 /// What goes to the windows: the tabs' state and other JSON, or a frame of the shown page (a JPEG).
 #[derive(Clone)]
@@ -48,6 +53,20 @@ struct Page {
     back: bool,
     forward: bool,
     size: Option<Size>,
+    /// Its own dialog, open and waiting for the person: `{"kind", "message", "value"}`. The page is
+    /// stopped meanwhile and answers nothing.
+    dialog: Option<Value>,
+    /// What pointer it shows is being asked.
+    asking: bool,
+}
+
+impl Page {
+    /// Asking whether to leave: a move elsewhere waits behind the question.
+    fn leaving(&self) -> bool {
+        self.dialog
+            .as_ref()
+            .is_some_and(|d| d["kind"] == "beforeunload")
+    }
 }
 
 pub(crate) struct Actor {
@@ -69,9 +88,14 @@ pub(crate) struct Actor {
     sizer: Option<u64>,
     /// The page whose picture is sent, by its session, at what size.
     casting: Option<(String, Size)>,
-    /// The address the next page to open goes to, shown: one the person opened with none open.
+    /// The address the next page to open goes to, shown: a new page's, or one the person opened with
+    /// none open.
     opening: Option<String>,
     line: Option<&'static str>,
+    /// The pointer the windows were last told, a CSS cursor as the page said it.
+    cursor: String,
+    /// The newest place the mouse moved to over a page, by its id, not yet asked about.
+    pointing: Option<(String, f64, f64)>,
     agent: String,
     acked: Instant,
 }
@@ -102,6 +126,8 @@ impl Actor {
             casting: None,
             opening: None,
             line: None,
+            cursor: ARROW.into(),
+            pointing: None,
             agent: String::new(),
             acked: Instant::now(),
         };
@@ -153,6 +179,7 @@ impl Actor {
         self.shown = None;
         self.casting = None;
         self.opening = None;
+        self.point(ARROW);
     }
 
     pub(super) async fn on_cmd(&mut self, cmd: Cmd) {
@@ -175,6 +202,22 @@ impl Actor {
                     (page.back, page.forward) = (looked.back, looked.forward);
                     self.publish();
                 }
+            }
+            Cmd::Moved(id, x, y) => {
+                self.pointing = Some((id, x, y));
+                self.ask();
+            }
+            Cmd::Pointed(id, cursor) => {
+                if let Some(page) = self.pages.iter_mut().find(|p| p.id == id) {
+                    page.asking = false;
+                }
+                let shown = self.shown_page();
+                if shown.is_some_and(|p| p.id == id && p.dialog.is_none())
+                    && let Some(cursor) = cursor
+                {
+                    self.point(&cursor);
+                }
+                self.ask();
             }
             Cmd::Stop(_) | Cmd::Ended(..) => {}
         }
@@ -208,10 +251,12 @@ impl Actor {
         // The window the person uses sets the page's size.
         self.sizer = Some(client);
         self.fit();
-        if kind == "open" {
-            return self
-                .open(message["address"].as_str().unwrap_or_default())
-                .await;
+        if kind == "open" || kind == "new" {
+            let typed = (kind == "open").then(|| message["address"].as_str().unwrap_or_default());
+            return self.open(typed).await;
+        }
+        if kind == "answer" {
+            return self.answer(&message);
         }
         if kind == "show" || kind == "close" {
             let Some(id) = message["page"]
@@ -228,17 +273,23 @@ impl Actor {
             }
             self.shown = Some(id.to_string());
             self.line = None;
+            self.point(ARROW);
             self.fit();
             return self.publish();
         }
         let (Some(cdp), Some(page)) = (self.cdp(), self.shown_page()) else {
             return;
         };
-        let (id, session) = (page.id.clone(), page.session.clone());
+        let (id, session, leaving) = (page.id.clone(), page.session.clone(), page.leaving());
         match kind {
-            "back" | "forward" => {
+            "back" | "forward" | "reload" => {
                 let step = if kind == "back" { -1 } else { 1 };
+                let reload = kind == "reload";
                 tokio::spawn(async move {
+                    stay(&cdp, &session, leaving).await;
+                    if reload {
+                        return cdp.call("Page.reload", json!({}), Some(&session)).await;
+                    }
                     let history = cdp
                         .call("Page.getNavigationHistory", json!({}), Some(&session))
                         .await?;
@@ -249,19 +300,22 @@ impl Actor {
                         cdp.call("Page.navigateToHistoryEntry", to, Some(&session))
                             .await?;
                     }
-                    Ok::<_, String>(())
+                    Ok(Value::Null)
                 });
             }
-            "reload" => cdp.send("Page.reload", json!({}), Some(&session)),
             "stop" => cdp.send("Page.stopLoading", json!({}), Some(&session)),
-            "mouse" | "wheel" | "key" | "paste" => self.input(&cdp, (id, session), kind, &message),
+            // A page with a dialog open is stopped: what is sent would all run once it is answered.
+            "mouse" | "wheel" | "key" | "paste" if page.dialog.is_none() => {
+                self.input(&cdp, (id, session), kind, &message)
+            }
             _ => {}
         }
     }
 
-    /// Goes to what was typed in the address: in the page shown, or a new one when none is open.
-    async fn open(&mut self, typed: &str) {
-        let url = address(typed);
+    /// Goes to what was typed in the address, in the page shown; or opens a new page (`None`), or one
+    /// for the address when none is shown, and shows it.
+    async fn open(&mut self, typed: Option<&str>) {
+        let url = typed.map_or_else(|| BLANK.to_string(), address);
         if url.is_empty() {
             return;
         }
@@ -270,19 +324,83 @@ impl Actor {
             return;
         };
         self.line = None;
-        match self.shown_page() {
-            Some(page) => cdp.send("Page.navigate", json!({ "url": url }), Some(&page.session)),
+        match self.shown_page().filter(|_| typed.is_some()) {
+            Some(page) => {
+                let (session, leaving) = (page.session.clone(), page.leaving());
+                tokio::spawn(async move {
+                    stay(&cdp, &session, leaving).await;
+                    let _ = cdp
+                        .call("Page.navigate", json!({ "url": url }), Some(&session))
+                        .await;
+                });
+            }
             // Blank first, so it is sized before it loads.
             None => {
                 self.opening = Some(url);
-                cdp.send("Target.createTarget", json!({ "url": "about:blank" }), None);
+                cdp.send("Target.createTarget", json!({ "url": BLANK }), None);
             }
         }
         self.publish();
     }
 
+    /// The person's answer to a page's dialog: `accept`, and the text typed for a prompt.
+    fn answer(&self, m: &Value) {
+        let page = m["page"].as_str().and_then(|id| self.page(id));
+        let (Some(cdp), Some(page)) = (self.cdp(), page.filter(|p| p.dialog.is_some())) else {
+            return;
+        };
+        let mut answer = json!({ "accept": m["accept"].as_bool().unwrap_or(false) });
+        if let Some(text) = m["text"].as_str() {
+            answer["promptText"] = json!(text);
+        }
+        cdp.send("Page.handleJavaScriptDialog", answer, Some(&page.session));
+    }
+
+    /// Tells the windows the pointer to show over the page, when it changed.
+    fn point(&mut self, cursor: &str) {
+        if self.cursor != cursor {
+            self.cursor = cursor.to_string();
+            let said = json!({ "type": "cursor", "value": cursor }).to_string();
+            let _ = self.out.send(Out::Text(said.into()));
+        }
+    }
+
+    /// Asks the shown page what pointer it shows where the mouse last moved: one question to a page at
+    /// a time, the newest place winning, and none while it has a dialog open, as it answers nothing then.
+    fn ask(&mut self) {
+        let Some(cdp) = self.cdp() else {
+            return;
+        };
+        let shown = self.shown.clone();
+        let Some(page) = self
+            .pages
+            .iter_mut()
+            .find(|p| Some(&p.id) == shown.as_ref())
+        else {
+            return;
+        };
+        if page.asking || page.dialog.is_some() {
+            return;
+        }
+        let Some((id, x, y)) = self.pointing.take().filter(|(id, ..)| *id == page.id) else {
+            return;
+        };
+        page.asking = true;
+        let (session, said) = (page.session.clone(), self.said.clone());
+        let expression = format!("{}({x}, {y})", CURSOR.trim_end());
+        let read = json!({ "expression": expression, "returnByValue": true });
+        tokio::spawn(async move {
+            let read = cdp.call("Runtime.evaluate", read, Some(&session)).await;
+            let cursor = read
+                .ok()
+                .and_then(|r| r["result"]["value"].as_str().map(String::from));
+            let _ = said.send(Cmd::Pointed(id, cursor));
+        });
+    }
+
     /// The person's mouse, wheel, keys and paste, to the page shown. A release that may have changed
-    /// what is selected reads it, for the window's copy, and looks at the page again.
+    /// what is selected reads it, for the window's copy, and looks at the page again; a move is
+    /// followed by asking the page what pointer it shows there.
     fn input(&self, cdp: &Arc<Cdp>, (id, session): (String, String), kind: &str, m: &Value) {
         let num = |key: &str| m[key].as_f64().unwrap_or_default();
         let modifiers = m["modifiers"].as_u64().unwrap_or_default() & 15;
@@ -335,9 +453,13 @@ impl Actor {
         let released = params["type"] == "mouseReleased" || params["type"] == "keyUp";
         let selects = kind == "mouse" && released || kind == "key" && released && modifiers != 0;
         let changes = released || kind == "paste";
+        let moved = (params["type"] == "mouseMoved").then(|| (num("x"), num("y")));
         let (cdp, out, said) = (cdp.clone(), self.out.clone(), self.said.clone());
         tokio::spawn(async move {
             let _ = cdp.call(method, params, Some(&session)).await;
+            if let Some((x, y)) = moved {
+                let _ = said.send(Cmd::Moved(id.clone(), x, y));
+            }
             if changes {
                 tokio::spawn(look_at(cdp.clone(), said, id, session.clone()));
             }
@@ -383,6 +505,7 @@ impl Actor {
                     if self.shown.as_deref() == Some(gone.id.as_str()) {
                         let next = self.pages.get(at).or(self.pages.last());
                         self.shown = next.map(|p| p.id.clone());
+                        self.point(ARROW);
                     }
                     if self
                         .casting
@@ -416,9 +539,10 @@ impl Actor {
             {
                 page.loading = method == "Page.frameStartedLoading";
                 look(cdp, &self.said, page);
-                // What the line said was of the page before.
+                // What the line said, and the pointer, were of the page before.
                 if page.loading && self.shown.as_deref() == Some(page.id.as_str()) {
                     self.line = None;
+                    self.point(ARROW);
                 }
                 self.publish();
             }
@@ -443,15 +567,17 @@ impl Actor {
                         .await;
                 });
             }
-            // A page's own alert closes, and leaving it is allowed; what asks a question is refused.
+            // A page's own alert, confirm, prompt or question on leaving waits for the person's answer.
             "Page.javascriptDialogOpening" => {
-                let accept = ["alert", "beforeunload"]
-                    .contains(&params["type"].as_str().unwrap_or_default());
-                cdp.send(
-                    "Page.handleJavaScriptDialog",
-                    json!({ "accept": accept }),
-                    Some(session),
-                );
+                let (kind, message) = (&params["type"], &params["message"]);
+                page.dialog = Some(json!({
+                    "kind": kind, "message": message, "value": params["defaultPrompt"],
+                }));
+                self.publish();
+            }
+            "Page.javascriptDialogClosed" => {
+                page.dialog = None;
+                self.publish();
             }
             "Page.fileChooserOpened" => {
                 self.line = Some(UPLOADS);
@@ -480,10 +606,13 @@ impl Actor {
             back: false,
             forward: false,
             size,
+            dialog: None,
+            asking: false,
         };
         let opening = self.opening.take();
         if opening.is_some() || self.shown.is_none() {
             self.shown = Some(page.id.clone());
+            self.point(ARROW);
         }
         self.pages.push(page);
         let (cdp, agent) = (cdp.clone(), self.agent.clone());
@@ -515,7 +644,7 @@ impl Actor {
                 cdp.call(sized.0, sized.1, on),
                 cdp.call("Runtime.runIfWaitingForDebugger", json!({}), on),
             );
-            if let Some(url) = opening {
+            if let Some(url) = opening.filter(|url| url != BLANK) {
                 let _ = cdp.call("Page.navigate", json!({ "url": url }), on).await;
             }
         });
@@ -579,7 +708,7 @@ impl Actor {
             .map(|p| {
                 json!({
                     "id": p.id, "title": p.title, "url": p.url, "loading": p.loading,
-                    "back": p.back, "forward": p.forward,
+                    "back": p.back, "forward": p.forward, "dialog": p.dialog,
                 })
             })
             .collect();
@@ -596,6 +725,17 @@ impl Actor {
             *kept = state.clone();
         }
         let _ = self.out.send(state);
+    }
+}
+
+/// A page asking whether to leave holds back a move elsewhere, and would ask again once answered: it
+/// stays first, and then asks about the new move.
+async fn stay(cdp: &Cdp, session: &str, leaving: bool) {
+    if leaving {
+        let stay = json!({ "accept": false });
+        let _ = cdp
+            .call("Page.handleJavaScriptDialog", stay, Some(session))
+            .await;
     }
 }
 
