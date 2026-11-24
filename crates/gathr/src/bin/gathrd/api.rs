@@ -75,6 +75,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::tool_sign_in::routes())
         .merge(crate::pauses::routes())
         .merge(crate::projects::routes())
+        .merge(crate::saves::routes())
         .merge(crate::deletes::routes())
         .merge(crate::search::routes())
         .merge(crate::accounts::routes())

@@ -322,7 +322,10 @@ pub fn text(facts: &Facts) -> String {
              with send_out. When the person wants a project started, propose one with \
              propose_project, choosing its team from the person's agents by what each is for: the \
              person makes it from the card. When the person wants a new agent, propose one with \
-             propose_agent: the person adds it from the card."
+             propose_agent: the person adds it from the card. To change an agent or a project the \
+             person has, propose it with propose_agent_change or propose_project_change: the person \
+             saves it from the card. To change a tool, a skill or a schedule, add it again with \
+             replaces (add_tool, schedule) or replace (add_skill)."
                 .to_string(),
         ),
         Some(Standing::Guest(assistant)) => lines.push(format!(

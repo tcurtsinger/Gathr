@@ -36,6 +36,8 @@ pub struct AddTool {
     command: Option<String>,
     /// Its name, if not the one it gives itself.
     name: Option<String>,
+    /// To change a tool already added: its name, id or link. Give only what changes: a name, or a new link or command.
+    replaces: Option<String>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -51,7 +53,8 @@ pub struct AddSkill {
 impl Tools {
     #[tool(
         description = "When the person asks for a tool (an MCP server), add it for every agent: its link, or the \
-                       command from its instructions. Leave a secret's value empty: the person fills it in."
+                       command from its instructions. Leave a secret's value empty: the person fills it in. To change \
+                       one, give it as replaces."
     )]
     async fn add_tool(
         &self,
@@ -62,7 +65,11 @@ impl Tools {
         let started = Instant::now();
         let name = ask.name;
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
-        let added = tool(&self.state, &trace, (ask.link, ask.command), name).await;
+        let given = (ask.link, ask.command);
+        let added = match ask.replaces {
+            Some(old) => changed(&self.state, &trace, &old, given, name).await,
+            None => tool(&self.state, &trace, given, name).await,
+        };
         let added = added.map(|(answer, _)| answer);
         Ok(self.respond(&caller, "add_tool", started, added).await)
     }
@@ -96,6 +103,75 @@ pub(super) async fn tool(
         (Some(link), None) => on_web(s, link, name).await,
         (None, Some(command)) => on_pc(s, trace, command, name).await,
         _ => Err("Give a link or a command: one of them.".into()),
+    }
+}
+
+/// The tool named or with the id `old`, changed: renamed, or a tool on this PC given its command again, keeping the
+/// values the person gave its variables; else the new tool added in its place, the old one removed. The answer, and
+/// the tool's id.
+async fn changed(
+    s: &Arc<State>,
+    trace: &str,
+    old: &str,
+    (link, command): (Option<String>, Option<String>),
+    name: Option<String>,
+) -> Result<(String, String), String> {
+    let wanted = old.trim().to_lowercase();
+    let found = db(s, move |c| {
+        let tools = web_tools::list(c)?;
+        let named = |t: &web_tools::Tool| {
+            [&t.id, &t.name, &t.link]
+                .iter()
+                .any(|v| v.trim().to_lowercase() == wanted)
+        };
+        Ok(tools.into_iter().find(named))
+    });
+    let Some(was) = found.await? else {
+        return Err(format!("There's no tool {}.", old.trim()));
+    };
+    let name = name.map(|n| one_line(&n)).filter(|n| !n.is_empty());
+    let given = |text: Option<String>| text.filter(|t| !t.trim().is_empty());
+    let (link, command) = (given(link), given(command));
+    let change = |answer: String| answer.replacen("Added the tool:", "Changed the tool:", 1);
+    match (&link, &command) {
+        (None, None) if name.is_none() => {
+            Err("Give what changes: a name, a link or a command.".into())
+        }
+        (None, Some(_)) | (None, None) if was.kind == "pc" => {
+            let id = was.id.clone();
+            let t = Trace(trace.to_string());
+            let saved = crate::pc_tools::change(s, &t, id.clone(), command, name).await;
+            let saved = saved.map_err(|fail| fail.why().to_string())?.0;
+            let named = saved["name"].as_str().unwrap_or_default();
+            let went = match crate::pc_tools::outcome(s, &id).await {
+                Ok(names) => format!("It's running, with {}.", actions(&names)),
+                Err(Some(printed)) => format!("It didn't start. It printed:\n{printed}"),
+                Err(None) => "It didn't start, and printed nothing.".into(),
+            };
+            Ok((change(added(named, &id, None, went)), id))
+        }
+        (None, None) => {
+            let (id, data) = (was.id.clone(), s.data.path().to_path_buf());
+            let name = name.unwrap_or_default();
+            let tool = db(s, move |c| {
+                let tool = web_tools::rename(c, &id, &name)?;
+                gathr::memory::renamed(&gathr::memory::root(c, &data)?, &was.name, &tool.name)?;
+                Ok(tool)
+            });
+            let tool = tool.await?;
+            let _ = s.chats.live.send(json!({ "type": "tools" }));
+            let went = "Renamed it.".to_string();
+            Ok((change(added(&tool.name, &tool.id, None, went)), tool.id))
+        }
+        _ => {
+            let name = name.or(Some(was.name.clone()));
+            let (answer, id) = tool(s, trace, (link, command), name).await?;
+            let old = was.id.clone();
+            db(s, move |c| web_tools::remove(c, &old)).await?;
+            crate::tools::relay::forget(&was.id);
+            let _ = s.chats.live.send(json!({ "type": "tools" }));
+            Ok((change(answer), id))
+        }
     }
 }
 

@@ -52,12 +52,16 @@ export interface ProposingAgent {
 /** Where the Agents screen opens from a card: an agent's page, or the form for a new agent filled in with a proposal. */
 export type AgentsAt = { agent: string } | { proposal: ProposingAgent };
 
-/** What a proposal's card needs of the window: the person's agents, Change's form, a chat or the Agents screen to open. */
+/**
+ * What a proposal's card needs of the window: the person's agents, Change's form, a chat, the Agents screen or a
+ * project's settings to open.
+ */
 export const ProposalActs = createContext<{
   agents: Agent[];
   change: (proposing: Proposing) => void;
   open: (chat: string) => void;
   toAgents: (at: AgentsAt) => void;
+  toProject: (project: string) => void;
 } | null>(null);
 
 /**
@@ -193,7 +197,7 @@ export function AgentProposal({ message, agent }: ProposingAgent) {
 }
 
 /** The account and model as the Agents screen names them: the engine and the account's name, the model's name. */
-function useRunsOn(agent: ProposedAgent) {
+export function useRunsOn(agent: { account: string; model: string | null }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [models, setModels] = useState<Model[] | null>(null);
   useEffect(() => {

@@ -30,6 +30,7 @@ mod projects;
 mod questions;
 mod reads;
 mod routes;
+mod saves;
 mod scheduled;
 mod search;
 mod serve;

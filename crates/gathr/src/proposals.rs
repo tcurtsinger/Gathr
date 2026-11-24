@@ -3,7 +3,8 @@
 //! made?}}`: the person makes the project, its first chat and the brief as that chat's first message, drawn as the
 //! person's, which starts the lead's turn as their message would. An agent (`propose_agent`), its body `{kind: "agent",
 //! agent: {name, description, account, model, shape, eyes, colour, added?}}`: the person adds it. The block then records
-//! what was made or added.
+//! what was made or added. A change to an agent or a project the person has (`propose_agent_change`,
+//! `propose_project_change`) is kept the same way, with what it was and what it becomes, and saved from its card.
 
 use std::collections::HashSet;
 
@@ -36,7 +37,7 @@ pub struct Proposal {
     pub made: Option<Made>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Seat {
     pub agent: String,
     #[serde(default)]
@@ -285,4 +286,143 @@ pub fn add_agent(
         block,
         proposed_in,
     }))
+}
+
+/// A change to one of the person's agents the assistant proposed (`propose_agent_change`), its body
+/// `{kind: "agent_change", agent_change: {agent, was, to, saved?}}`: the person saves it from its card, once. `was` is
+/// the agent when it was proposed, so the card shows what changes; saving sets only what differs from it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentChange {
+    /// The agent's id.
+    pub agent: String,
+    pub was: AgentSet,
+    pub to: AgentSet,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub saved: bool,
+}
+
+/// What `propose_agent` sets on an agent: what `propose_agent_change` may change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSet {
+    pub name: String,
+    pub description: String,
+    /// The account's id.
+    pub account: String,
+    /// `None` is the engine's own default.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+impl AgentSet {
+    pub fn of(agent: &Agent) -> AgentSet {
+        AgentSet {
+            name: agent.name.clone(),
+            description: agent.description.clone().unwrap_or_default(),
+            account: agent.account.clone(),
+            model: agent.model.clone(),
+        }
+    }
+}
+
+impl AgentChange {
+    /// The block's body as kept.
+    pub fn body(&self) -> String {
+        json!({ "kind": "agent_change", "agent_change": self }).to_string()
+    }
+
+    /// The change to save: what differs from `was`. A new account always sets the model, since the old one came
+    /// from the other engine.
+    pub fn change(&self) -> agents::Change {
+        let (was, to) = (&self.was, &self.to);
+        let differs = |a: &String, b: &String| (a != b).then(|| b.clone());
+        let account = differs(&was.account, &to.account);
+        agents::Change {
+            name: differs(&was.name, &to.name),
+            description: differs(&was.description, &to.description).map(Some),
+            model: (account.is_some() || was.model != to.model).then(|| to.model.clone()),
+            account,
+            ..Default::default()
+        }
+    }
+}
+
+/// A team as roles, each agent by id.
+pub type Team = Vec<(String, Role)>;
+
+/// A change to one of the person's projects the assistant proposed (`propose_project_change`), its body
+/// `{kind: "project_change", project_change: {project, was, to, saved?}}`: the person saves it from its card, once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectChange {
+    /// The project's id.
+    pub project: String,
+    pub was: ProjectSet,
+    pub to: ProjectSet,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub saved: bool,
+}
+
+/// What a project is: its name, folder and team, the lead first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectSet {
+    pub name: String,
+    pub folder: String,
+    pub team: Vec<Seat>,
+}
+
+impl ProjectSet {
+    pub fn of(project: &crate::projects::Project) -> ProjectSet {
+        let mut team: Vec<Seat> = (project.members.iter())
+            .map(|m| Seat {
+                agent: m.agent.clone(),
+                lead: m.role == Role::Supervisor,
+            })
+            .collect();
+        team.sort_by_key(|s| !s.lead);
+        ProjectSet {
+            name: project.name.clone(),
+            folder: project.folder.clone(),
+            team,
+        }
+    }
+}
+
+impl ProjectChange {
+    /// The block's body as kept.
+    pub fn body(&self) -> String {
+        json!({ "kind": "project_change", "project_change": self }).to_string()
+    }
+
+    /// What differs from `was`: a name, a folder, a team as roles.
+    pub fn change(&self) -> (Option<String>, Option<String>, Option<Team>) {
+        let (was, to) = (&self.was, &self.to);
+        let role = |lead| if lead { Role::Supervisor } else { Role::Member };
+        let team = (was.team != to.team).then(|| {
+            let seats = to.team.iter();
+            seats.map(|s| (s.agent.clone(), role(s.lead))).collect()
+        });
+        (
+            (was.name != to.name).then(|| to.name.clone()),
+            (was.folder != to.folder).then(|| to.folder.clone()),
+            team,
+        )
+    }
+}
+
+/// The agent change proposed in `message`, if it is one.
+pub fn find_agent_change(conn: &Connection, message: &str) -> Result<Option<AgentChange>, Error> {
+    proposed(conn, message, "agent_change")
+}
+
+/// The project change proposed in `message`, if it is one.
+pub fn find_project_change(
+    conn: &Connection,
+    message: &str,
+) -> Result<Option<ProjectChange>, Error> {
+    proposed(conn, message, "project_change")
+}
+
+/// Keeps `body` as the proposal's block once its change is saved: the block as it is now, and the chat it is in.
+pub fn mark_saved(conn: &Connection, message: &str, body: &str) -> Result<(Value, String), Error> {
+    store::set_message_body(conn, message, body)?;
+    Ok((store::message(conn, message)?, proposed_in(conn, message)?))
 }

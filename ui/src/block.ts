@@ -1,4 +1,5 @@
 import type { ProposedAgent, ProposedProject } from './room/Proposal';
+import type { ProposedAgentChange, ProposedProjectChange } from './room/ProposedChange';
 
 /** A cell of a shown table: what the agent gave, as its column's `as` wants. */
 export type Cell = string | number | boolean | null;
@@ -46,6 +47,10 @@ export interface Block {
   project?: ProposedProject;
   /** An agent the assistant proposed with `propose_agent`; once added, the agent as it was added. */
   agent?: ProposedAgent;
+  /** A change the assistant proposed to an agent (`propose_agent_change`); saved once the person saves it. */
+  agent_change?: ProposedAgentChange;
+  /** A change the assistant proposed to a project (`propose_project_change`). */
+  project_change?: ProposedProjectChange;
   /** The message that holds it: not kept in the body, set as the chat reads. */
   message?: string;
 }

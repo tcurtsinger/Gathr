@@ -29,6 +29,8 @@ pub struct Schedule {
     date: Option<String>,
     /// Alone: once, this many minutes from now (1 to 1440).
     in_minutes: Option<i64>,
+    /// To change one scheduled in this chat: its id. This takes its place.
+    replaces: Option<String>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -42,7 +44,7 @@ impl Tools {
     #[tool(
         description = "When the person asks for something at a set time or on repeat, or for you to come back to \
                        something later in this chat: keep words that arrive here then, as a message to you. With \
-                       days it repeats; with date, or neither, it is once."
+                       days it repeats; with date, or neither, it is once. To change one, give its id as replaces."
     )]
     async fn schedule(
         &self,
@@ -57,6 +59,12 @@ impl Tools {
             .writer
             .call(move |c| {
                 let agent = agent.ok_or_else(|| Error::Refused("You're not an agent here.".into()))?;
+                // A schedule replaced goes only once the new one is kept.
+                let tx = c.transaction()?;
+                let c = &tx;
+                if let Some(id) = &ask.replaces {
+                    schedules::delete(c, id.trim(), Some(&chat))?;
+                }
                 let now = gathr::ids::now_us();
                 let asked = Ask {
                     time: ask.time,
@@ -68,7 +76,7 @@ impl Tools {
                 let made = schedules::add(c, (&chat, &agent), (&ask.name, &ask.words), &when, now)?;
                 let mut label = made.when.chars();
                 let first = label.next().map(|l| l.to_lowercase().to_string()).unwrap_or_default();
-                Ok::<_, Error>(format!(
+                let said = format!(
                     "Scheduled {first}{}:\n{}\nschedule {}\nIts id is {}. Next: {}. It is now {} on this PC.",
                     label.as_str(),
                     made.name,
@@ -76,7 +84,9 @@ impl Tools {
                     made.id,
                     when::day_time(c, made.next)?,
                     when::now_words(c, now)?,
-                ))
+                );
+                tx.commit()?;
+                Ok::<_, Error>(said)
             })
             .await
             .unwrap_or_else(|| Err(Error::Other("the database didn't answer".into())));
