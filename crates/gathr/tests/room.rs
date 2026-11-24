@@ -3,8 +3,8 @@
 //! a turn that goes on in its conversation hears what came since its last turn, without its own; a
 //! member hears other members' lines cut to their first sentence, the lead hears every line whole,
 //! a very long line is capped; the message that opened the turn is never a line; a chat of one hears
-//! nothing; and what each turn was told is counted on its trace. And when the chat goes quiet with a
-//! member's board line still doing, that member gets its turn back once.
+//! nothing; and what each turn was told is counted on its trace. And when the chat goes quiet with an
+//! agent's board line still doing, that agent gets its turn back once, the lead too.
 
 mod common;
 
@@ -283,12 +283,12 @@ fn a_chat_of_one_agent_hears_nothing_of_it() {
     assert_eq!(rows(&data.0, sql)[0]["n"], 0);
 }
 
-/// Ann's hand-backs (`nudge`), oldest first: each turn's status and Gathr's words in it.
-fn nudges(data: &Path, ann: &str) -> Vec<Value> {
+/// An agent's hand-backs (`nudge`), oldest first: each turn's status and Gathr's words in it.
+fn nudges(data: &Path, agent: &str) -> Vec<Value> {
     let sql = format!(
         "SELECT t.id, t.status, t.opened_version, (SELECT group_concat(m.body, ' | ') FROM messages m
              WHERE m.turn_id = t.id AND m.role = 'gathr') AS body
-         FROM turns t WHERE t.opened_by = 'nudge' AND t.agent_id = '{ann}' ORDER BY t.created_ts"
+         FROM turns t WHERE t.opened_by = 'nudge' AND t.agent_id = '{agent}' ORDER BY t.created_ts"
     );
     rows(data, &sql)
 }
@@ -299,9 +299,9 @@ fn after_quiet() {
 }
 
 #[test]
-fn a_quiet_chat_hands_a_doing_line_back_to_its_member_once() {
+fn a_quiet_chat_hands_a_doing_line_back_to_its_agent_once() {
     let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &engine(&data.0, &[], 5), &[]);
+    let (service, chat, lead) = team(&data.0, &engine(&data.0, &[], 5), &[]);
     let ann = member(&service, &chat, "Ann");
     let seed = Seed::new(&data.0, &chat);
     let line = |state: &str| {
@@ -347,4 +347,19 @@ fn a_quiet_chat_hands_a_doing_line_back_to_its_member_once() {
     ended(&service, &chat, &last);
     after_quiet();
     assert_eq!(nudges(&data.0, &ann).len(), 1, "a question open");
+
+    // The lead's own line, in a chat of one where it is the only agent, is handed back too, once.
+    let one = json!({ "members": [{ "agent": lead, "role": "supervisor" }] });
+    let made = service.send("POST", "/api/chats", one);
+    assert_eq!(made.status, 200, "{}", made.body);
+    let alone = made.json()["id"].as_str().unwrap().to_string();
+    let sql = "INSERT INTO board_lines (id, chat_id, owner, text, state) VALUES (2, ?1, ?2, 'Plan the walk', 'doing')";
+    seed.conn.execute(sql, [&alone, &lead]).unwrap();
+    let asked = say_to(&service, &alone, &lead, "Plan it");
+    ended(&service, &alone, &asked);
+    until(30, "the lead's hand-back to end", || {
+        (nudges(&data.0, &lead).first()?["status"] == "done").then_some(())
+    });
+    after_quiet();
+    assert_eq!(nudges(&data.0, &lead).len(), 1, "the lead's: once");
 }

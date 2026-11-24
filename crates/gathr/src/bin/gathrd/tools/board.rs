@@ -1,5 +1,5 @@
 //! `set_board_line`: an agent adds, changes or takes off a line of its chat's board. The window hears the
-//! board whole. A member's line still doing when the chat goes quiet hands it its turn back once (`gathr::nudge`).
+//! board whole. An agent's line still doing when the chat goes quiet hands it its turn back once (`gathr::nudge`).
 
 use std::time::Instant;
 

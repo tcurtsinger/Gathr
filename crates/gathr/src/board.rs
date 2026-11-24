@@ -1,6 +1,6 @@
 //! The board: a chat's pieces of work, each with an owner (an agent of the chat) and one of four states.
 //! Agents set its lines; Gathr checks nothing on it and says nothing about it. It starts one thing from it:
-//! a member whose line still says doing when its chat goes quiet gets its turn back once (`nudge`).
+//! an agent whose line still says doing when its chat goes quiet gets its turn back once (`nudge`).
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};

@@ -1,6 +1,7 @@
-//! The hand-back, after SerenityOS's quiet-room nudge: when a chat goes quiet while a member's line
-//! on the board still says doing, that member gets its turn back once, with Gathr's words. Once per
-//! member until the person writes in the chat again. Never the lead's: the person hears from it.
+//! The hand-back, after SerenityOS's quiet-room nudge: when a chat goes quiet while an agent's line
+//! on the board still says doing, that agent gets its turn back once, with Gathr's words. Once per
+//! agent until the person writes in the chat again. Any agent of the chat: a member, the lead, or
+//! the only agent of a chat of one.
 
 use rusqlite::Connection;
 
@@ -9,10 +10,10 @@ use crate::event::Event;
 use crate::store::Start;
 use crate::words::Opened;
 
-/// A member's `doing` lines whose member can be handed its turn back: one whose engine runs no
-/// background command and that wasn't handed one back since the person last wrote in the chat.
+/// The `doing` lines of the chat's agents whose agent can be handed its turn back: one whose engine
+/// runs no background command and that wasn't handed one back since the person last wrote in the chat.
 const DOING: &str = "SELECT b.owner, b.text FROM board_lines b
-    JOIN chat_members m ON m.chat_id = b.chat_id AND m.agent_id = b.owner AND m.role = 'member'
+    JOIN chat_members m ON m.chat_id = b.chat_id AND m.agent_id = b.owner
     WHERE b.chat_id = ?1 AND b.state = 'doing'
       AND NOT EXISTS (SELECT 1 FROM background g JOIN turns t ON t.id = g.turn_id WHERE t.agent_id = b.owner)
       AND NOT EXISTS (SELECT 1 FROM turns n WHERE n.chat_id = b.chat_id AND n.agent_id = b.owner
@@ -27,7 +28,7 @@ const QUIET: &str = "SELECT c.archived_ts IS NULL
     AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.chat_id = c.id AND q.answered_ts IS NULL AND q.closed_ts IS NULL)
     FROM chats c WHERE c.id = ?1";
 
-/// Gathr's words to a member whose `lines` still say doing.
+/// Gathr's words to an agent whose `lines` still say doing.
 fn said(lines: &[String]) -> String {
     let quoted: Vec<String> = lines.iter().map(|l| format!("\"{l}\"")).collect();
     let (line, it, set) = match lines.len() {
@@ -46,7 +47,7 @@ fn said(lines: &[String]) -> String {
 }
 
 /// At the moment a turn of `chat` ended: once the chat is quiet, unpaused and waits on nobody
-/// (`asks`: an approval waits there, which is in no table), queues one turn for each member whose
+/// (`asks`: an approval waits there, which is in no table), queues one turn for each agent whose
 /// line still says doing, in one transaction. The turns to start.
 pub fn hand_back(
     conn: &mut Connection,
