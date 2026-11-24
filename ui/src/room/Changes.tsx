@@ -12,7 +12,7 @@ import './changes.css';
 /** A change of at most this many lines starts with every file open; a larger one with every file shut. */
 const OPEN_UP_TO = 600;
 
-const count = (n: number, one: string) => `${n.toLocaleString('en')} ${n === 1 ? one : `${one}s`}`;
+export const count = (n: number, one: string) => `${n.toLocaleString('en')} ${n === 1 ? one : `${one}s`}`;
 const sum = (files: ChangedFile[]) => ({
   added: files.reduce((n, f) => n + f.added, 0),
   removed: files.reduce((n, f) => n + f.removed, 0),
@@ -61,7 +61,7 @@ export const filesOf = (a: ChatChanges['agents'][number]) => [
   ...a.outside.flatMap((o) => o.files),
 ];
 
-/** Home's Changes tile: how many files the chat's agents changed and their lines, once read. */
+/** Home's Changes tile: how many files the chat's agents changed, once read: short enough for the narrowest panel. */
 export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen: () => void }) {
   const all = changes?.agents?.flatMap(filesOf) ?? [];
   return (
@@ -71,9 +71,7 @@ export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen
         Changes
       </span>
       <span className="home-tile-sub">
-        {all.length > 0 && count(all.length, 'file')}
-        {all.length > 0 && <Totals {...sum(all)} />}
-        {changes && !all.length && 'None yet'}
+        {changes && (all.length ? count(all.length, 'file') : 'None yet')}
       </span>
     </button>
   );
