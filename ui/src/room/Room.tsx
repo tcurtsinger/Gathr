@@ -1,4 +1,4 @@
-import { BookOpen, Check, ChevronRight, CircleAlert, Copy, Plug, ThumbsUp } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, CircleAlert, Copy, Plug, ThumbsUp, User } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Member, type Message, type Reaction } from '../api';
@@ -722,13 +722,11 @@ function Asks({ turn, agent, ctx }: { turn: string; agent: string; ctx: Ctx }) {
 }
 
 /**
- * Replies to a message, tucked under it. Folded, each reply shows its face and first line (the first and last of a
- * longer thread), so a review that changed the plan is read without opening it; a click on a line opens the thread
- * at that reply. Open, "Hide replies" at the foot folds it again.
+ * Replies to a message, tucked under it. Folded, a row of overlapping faces, one per reply, and the count; a click opens
+ * the thread. Open, "Hide replies" at the foot folds it again.
  */
 function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
   const [opened, setOpen] = useState(false);
-  const own = useRef<HTMLDivElement>(null);
   // A search hit on one of the replies opens them.
   const [seen, setSeen] = useState<string>();
   if (ctx.found !== seen) {
@@ -738,32 +736,28 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
   // A reply that waits for an approval is never folded away.
   const waits = replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
   const open = opened || waits;
-  const peek = replies.length > 2 ? [replies[0], replies.at(-1) as Item] : replies;
-  const show = (id: string) => {
-    setOpen(true);
-    requestAnimationFrame(() =>
-      own.current
-        ?.querySelector(`[data-reply="${id}"]`)
-        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
-    );
-  };
+  const count = `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`;
   return (
-    <div className="room-thread" ref={own}>
+    <div className="room-thread">
       {!open && (
-        <div className="room-peek">
-          {peek.map((r) => (
-            <button key={r.id} type="button" className="room-peek-line" onClick={() => show(r.id)}>
-              {r.kind === 'card' ? (
-                <Face agent={ctx.people.face(r.turn.agent ?? '')} size={20} />
+        <button type="button" className="room-peek" aria-expanded={false} onClick={() => setOpen(true)}>
+          <span className="room-peek-faces">
+            {replies.map((r) =>
+              r.kind === 'card' ? (
+                <Face key={r.id} agent={ctx.people.face(r.turn.agent ?? '')} size={16} />
               ) : r.message.app ? (
-                <AppLogo app={r.message.app} className="room-reply-logo" />
+                <span key={r.id} className="room-peek-other">
+                  <AppLogo app={r.message.app} className="room-reply-logo" />
+                </span>
               ) : (
-                <span />
-              )}
-              <span>{firstLine(r)}</span>
-            </button>
-          ))}
-        </div>
+                <span key={r.id} className="room-peek-other room-peek-you">
+                  <User />
+                </span>
+              ),
+            )}
+          </span>
+          <span className="room-peek-count">{count}</span>
+        </button>
       )}
       {open && (
         <div className="room-replies">
@@ -778,16 +772,6 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
         </button>
       )}
     </div>
-  );
-}
-
-/** A reply's first line of words, without markdown's marks; "Working" for a turn that has said nothing yet. */
-function firstLine(r: Item) {
-  const text = r.kind === 'card' ? (r.text ?? '') : split(r.message.body as string).words;
-  const line = text.split('\n').find((l) => l.trim()) ?? '';
-  return (
-    line.replace(/\*\*|`|^#+\s+|^>\s?|^\s*[-+*]\s+/g, '').trim() ||
-    (r.kind === 'card' && working(r) ? 'Working' : '')
   );
 }
 

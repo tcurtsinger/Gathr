@@ -119,6 +119,14 @@ turn(
   ['Bash'],
 );
 turn(
+  'bo',
+  14,
+  0.4,
+  words(pr),
+  ['Read it too. The download name should carry the date, like orders-2026-11-24.csv.'],
+  ['Read'],
+);
+turn(
   'ann',
   17,
   1,
