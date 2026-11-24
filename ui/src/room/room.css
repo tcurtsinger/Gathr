@@ -625,33 +625,79 @@
 .room-fold span {
   color: var(--muted-foreground);
 }
-/* A folded thread's first lines: each reply's face and what it said, one line each; a click opens it at that reply. */
+/* A folded thread: one face per reply on a disc of its colour, overlapping, then the count; a click opens it. */
 .room-peek {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.room-peek-line {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  width: 100%;
   min-height: 0;
-  padding: 2px 8px;
+  padding: 3px 8px 3px 6px;
   border-radius: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
-  text-align: left;
 }
-.room-peek-line:hover {
+.room-peek:hover {
   background: color-mix(in oklab, var(--foreground) 4%, transparent);
 }
-.room-peek-line > span:last-child {
-  overflow: hidden;
-  color: color-mix(in oklab, var(--foreground) 78%, var(--background));
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.room-peek-faces {
+  display: flex;
+  isolation: isolate;
+}
+.room-peek-faces > * {
+  box-sizing: content-box;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 5px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--ink, var(--foreground)) 20%, var(--background));
+  box-shadow: 0 0 0 2px var(--background);
+}
+.room-peek-faces > * + * {
+  margin-left: -7px;
+}
+/* The first reply sits on top. */
+.room-peek-faces > :nth-child(1) {
+  z-index: 8;
+}
+.room-peek-faces > :nth-child(2) {
+  z-index: 7;
+}
+.room-peek-faces > :nth-child(3) {
+  z-index: 6;
+}
+.room-peek-faces > :nth-child(4) {
+  z-index: 5;
+}
+.room-peek-faces > :nth-child(5) {
+  z-index: 4;
+}
+.room-peek-faces > :nth-child(6) {
+  z-index: 3;
+}
+.room-peek-faces > :nth-child(7) {
+  z-index: 2;
+}
+.room-peek-faces > :nth-child(8) {
+  z-index: 1;
+}
+/* A long thread shows its first eight; the count says the rest. */
+.room-peek-faces > :nth-child(n + 9) {
+  display: none;
+}
+.room-peek-other > * {
+  width: 14px;
+  height: 14px;
+}
+.room-peek-you {
+  color: var(--muted-foreground);
+}
+.room-peek-count {
+  color: var(--muted-foreground);
+}
+html.light .room-peek-faces > * {
+  background: color-mix(in oklab, var(--ink-l, var(--foreground)) 14%, var(--background));
 }
 .room-replies {
   display: flex;
