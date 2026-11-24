@@ -1,6 +1,6 @@
-//! The names the person picked from the window's `@` list, kept with their message so it draws them
-//! blue (0072), and every picked agent gets it (0028). A span counts UTF-16 code units of the text, as
-//! the window does.
+//! The names the person picked from the window's `@` list, or typed whole, kept with their message so
+//! it draws them blue (0072), and every picked agent gets it (0028). A span counts UTF-16 code units of
+//! the text, as the window does.
 
 use std::collections::HashMap;
 
@@ -50,6 +50,32 @@ pub fn kept(text: &str, mut picks: Vec<Pick>) -> Result<Option<String>, &'static
     Ok(Some(
         serde_json::to_string(&picks).expect("picks serialize"),
     ))
+}
+
+/// The picks with each `@Name` typed in `text` that names one of `offered` (the chat's `@` list) added
+/// where no pick stands, by the rule an agent's words follow (`team::mentions`): a typed name counts as
+/// one picked. In the order they stand.
+pub fn typed(text: &str, mut picks: Vec<Pick>, offered: &[crate::team::Member]) -> Vec<Pick> {
+    let mut units = vec![0];
+    for c in text.chars() {
+        units.push(units[units.len() - 1] + c.len_utf16());
+    }
+    for (at, len, member) in crate::team::mentions(offered, text) {
+        let (at, end) = (units[at], units[at + len]);
+        if !picks
+            .iter()
+            .any(|p| p.at < end && at < p.at.saturating_add(p.len))
+        {
+            let agent = member.agent.clone();
+            picks.push(Pick {
+                at,
+                len: end - at,
+                agent,
+            });
+        }
+    }
+    picks.sort_by_key(|p| p.at);
+    picks
 }
 
 /// The agents of the picks as kept, in the order their names stand, each once: everyone the message

@@ -282,8 +282,7 @@ pub fn join(conn: &mut Connection, chat: &str, plan: Plan) -> Result<Routed, Err
 }
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one
 /// of them; else the lead, or the only agent. A chat with no agents keeps what it was sent
-/// to. The text is never read for names: a name counts only when picked from the window's list,
-/// which sends its agent, so `bob@ann.com` names nobody.
+/// to. The text isn't read here: the names in it come as picks (`picks::typed`).
 pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String>, &'static str> {
     if team.is_empty() {
         return Ok(sent_to.map(String::from));
@@ -300,35 +299,53 @@ pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String
 }
 
 /// The members `text` names with `@Name` (0081), ignoring case, in the order they are first named.
-/// Longest name first, each place it is found blanked, so `@Bo` is never found inside `@Bobby`. A
-/// name counts only as a whole word: `@Al` isn't in `@Alex`, and `bob@ann.com` names nobody.
 pub fn mentioned<'a>(team: &'a [Member], text: &str) -> Vec<&'a Member> {
-    let mut left: Vec<char> = text.to_lowercase().chars().collect();
+    let mut found: Vec<&Member> = Vec::new();
+    for (_, _, member) in mentions(team, text) {
+        if !found.iter().any(|m| m.agent == member.agent) {
+            found.push(member);
+        }
+    }
+    found
+}
+
+/// Each `@Name` in `text` that names a member, ignoring case, in the order they stand: where it starts
+/// and how many characters it takes with its `@`. Longest name first, each place it is found blanked,
+/// so `@Bo` is never found inside `@Bobby`. A name counts only as a whole word: `@Al` isn't in
+/// `@Alex`, and `bob@ann.com` names nobody.
+pub fn mentions<'a>(team: &'a [Member], text: &str) -> Vec<(usize, usize, &'a Member)> {
+    // Each character lowered on its own, with the place in `text` it came from.
+    let lowered = |s: &str| -> Vec<(char, usize)> {
+        let each = s.chars().enumerate();
+        each.flat_map(|(i, c)| c.to_lowercase().map(move |l| (l, i)))
+            .collect()
+    };
+    let (mut left, from): (Vec<char>, Vec<usize>) = lowered(text).into_iter().unzip();
+    let place = |at: usize| from.get(at).copied().unwrap_or(text.chars().count());
     let mut longest: Vec<&Member> = team.iter().collect();
     longest.sort_by_key(|m| std::cmp::Reverse(m.name.chars().count()));
     let word = |c: &char| c.is_alphanumeric() || *c == '_' || *c == '-';
     let mut found = Vec::new();
     for member in longest {
-        let name: Vec<char> = format!("@{}", member.name.to_lowercase()).chars().collect();
-        let mut first = None;
+        let name: Vec<char> = lowered(&format!("@{}", member.name))
+            .into_iter()
+            .map(|(c, _)| c)
+            .collect();
         let mut at = 0;
         while name.len() > 1 && at + name.len() <= left.len() {
             let starts = at == 0 || !word(&left[at - 1]);
             let ends = left.get(at + name.len()).is_none_or(|c| !word(c));
             if starts && ends && left[at..at + name.len()] == name[..] {
                 left[at..at + name.len()].fill(' ');
-                first.get_or_insert(at);
+                found.push((place(at), place(at + name.len()) - place(at), member));
                 at += name.len();
             } else {
                 at += 1;
             }
         }
-        if let Some(at) = first {
-            found.push((at, member));
-        }
     }
-    found.sort_by_key(|(at, _)| *at);
-    found.into_iter().map(|(_, member)| member).collect()
+    found.sort_by_key(|(at, _, _)| *at);
+    found
 }
 
 /// The member called `name`, ignoring case, matched as the person's `@Name` is.

@@ -1,6 +1,6 @@
 import type { PickedName } from '../api';
 
-/** A name picked from the "@" list: where its `@Name` starts in the text, and whose it is. Only these count, never a name typed. */
+/** A name picked from the "@" list: where its `@Name` starts in the text, and whose it is. The service adds names typed whole. */
 export interface Picked {
   at: number;
   id: string;

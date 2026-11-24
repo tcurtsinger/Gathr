@@ -284,8 +284,8 @@ project, every other agent follows under "Bring in" (12px muted, a rule above). 
 the assistant comes first, marked "Assistant", and nobody is under "Bring in". It is at most 19rem tall, then
 scrolls. Up and Down move the lit row, Enter or Tab picks, Escape
 closes it, and a click picks; the lit row has no Enter mark. The name goes in as
-"@Name ". Only a name picked from the list counts, as @ and / work in other apps'
-boxes: a typed @Ann with nothing picked is plain text. The box keeps each picked
+"@Name ". A typed @Ann that is the exact name of one the list offers counts once sent, as a pick
+does, though the box and the sign by Send see only picks. The box keeps each picked
 name as a range of its text with its agent, through typing before and after it,
 pasting and a draft kept while another chat is open; an edit inside it makes it
 plain. Picked names show in the attention blue at the text's own weight: the box's
@@ -298,8 +298,8 @@ agent (0028), in 12.5px muted with each name in the foreground at 550 and bare
 agents picked from outside a chat with no project are said apart, "Bo joins", "Bo
 and Cy join", "To Ann, Bo joins". The names end in "…" where the row runs out (the
 360 column), the pictures stay. Each agent named gets the message.
-There is no Everyone option. Sent, the message keeps its picked names, and its bubble draws each in the same attention blue; a typed
-@Ann stays plain, as does every name in a message from before picks were kept.
+There is no Everyone option. Sent, the message keeps its picked names and the ones typed whole, and its bubble draws each in the
+same attention blue; any other @word stays plain, as does every name in a message from before picks were kept.
 
 Streamdown draws an agent's words (`Markdown.tsx`); the person's stay plain text. An agent's raw HTML shows
 as the text it is. A link opens in the person's browser; a link to a file opens it in the chat's sidebar as a

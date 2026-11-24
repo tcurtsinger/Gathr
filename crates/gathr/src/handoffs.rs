@@ -194,7 +194,7 @@ pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, 
 
 /// The person's agents a chat with no project can bring in: every one not in it. None for a project's
 /// chat, whose team is its team.
-fn outsiders(conn: &Connection, chat: &str) -> Result<Vec<crate::team::Member>, Error> {
+pub fn outsiders(conn: &Connection, chat: &str) -> Result<Vec<crate::team::Member>, Error> {
     let mut statement = conn.prepare_cached(
         "SELECT a.id, a.name FROM agents a JOIN chats c ON c.id = ?1 AND c.project IS NULL
          WHERE a.removed_ts IS NULL

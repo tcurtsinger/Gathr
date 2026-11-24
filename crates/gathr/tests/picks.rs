@@ -1,4 +1,4 @@
-//! The names the person picked from the window's `@` list are kept with their message (0028, 0072):
+//! The names the person picked from the window's `@` list, or typed whole, are kept with their message (0028, 0072):
 //! saved with a message that opens a turn and with one sent into a running turn, returned live and
 //! in history, kept across a restart, and refused with a reason and a reference when they don't fit
 //! the text. Spans count UTF-16 code units, as the window does.
@@ -67,14 +67,26 @@ fn picks_are_kept_with_a_new_turn_and_a_steered_message_live_in_history_and_afte
         "the live steered message: {live}"
     );
 
-    // A message with no pick keeps none.
-    let plain = json!({ "text": "And @Ann typed", "agent": lead });
+    // A message with no name keeps none.
+    let plain = json!({ "text": "And that", "agent": lead });
     assert_eq!(service.send("POST", &path, plain).status, 200);
+    live_said(&mut socket);
+    // A name typed whole counts as picked: it goes to Ann, not to the lead the window sends it to.
+    let typed = json!({ "text": "And @Ann typed", "agent": lead });
+    let sent = service.send("POST", &path, typed);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let turns = sent.json()["turns"].clone();
+    assert_eq!(turns.as_array().map(Vec::len), Some(1), "{turns}");
+    assert_eq!(turns[0]["agent"], ann, "{turns}");
+    let typed_picks = json!([{ "at": 4, "len": 4, "agent": ann }]);
+    let live = live_said(&mut socket);
+    assert_eq!(live["picks"], typed_picks, "the live typed message: {live}");
 
     let expected = vec![
         (json!(FIRST), first_picks),
         (json!(SECOND), second_picks),
-        (json!("And @Ann typed"), Value::Null),
+        (json!("And that"), Value::Null),
+        (json!("And @Ann typed"), typed_picks),
     ];
     assert_eq!(
         said(&service, &chat),

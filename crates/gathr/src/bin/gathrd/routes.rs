@@ -159,8 +159,13 @@ pub async fn send(
     if let Some(agent) = &body.agent {
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
-    let chosen: Vec<String> = body.picks.iter().map(|p| p.agent.clone()).collect();
-    let picks = picked(&s, &t, &body.text, body.picks).await?;
+    let given = !body.picks.is_empty();
+    let (chosen, picks) = picked(&s, &t, &chat, &body.text, body.picks).await?;
+    // With no pick, the window sends who a message that names nobody goes to: a typed name goes first.
+    let sent_to = match given {
+        false => chosen.first().cloned().or(body.agent),
+        true => body.agent,
+    };
     let id = chat.clone();
     let _ = db(&s, &t, "Send failed", move |conn| {
         gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
@@ -169,7 +174,7 @@ pub async fn send(
     let lines = crate::files::lines(&s, &t, &chat, &body.files, "Send failed").await?;
     let text = gathr::files::with_lines(&body.text, &lines);
     let target = replying(&s, &t, &chat, body.target).await?;
-    let (agent, others) = addressee(&s, &t, &chat, body.agent, chosen).await?;
+    let (agent, others) = addressee(&s, &t, &chat, sent_to, chosen).await?;
     let opened = match target.is_reply() {
         true => gathr::words::Opened::Reply,
         false => gathr::words::Opened::Picked,
@@ -259,28 +264,34 @@ async fn replying(
     }
 }
 
-/// The names picked in `text`, as kept: each fits the text and is a known agent's. Each picked agent
-/// gets the message (0028).
+/// The names picked in `text`, with each `@Name` typed there that the chat's `@` list offers (its team,
+/// and in a chat with no project every other agent) counted as picked: their agents in the order they
+/// stand, and the picks as kept, each fitting the text and a known agent's. Each gets the message (0028).
 async fn picked(
     s: &State,
     t: &Trace,
+    chat: &str,
     text: &str,
     picks: Vec<gathr::picks::Pick>,
-) -> Result<Option<String>, Fail> {
+) -> Result<(Vec<String>, Option<String>), Fail> {
     let refuse = |why: &str| fail(StatusCode::BAD_REQUEST, "Send failed", why, &t.0);
-    let agents: Vec<String> = picks.iter().map(|p| p.agent.clone()).collect();
-    let kept = gathr::picks::kept(text, picks).map_err(refuse)?;
+    let (id, words) = (chat.to_string(), text.to_string());
     let known = s.writer.call(move |conn| {
-        for agent in &agents {
-            if gathr::agents::get(conn, agent)?.is_none() {
-                return Ok(false);
+        for p in &picks {
+            if gathr::agents::get(conn, &p.agent)?.is_none() {
+                return Ok(None);
             }
         }
-        Ok::<_, gathr::Error>(true)
+        let mut offered = gathr::team::members(conn, &id)?;
+        offered.extend(gathr::handoffs::outsiders(conn, &id)?);
+        Ok::<_, gathr::Error>(Some(gathr::picks::typed(&words, picks, &offered)))
     });
     match known.await {
-        Some(Ok(true)) => Ok(kept),
-        Some(Ok(false)) => Err(refuse("Unknown agent picked")),
+        Some(Ok(Some(picks))) => {
+            let agents = picks.iter().map(|p| p.agent.clone()).collect();
+            Ok((agents, gathr::picks::kept(text, picks).map_err(refuse)?))
+        }
+        Some(Ok(None)) => Err(refuse("Unknown agent picked")),
         Some(Err(e)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",
