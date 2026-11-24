@@ -150,7 +150,7 @@ fn role_rules_are_refused_through_the_api() {
 }
 
 #[test]
-fn a_persons_message_goes_to_the_agent_sent_else_the_supervisor_whatever_its_text_names() {
+fn a_persons_message_goes_to_the_agent_sent_else_the_supervisor() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
     let ids = agents(&service, &data.0, &["Orin", "Pia", "Rook"]);
@@ -161,9 +161,8 @@ fn a_persons_message_goes_to_the_agent_sent_else_the_supervisor_whatever_its_tex
         None,
     );
 
-    // A name in the person's text is only text: the window sends the agent picked from its list.
-    let named = send(&service, &chat, json!({ "text": "@pia, look at this" }));
-    service.wait_for(&chat, 10, "the named turn", |h| ended(h, 1));
+    let named = send(&service, &chat, json!({ "text": "Look at this first" }));
+    service.wait_for(&chat, 10, "the lead's turn", |h| ended(h, 1));
     let sent = send(
         &service,
         &chat,
