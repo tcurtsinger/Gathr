@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type BackgroundChoice, type Failure } from '../api';
 import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
+import { engineName, useDownloading } from './Accounts';
 import { Page, Row } from './Row';
 import { useSettings } from './saved';
 
@@ -22,6 +23,7 @@ export function Background() {
     api.background().then(setListed, setFailure);
   }, []);
 
+  const fetching = useDownloading();
   const picked = saved?.background_model ?? null;
   const none = listed && !listed.auto && !picked;
   return (
@@ -30,7 +32,13 @@ export function Background() {
         <div className="settings-rows">
           <Row
             name={<label htmlFor="background-model">Model</label>}
-            line={none ? 'Sign in to an account that has one.' : 'It uses that account’s usage.'}
+            line={
+              !none
+                ? 'It uses that account’s usage.'
+                : fetching.length
+                  ? `Ready once ${fetching.map(engineName).join(' or ')} is installed.`
+                  : 'Sign in to an account that has one.'
+            }
             lineId="background-line"
           >
             <Dropdown

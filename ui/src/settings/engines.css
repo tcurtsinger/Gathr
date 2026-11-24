@@ -29,7 +29,7 @@
 }
 /* An account's state, Sign in or out, and More: fixed columns, so each state starts at the same x down the list
    whatever its engine's name or its button's word. Signed out in the same red as the Can't run mark. */
-.account-row:not([data-confirming]) .setting-control {
+.account-row:not([data-confirming]) .setting:not(.account-form) .setting-control {
   display: grid;
   grid-template-columns: 84px 86px auto;
   align-items: center;
@@ -48,27 +48,13 @@
   justify-content: flex-end;
 }
 /* Add or Rename, over the list. */
-.account-form {
-  display: grid;
-  gap: 10px;
-  margin: 8px 0 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--hair);
-  border-radius: 10px;
+/* Add or Rename: the account's own row, its name typed in place (the owner's pick 5A, 2026-11-24). */
+.account-form input {
+  width: 220px;
 }
-.account-form h5 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-.account-field {
-  display: grid;
-  gap: 6px;
-}
-.account-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.account-form .account-engine {
+  width: 128px;
+  min-width: 0;
 }
 .pathfield a {
   display: inline-block;

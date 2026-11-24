@@ -1,4 +1,4 @@
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Plus } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, downloading, type Engine, Failure } from '../api';
@@ -10,9 +10,19 @@ import './engines.css';
 
 /** Settings > Engines (settings-entry/v5): the accounts, then each engine's program once. */
 export function Engines() {
+  const [adding, setAdding] = useState(false);
   return (
-    <Page title="Engines" line="Accounts and engine versions.">
-      <Accounts />
+    <Page
+      title="Engines"
+      line="Accounts and engine versions."
+      action={
+        <Button type="button" variant="outline" disabled={adding} onClick={() => setAdding(true)}>
+          <Plus />
+          Add
+        </Button>
+      }
+    >
+      <Accounts adding={adding} onAdded={() => setAdding(false)} />
       <Group title="Versions" />
       <div className="settings-rows settings-top">
         {engines.map(([id, name]) => (

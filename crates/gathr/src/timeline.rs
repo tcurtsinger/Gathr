@@ -40,7 +40,8 @@ pub fn turns(conn: &Connection, chat: &str) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT t.id, t.status, t.why, t.trace_id, t.created_ts, t.ended_ts,
                 (SELECT substr(m.body, 1, 120) FROM messages m
-                 WHERE m.turn_id = t.id AND m.role = 'user' ORDER BY m.ts LIMIT 1)
+                 WHERE m.turn_id = t.id AND m.role = 'user' ORDER BY m.ts LIMIT 1),
+                t.agent_id
          FROM turns t WHERE t.chat_id = ?1 ORDER BY t.created_ts",
     )?;
     let turns = stmt.query_map([chat], |r| {
@@ -53,6 +54,7 @@ pub fn turns(conn: &Connection, chat: &str) -> Result<Value, Error> {
             "created": utc(r.get(4)?),
             "ended": r.get::<_, Option<i64>>(5)?.map(utc),
             "asked": r.get::<_, Option<String>>(6)?,
+            "agent": r.get::<_, Option<String>>(7)?,
             "events": events.remove(&id).unwrap_or_default(),
         }))
     })?;

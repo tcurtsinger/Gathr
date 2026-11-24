@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { Agent, Role } from '../api';
 import { Dropdown } from '../components/Dropdown';
 import { Face } from '../components/Face';
@@ -7,76 +8,71 @@ import type { Seat } from './Projects';
 import { Group, Row } from './Row';
 
 const MOST = 5;
-const roles: Role[] = ['supervisor', 'member'];
-const roleName: Record<Role, string> = {
-  supervisor: 'Lead',
-  member: 'Member',
-};
 
 interface Props {
   seats: Seat[];
   agents: Agent[];
   onChange: (seats: Seat[]) => void;
+  /** At the group's right in place of the rule: "Saved". */
+  status?: ReactNode;
 }
 
 /**
- * A project's default team (0028): one lead, up to five agents, never none. The lead changes only by
- * picking another, which makes the one before a Member; removing the lead makes the next one it; the last
- * agent can't be removed.
+ * A project's default team (0028): one lead, up to five agents, never none. The lead is picked above the list (the
+ * owner's pick 6B, 2026-11-24); removing the lead makes the next one it; the last agent can't be removed.
  */
-export function Team({ seats, agents, onChange }: Props) {
-  const name = (id: string) => agents.find((a) => a.id === id)?.name ?? 'An agent';
-  const setRole = (agent: string, role: Role) =>
+export function Team({ seats, agents, onChange, status }: Props) {
+  const agent = (id: string) => agents.find((a) => a.id === id) ?? { id, name: 'An agent' };
+  const lead = (seats.find((s) => s.role === 'supervisor') ?? seats[0])?.agent ?? '';
+  const setLead = (id: string) =>
     onChange(
-      seats.map((s) =>
-        s.agent === agent
-          ? { agent, role }
-          : role !== 'member' && s.role === role
-            ? { ...s, role: 'member' }
-            : s,
-      ),
+      seats.map((s) => ({ agent: s.agent, role: (s.agent === id ? 'supervisor' : 'member') as Role })),
     );
-  const remove = (agent: string) => {
-    const left = seats.filter((s) => s.agent !== agent);
-    const lead = left.some((s) => s.role === 'supervisor');
-    onChange(lead ? left : left.map((s, i) => (i === 0 ? { ...s, role: 'supervisor' } : s)));
+  const remove = (id: string) => {
+    const left = seats.filter((s) => s.agent !== id);
+    const led = left.some((s) => s.role === 'supervisor');
+    onChange(led ? left : left.map((s, i) => (i === 0 ? { ...s, role: 'supervisor' } : s)));
   };
-  const add = (agent: string) =>
-    onChange([...seats, { agent, role: seats.length === 0 ? 'supervisor' : 'member' }]);
+  const add = (id: string) =>
+    onChange([...seats, { agent: id, role: seats.length === 0 ? 'supervisor' : 'member' }]);
   const others = agents.filter((a) => !seats.some((s) => s.agent === a.id));
 
   return (
     <>
+      {seats.length > 0 && (
+        <div className="settings-rows">
+          <Row name={<span id="project-lead">Lead</span>}>
+            <Dropdown
+              aria-labelledby="project-lead"
+              className="project-lead"
+              value={lead}
+              onChange={setLead}
+              choices={seats.map((s) => ({
+                value: s.agent,
+                label: agent(s.agent).name,
+                icon: <Face agent={agent(s.agent)} size={16} />,
+              }))}
+            />
+          </Row>
+        </div>
+      )}
       <Group
         title="Default team"
-        right={<span className="settings-group-line">One lead, up to five agents.</span>}
+        right={
+          <span className="settings-group-line" role={status ? 'status' : undefined}>
+            {status ?? 'Up to five agents.'}
+          </span>
+        }
       />
       <div className="settings-rows settings-top">
-        {seats.map(({ agent, role }) => (
-          <Row
-            key={agent}
-            lead={
-              <Face
-                agent={agents.find((a) => a.id === agent) ?? { id: agent, name: name(agent) }}
-                size={24}
-              />
-            }
-            name={name(agent)}
-          >
-            <Dropdown
-              aria-label={`Role of ${name(agent)}`}
-              className="project-role"
-              disabled={role === 'supervisor'}
-              value={role}
-              onChange={(v) => setRole(agent, v as Role)}
-              choices={roles.map((r) => ({ value: r, label: roleName[r] }))}
-            />
+        {seats.map((s) => (
+          <Row key={s.agent} lead={<Face agent={agent(s.agent)} size={24} />} name={agent(s.agent).name}>
             <IconButton
               type="button"
-              aria-label={`Remove ${name(agent)}`}
+              aria-label={`Remove ${agent(s.agent).name}`}
               className="settings-more"
               disabled={seats.length === 1}
-              onClick={() => remove(agent)}
+              onClick={() => remove(s.agent)}
             >
               <X />
             </IconButton>
