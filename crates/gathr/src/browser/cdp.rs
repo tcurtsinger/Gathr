@@ -98,41 +98,48 @@ impl Cdp {
         (Arc::new(cdp), heard)
     }
 
-    /// Calls `method`, on the page's `session` when given, and waits for its answer.
-    pub async fn call(
+    /// Calls `method`, on the page's `session` when given: it is queued now, in the order of the calls,
+    /// and the future waits for its answer.
+    pub fn call(
         &self,
         method: &str,
         params: Value,
         session: Option<&str>,
-    ) -> Result<Value, String> {
+    ) -> impl Future<Output = Result<Value, String>> + Send + use<> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        let mut message = json!({ "id": id, "method": method, "params": params });
-        if let Some(session) = session {
-            message["sessionId"] = json!(session);
-        }
         let (answer, answered) = oneshot::channel();
         if let Ok(mut waiting) = self.waiting.lock() {
             waiting.insert(id, answer);
         }
-        let answer = match self.out.send(message.to_string().into_bytes()) {
-            Ok(()) => tokio::time::timeout(ANSWER, answered).await,
-            Err(_) => Ok(Ok(Err("the browser closed".into()))),
-        };
-        if let Ok(mut waiting) = self.waiting.lock() {
-            waiting.remove(&id);
-        }
-        match answer {
-            Ok(Ok(answer)) => answer,
-            Ok(Err(_)) => Err("the browser closed".into()),
-            Err(_) => Err(format!("{method} wasn't answered")),
+        let sent = self.out.send(message(id, method, params, session)).is_ok();
+        let (waiting, method) = (self.waiting.clone(), method.to_string());
+        async move {
+            let answer = match sent {
+                true => tokio::time::timeout(ANSWER, answered).await,
+                false => Ok(Ok(Err("the browser closed".into()))),
+            };
+            if let Ok(mut waiting) = waiting.lock() {
+                waiting.remove(&id);
+            }
+            match answer {
+                Ok(Ok(answer)) => answer,
+                Ok(Err(_)) => Err("the browser closed".into()),
+                Err(_) => Err(format!("{method} wasn't answered")),
+            }
         }
     }
 
-    /// Calls `method` without waiting for its answer.
-    pub fn send(self: &Arc<Self>, method: &'static str, params: Value, session: Option<&str>) {
-        let (cdp, session) = (self.clone(), session.map(String::from));
-        tokio::spawn(async move {
-            let _ = cdp.call(method, params, session.as_deref()).await;
-        });
+    /// Calls `method` without waiting for its answer: queued now, as `call` is.
+    pub fn send(&self, method: &str, params: Value, session: Option<&str>) {
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        let _ = self.out.send(message(id, method, params, session));
     }
+}
+
+fn message(id: u64, method: &str, params: Value, session: Option<&str>) -> Vec<u8> {
+    let mut message = json!({ "id": id, "method": method, "params": params });
+    if let Some(session) = session {
+        message["sessionId"] = json!(session);
+    }
+    message.to_string().into_bytes()
 }

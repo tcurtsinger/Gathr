@@ -96,6 +96,8 @@ pub(crate) struct Actor {
     cursor: String,
     /// The newest place the mouse moved to over a page, by its id, not yet asked about.
     pointing: Option<(String, f64, f64)>,
+    /// A mouse button is held, as the person's last mouse event said: no pointer is asked for meanwhile.
+    held: bool,
     agent: String,
     acked: Instant,
 }
@@ -128,6 +130,7 @@ impl Actor {
             line: None,
             cursor: ARROW.into(),
             pointing: None,
+            held: false,
             agent: String::new(),
             acked: Instant::now(),
         };
@@ -212,7 +215,8 @@ impl Actor {
                     page.asking = false;
                 }
                 let shown = self.shown_page();
-                if shown.is_some_and(|p| p.id == id && p.dialog.is_none())
+                if !self.held
+                    && shown.is_some_and(|p| p.id == id && p.dialog.is_none())
                     && let Some(cursor) = cursor
                 {
                     self.point(&cursor);
@@ -276,6 +280,9 @@ impl Actor {
             self.point(ARROW);
             self.fit();
             return self.publish();
+        }
+        if kind == "mouse" {
+            self.held = message["buttons"].as_u64().unwrap_or_default() != 0;
         }
         let (Some(cdp), Some(page)) = (self.cdp(), self.shown_page()) else {
             return;
@@ -379,7 +386,7 @@ impl Actor {
         else {
             return;
         };
-        if page.asking || page.dialog.is_some() {
+        if self.held || page.asking || page.dialog.is_some() {
             return;
         }
         let Some((id, x, y)) = self.pointing.take().filter(|(id, ..)| *id == page.id) else {
@@ -389,8 +396,9 @@ impl Actor {
         let (session, said) = (page.session.clone(), self.said.clone());
         let expression = format!("{}({x}, {y})", CURSOR.trim_end());
         let read = json!({ "expression": expression, "returnByValue": true });
+        let read = cdp.call("Runtime.evaluate", read, Some(&session));
         tokio::spawn(async move {
-            let read = cdp.call("Runtime.evaluate", read, Some(&session)).await;
+            let read = read.await;
             let cursor = read
                 .ok()
                 .and_then(|r| r["result"]["value"].as_str().map(String::from));
@@ -453,10 +461,14 @@ impl Actor {
         let released = params["type"] == "mouseReleased" || params["type"] == "keyUp";
         let selects = kind == "mouse" && released || kind == "key" && released && modifiers != 0;
         let changes = released || kind == "paste";
-        let moved = (params["type"] == "mouseMoved").then(|| (num("x"), num("y")));
+        // The pointer is asked for only with no button held: a drag keeps the one it started with.
+        let hovered = params["type"] == "mouseMoved" && params["buttons"] == 0;
+        let moved = hovered.then(|| (num("x"), num("y")));
+        // Queued here, so the page gets the person's input in the order it came.
+        let sent = cdp.call(method, params, Some(&session));
         let (cdp, out, said) = (cdp.clone(), self.out.clone(), self.said.clone());
         tokio::spawn(async move {
-            let _ = cdp.call(method, params, Some(&session)).await;
+            let _ = sent.await;
             if let Some((x, y)) = moved {
                 let _ = said.send(Cmd::Moved(id.clone(), x, y));
             }
@@ -618,35 +630,39 @@ impl Actor {
             self.point(ARROW);
         }
         self.pages.push(page);
-        let (cdp, agent) = (cdp.clone(), self.agent.clone());
-        // Sent at once, in this order, never waiting on one: a page opened by another one answers
-        // nothing until it runs.
+        // Sent at once, in this order and before the picture starts, never waiting on one: a page opened
+        // by another one answers nothing until it runs.
+        let on = Some(session.as_str());
+        let sized = match size {
+            Some(size) => ("Emulation.setDeviceMetricsOverride", metrics(size)),
+            None => ("Emulation.clearDeviceMetricsOverride", json!({})),
+        };
+        let set_up = [
+            cdp.call("Page.enable", json!({}), on),
+            cdp.call(
+                "Page.setInterceptFileChooserDialog",
+                json!({ "enabled": true }),
+                on,
+            ),
+            cdp.call(
+                "Emulation.setFocusEmulationEnabled",
+                json!({ "enabled": true }),
+                on,
+            ),
+            cdp.call(
+                "Emulation.setUserAgentOverride",
+                json!({ "userAgent": self.agent }),
+                on,
+            ),
+            cdp.call(sized.0, sized.1, on),
+            cdp.call("Runtime.runIfWaitingForDebugger", json!({}), on),
+        ];
+        let cdp = cdp.clone();
         tokio::spawn(async move {
+            for answer in set_up {
+                let _ = answer.await;
+            }
             let on = Some(session.as_str());
-            let sized = match size {
-                Some(size) => ("Emulation.setDeviceMetricsOverride", metrics(size)),
-                None => ("Emulation.clearDeviceMetricsOverride", json!({})),
-            };
-            let _ = tokio::join!(
-                cdp.call("Page.enable", json!({}), on),
-                cdp.call(
-                    "Page.setInterceptFileChooserDialog",
-                    json!({ "enabled": true }),
-                    on
-                ),
-                cdp.call(
-                    "Emulation.setFocusEmulationEnabled",
-                    json!({ "enabled": true }),
-                    on
-                ),
-                cdp.call(
-                    "Emulation.setUserAgentOverride",
-                    json!({ "userAgent": agent }),
-                    on
-                ),
-                cdp.call(sized.0, sized.1, on),
-                cdp.call("Runtime.runIfWaitingForDebugger", json!({}), on),
-            );
             if let Some(url) = opening.filter(|url| url != BLANK) {
                 let _ = cdp.call("Page.navigate", json!({ "url": url }), on).await;
             }
