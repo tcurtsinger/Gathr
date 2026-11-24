@@ -141,6 +141,9 @@ pub fn flags(program: &Path, profile: &Path) -> Vec<String> {
         "--disable-sync".into(),
         // Edge's own sign-in to the browser, which a new profile otherwise does with the PC's account.
         "--disable-features=msImplicitSignin,msEnableWebToBrowserSignIn,msSeamlessWebToBrowserSignIn".into(),
+        // The pipe alone makes `navigator.webdriver` true, and a sign-in page may then refuse the
+        // person: it is their own browser, used by them.
+        "--disable-blink-features=AutomationControlled".into(),
         format!("--user-data-dir={}", profile.display()),
         "--remote-debugging-pipe".into(),
         "--no-startup-window".into(),
