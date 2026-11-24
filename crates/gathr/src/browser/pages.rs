@@ -14,8 +14,8 @@ use super::cdp::{Cdp, Heard};
 use super::{Cmd, Live, Watchers};
 use crate::writer::Writer;
 
-/// The shortest time between two frames of the live picture: at most about 30 a second.
-const FRAME: Duration = Duration::from_millis(33);
+/// The shortest time between two frames of the live picture: at most about 60 a second.
+const FRAME: Duration = Duration::from_millis(16);
 const DOWNLOADS: &str = "Downloads aren't built yet";
 const UPLOADS: &str = "Uploads aren't built yet";
 const BLANK: &str = "about:blank";
@@ -554,7 +554,7 @@ impl Actor {
                 {
                     let _ = self.out.send(Out::Frame(frame.into()));
                 }
-                // The next frame comes once this one is answered: at most about 30 a second.
+                // The next frame comes once this one is answered: at most about 60 a second.
                 let now = Instant::now();
                 let at = (self.acked + FRAME).max(now);
                 self.acked = at;
