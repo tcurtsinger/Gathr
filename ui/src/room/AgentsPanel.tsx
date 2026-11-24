@@ -107,8 +107,9 @@ function fillOf(member: Member) {
 }
 
 /**
- * One agent: its face and name, what it is doing, the bar "96K of 500K", and the commands it left running. Signed out
- * comes first, then a compaction under way or Compact once nearly full, then Working; idle says nothing.
+ * One agent: its face and name, what it is doing, the bar "96K of 500K" once it has used any, and the commands it left
+ * running. Signed out comes first, then a compaction under way or Compact once nearly full, then Working, then New
+ * before it has used any; idle says nothing.
  */
 function Block(props: {
   chat: string;
@@ -154,16 +155,20 @@ function Block(props: {
           </>
         ) : used !== null && (compacting || fill >= NEAR) ? (
           <Compact chat={chat} agent={member.agent} turns={props.turns} onAsked={props.onAsked} />
+        ) : working ? (
+          <span className="agents-word">Working</span>
         ) : (
-          working && <span className="agents-word">Working</span>
+          used === null && <span className="agents-word">New</span>
         )}
       </div>
-      <div className="agents-meter">
-        <span className="agents-track" data-near={fill >= NEAR || undefined}>
-          {fill > 0 && <i style={{ width: `${fill * 100}%` }} />}
-        </span>
-        <span>{used === null ? 'New' : point ? `${tokens(used)} of ${tokens(point)}` : tokens(used)}</span>
-      </div>
+      {used !== null && (
+        <div className="agents-meter">
+          <span className="agents-track" data-near={fill >= NEAR || undefined}>
+            {fill > 0 && <i style={{ width: `${fill * 100}%` }} />}
+          </span>
+          <span>{point ? `${tokens(used)} of ${tokens(point)}` : tokens(used)}</span>
+        </div>
+      )}
       {running.length > 0 && (
         <ul className="agents-commands">
           {running.map((b) => (
