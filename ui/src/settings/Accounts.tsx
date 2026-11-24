@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { type Account, api, type Failure } from '../api';
+import { type Account, api, downloading, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { useCard } from '../components/Corner';
 import { DialogMenuContent } from '../components/DialogMenu';
@@ -25,6 +25,33 @@ export const engines: [string, string][] = [
 ];
 export const engineName = (engine: string) => engines.find(([id]) => id === engine)?.[1] ?? engine;
 
+/** The engines whose program is still downloading: none can sign in or list models until it is there. Looked at
+ * again every few seconds while one is, as a download sends no live event. */
+export function useDownloading() {
+  const [list, setList] = useState<string[]>([]);
+  useEffect(() => {
+    let again: ReturnType<typeof setTimeout> | undefined;
+    let gone = false;
+    const look = () =>
+      Promise.all(
+        engines.map(([id]) => api.engine(id).then((e) => (downloading(e.why_not_found) ? [id] : []))),
+      )
+        .then((found) => {
+          if (gone) return;
+          const now = found.flat();
+          setList((before) => (before.join() === now.join() ? before : now));
+          if (now.length) again = setTimeout(look, 3000);
+        })
+        .catch(() => {});
+    look();
+    return () => {
+      gone = true;
+      clearTimeout(again);
+    };
+  }, []);
+  return list;
+}
+
 const said: Record<string, string> = {
   signed_in: 'Signed in',
   signed_out: 'Signed out',
@@ -32,15 +59,15 @@ const said: Record<string, string> = {
   unknown: 'Checking',
 };
 
-/** Settings > Engines' accounts (settings-entry/v5): each named, on one engine, signed in on its own. */
-export function Accounts() {
+/** Settings > Engines' accounts (settings-entry/v5): each named, on one engine, signed in on its own. `adding`: the
+ * page's Add was pressed, and a row to name the new account shows under the list. */
+export function Accounts({ adding, onAdded }: { adding: boolean; onAdded: () => void }) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
-  /** The form, open to add (no account) or to rename one. */
-  const [form, setForm] = useState<{ account?: Account; opener: HTMLElement | null } | null>(null);
-  /** Gets focus once an account is removed, as its row goes. */
-  const addButton = useRef<HTMLButtonElement>(null);
+  /** The account being renamed, in its own row. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const fetching = useDownloading();
 
   const load = useCallback(() => api.accounts().then(setAccounts, setFailure), []);
   useEffect(() => {
@@ -50,47 +77,31 @@ export function Accounts() {
     });
   }, [load]);
 
-  const open = (opener: HTMLElement | null, account?: Account) => {
-    setFailure(null);
-    setForm({ account, opener });
-  };
-  const close = () => {
-    form?.opener?.focus();
-    setForm(null);
-  };
-
   return (
     <>
-      <Group
-        title="Accounts"
-        right={
-          <Button type="button" variant="outline" ref={addButton} onClick={(e) => open(e.currentTarget)}>
-            <Plus />
-            Add
-          </Button>
-        }
-      />
-      {form && (
-        // A new form for each account, so one account's draft never carries to another.
-        <AccountForm
-          key={form.account?.id ?? ''}
-          account={form.account}
-          onClose={close}
-          onFailure={setFailure}
-        />
-      )}
-      {accounts?.length === 0 && <p className="settings-empty">No accounts</p>}
-      {accounts && accounts.length > 0 && (
+      <Group title="Accounts" />
+      {accounts?.length === 0 && !adding && <p className="settings-empty">No accounts</p>}
+      {((accounts && accounts.length > 0) || adding) && (
         <ul className="settings-rows settings-top">
-          {accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              onRename={(opener) => open(opener, account)}
-              onRemoved={() => addButton.current?.focus()}
-              onFailure={setFailure}
-            />
-          ))}
+          {(accounts ?? []).map((account) =>
+            renaming === account.id ? (
+              <AccountForm
+                key={account.id}
+                account={account}
+                onClose={() => setRenaming(null)}
+                onFailure={setFailure}
+              />
+            ) : (
+              <AccountRow
+                key={account.id}
+                account={account}
+                engineWaits={fetching.includes(account.engine)}
+                onRename={() => setRenaming(account.id)}
+                onFailure={setFailure}
+              />
+            ),
+          )}
+          {adding && <AccountForm onClose={onAdded} onFailure={setFailure} />}
         </ul>
       )}
     </>
@@ -103,12 +114,12 @@ interface FormProps {
   onFailure: (f: Failure) => void;
 }
 
-/** Add asks for the engine and a name, then signs in; Rename keeps the engine. */
+/** One row to name an account (the owner's pick 5A, 2026-11-24): Add asks for the engine too, then signs in; Rename
+ * keeps the engine. */
 function AccountForm({ account, onClose, onFailure }: FormProps) {
   const [engine, setEngine] = useState(account?.engine ?? engines[0][0]);
   const [name, setName] = useState(account?.name ?? '');
   const [busy, setBusy] = useState(false);
-  const title = useId();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,54 +139,63 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
   };
 
   return (
-    <form className="account-form" aria-labelledby={title} onSubmit={submit}>
-      <h5 id={title}>{account ? 'Rename account' : 'Add account'}</h5>
-      <div className="account-field">
-        <label htmlFor={`${title}engine`}>Engine</label>
-        <Dropdown
-          id={`${title}engine`}
-          value={engine}
-          disabled={!!account}
-          onChange={setEngine}
-          choices={engines.map(([id, label]) => ({
-            value: id,
-            label,
-            icon: <EngineLogo engine={id} className="engine-choice-logo" />,
-          }))}
-        />
-      </div>
-      <label className="account-field">
-        Name
-        <input
-          value={name}
-          maxLength={80}
-          autoComplete="off"
-          spellCheck={false}
-          // biome-ignore lint/a11y/noAutofocus: the form opens from Add or Rename, to type the name
-          autoFocus
-          onChange={(e) => setName(e.target.value)}
-        />
-      </label>
-      <div className="account-form-actions">
-        <Button type="button" variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={busy || !name.trim()}>
-          {account ? 'Save' : 'Sign in'}
-        </Button>
-      </div>
-    </form>
+    <li className="account-row">
+      <form
+        className="setting account-form"
+        aria-label={account ? `Rename ${account.name}` : 'Add account'}
+        onSubmit={submit}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <div className="setting-words">
+          <EngineLogo engine={engine} className="engine-logo" />
+          <input
+            aria-label="Name"
+            placeholder="Account name"
+            value={name}
+            maxLength={80}
+            autoComplete="off"
+            spellCheck={false}
+            // biome-ignore lint/a11y/noAutofocus: the row opens from Add or Rename, to type the name
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="setting-control">
+          {!account && (
+            <Dropdown
+              aria-label="Engine"
+              className="account-engine"
+              value={engine}
+              onChange={setEngine}
+              choices={engines.map(([id, label]) => ({ value: id, label }))}
+            />
+          )}
+          <Button type="submit" disabled={busy || !name.trim()}>
+            {account ? 'Save' : 'Add'}
+          </Button>
+          <IconButton type="button" aria-label="Cancel" className="settings-more" onClick={onClose}>
+            <X />
+          </IconButton>
+        </div>
+      </form>
+    </li>
   );
 }
 
 interface RowProps {
   account: Account;
-  onRename: (opener: HTMLElement | null) => void;
-  onRemoved: () => void;
+  /** Its engine's program is still downloading: a signed-out account waits for it to sign in. */
+  engineWaits: boolean;
+  onRename: () => void;
   onFailure: (f: Failure) => void;
 }
 
-function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
+function AccountRow({ account, engineWaits, onRename, onFailure }: RowProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   /** Focus goes back to the menu's button when Remove's question is cancelled. */
@@ -184,7 +204,8 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
   const id = account.id;
   const waiting = account.sign_in?.state === 'waiting' ? account.sign_in : null;
   const failed = account.sign_in?.state === 'failed' ? account.sign_in : null;
-  const state = busy ?? (waiting ? 'Signing in' : (said[account.login] ?? account.login));
+  const held = engineWaits && account.login === 'signed_out' && !waiting;
+  const state = busy ?? (waiting ? 'Signing in' : held ? 'Waiting' : (said[account.login] ?? account.login));
 
   const act = (doing: string, call: Promise<unknown>) => {
     setBusy(doing);
@@ -204,6 +225,7 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
       type="button"
       variant="outline"
       aria-describedby={name}
+      disabled={held}
       onClick={() => act('Signing in', api.signIn(id))}
     >
       Sign in
@@ -243,13 +265,13 @@ function AccountRow({ account, onRename, onRemoved, onFailure }: RowProps) {
             }}
             onRemove={() => {
               setConfirming(false);
-              act('Removing', api.removeAccount(id).then(onRemoved));
+              act('Removing', api.removeAccount(id));
             }}
           />
         ) : (
           <>
             {/* Its own column, so the states line up down the list whatever the engine's name. */}
-            <span className="account-state" data-state={busy || waiting ? 'busy' : account.login}>
+            <span className="account-state" data-state={busy || waiting || held ? 'busy' : account.login}>
               {state}
             </span>
             <span className="account-action">{!busy && action}</span>
@@ -279,7 +301,7 @@ function AccountMenu({
   busy: boolean;
   /** Set when Remove's question was cancelled: its button takes focus back as it shows again. */
   focus: React.RefObject<boolean>;
-  onRename: (opener: HTMLElement | null) => void;
+  onRename: () => void;
   onRemove: () => void;
 }) {
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -317,7 +339,7 @@ function AccountMenu({
           picked.current = null;
         }}
       >
-        <DropdownMenuItem onSelect={pick(() => onRename(trigger.current))}>
+        <DropdownMenuItem onSelect={pick(onRename)}>
           <Pencil />
           Rename
         </DropdownMenuItem>

@@ -10,13 +10,15 @@ interface Props {
   /** The system picker's title. */
   title: string;
   onChange: (folder: string) => void;
+  /** A folder settled on: picked, or typed and left (Enter or leaving the field). */
+  onCommit?: (folder: string) => void;
 }
 
 /**
  * A project's folder: in the desktop window a field that opens the system's folder picker, showing the folder
  * picked; in a browser, or when the picker fails, a field to type the path.
  */
-export function FolderField({ id, value, title, onChange }: Props) {
+export function FolderField({ id, value, title, onChange, onCommit }: Props) {
   const [typing, setTyping] = useState(() => !desktop());
   const picking = useRef(false);
 
@@ -27,6 +29,8 @@ export function FolderField({ id, value, title, onChange }: Props) {
         className="project-folder"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => onCommit?.(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && onCommit?.(e.currentTarget.value)}
         placeholder="Folder path"
         required
         spellCheck={false}
@@ -41,7 +45,11 @@ export function FolderField({ id, value, title, onChange }: Props) {
     picking.current = true;
     pickFolder(title, value || null)
       .then(
-        (picked) => picked && onChange(picked),
+        (picked) => {
+          if (!picked) return;
+          onChange(picked);
+          onCommit?.(picked);
+        },
         (e) => {
           report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });
           setTyping(true);

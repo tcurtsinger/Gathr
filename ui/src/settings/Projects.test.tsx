@@ -1,6 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Corner } from '../components/Corner';
 import '../theme.css';
@@ -21,7 +21,7 @@ const agent = (id: string, name: string): Agent => ({
   eyes: null,
   colour: null,
 });
-const project: Project = {
+const start: Project = {
   id: 'p',
   name: 'Made-up project',
   folder: 'X:\\made-up\\repo',
@@ -30,6 +30,7 @@ const project: Project = {
     { agent: 'b', name: 'Made-up Member', role: 'member' },
   ],
 };
+let project = { ...start };
 const sent: { method: string; path: string; body: unknown }[] = [];
 
 /** The service: its projects and agents, and an answer to each PATCH. */
@@ -54,9 +55,10 @@ function service(patch: (body: Record<string, unknown>) => Response) {
 afterEach(() => {
   vi.unstubAllGlobals();
   sent.length = 0;
+  project = { ...start };
 });
 
-test('a refused save says why with its reference, and keeps the draft', async () => {
+test('a refused save says why with its reference, and puts the folder back', async () => {
   const refused = { error: 'Save failed', why: 'made-up folder refusal', ref: 'made-up-ref' };
   service(() => new Response(JSON.stringify(refused), { status: 400 }));
   const opened: string[] = [];
@@ -68,44 +70,53 @@ test('a refused save says why with its reference, and keeps the draft', async ()
   );
 
   await screen.getByRole('textbox', { name: 'Folder' }).fill('X:\\made-up\\elsewhere');
-  await screen.getByRole('button', { name: 'Save' }).click();
+  await userEvent.keyboard('{Enter}');
 
   await expect.element(screen.getByText('made-up folder refusal')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
-  await expect.element(screen.getByRole('textbox', { name: 'Folder' })).toHaveValue('X:\\made-up\\elsewhere');
+  await expect.element(screen.getByRole('textbox', { name: 'Folder' })).toHaveValue('X:\\made-up\\repo');
   expect(sent.map((s) => s.body)).toEqual([{ folder: 'X:\\made-up\\elsewhere' }]);
 });
 
-test('the team keeps one lead and at least one agent; a new lead makes the one before a Member', async () => {
-  service((body) => new Response(JSON.stringify({ ...project, ...body, members: project.members })));
+test('each team change saves at once; removing the lead makes the next one lead, and the last agent stays', async () => {
+  const names: Record<string, string> = { a: 'Made-up Lead', b: 'Made-up Member', c: 'Made-up Third' };
+  service((body) => {
+    const members = (body.members as { agent: string; role: string }[]).map((m) => ({
+      ...m,
+      name: names[m.agent],
+    }));
+    project.members = members as Project['members'];
+    return new Response(JSON.stringify({ ...project, members }));
+  });
   const screen = await render(<Projects start="p" onAdd={() => {}} />);
-  const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
+  const lead = screen.getByRole('combobox', { name: 'Lead' });
   const remove = (name: string) => screen.getByRole('button', { name: `Remove ${name}` });
-  const pick = async (field: ReturnType<typeof role>, choice: string) => {
+  const pick = async (field: ReturnType<typeof screen.getByRole>, choice: string) => {
     await field.click();
     await page.getByRole('option', { name: choice, exact: true }).click();
   };
 
-  // The lead isn't demoted directly: another is picked in its place.
-  await expect.element(role('Made-up Lead')).toBeDisabled();
-  await pick(role('Made-up Member'), 'Lead');
-  await expect.element(role('Made-up Lead')).toHaveTextContent('Member');
-  await expect.element(role('Made-up Member')).toBeDisabled();
-
-  // Removing the lead makes the next agent it; the last agent stays.
-  await pick(screen.getByRole('combobox', { name: 'Add agent' }), 'Made-up Third');
-  await remove('Made-up Member').click();
-  await expect.element(role('Made-up Lead')).toHaveTextContent('Lead');
-  await remove('Made-up Third').click();
-  await expect.element(remove('Made-up Lead')).toBeDisabled();
-
-  await screen.getByRole('button', { name: 'Save' }).click();
+  await expect.element(lead).toHaveTextContent('Made-up Lead');
+  await pick(lead, 'Made-up Member');
+  await expect.element(lead).toHaveTextContent('Made-up Member');
   await expect.element(screen.getByRole('status')).toHaveTextContent('Saved');
-  expect(sent.map((s) => s.body)).toEqual([{ members: [{ agent: 'a', role: 'supervisor' }] }]);
+
+  await remove('Made-up Member').click();
+  await expect.element(lead).toHaveTextContent('Made-up Lead');
+  await expect.element(remove('Made-up Lead')).toBeDisabled();
+  expect(sent.map((s) => s.body)).toEqual([
+    {
+      members: [
+        { agent: 'a', role: 'member' },
+        { agent: 'b', role: 'supervisor' },
+      ],
+    },
+    { members: [{ agent: 'a', role: 'supervisor' }] },
+  ]);
 });
 
-test('Delete asks with what the service counts, then deletes the project and shows the list', async () => {
+test('Delete asks in place with what the service counts, then deletes the project and shows the list', async () => {
   let projects = [project, { ...project, id: 'q', name: 'Made-up other' }];
   const deleted: string[] = [];
   const answer = (body: unknown) => new Response(JSON.stringify(body));
@@ -122,11 +133,10 @@ test('Delete asks with what the service counts, then deletes the project and sho
   });
   const screen = await render(<Projects start="p" onAdd={() => {}} />);
   await screen.getByRole('button', { name: 'Delete' }).click();
-  const confirm = screen.getByRole('dialog', { name: 'Delete Made-up project?' });
+  const confirm = screen.getByRole('group').filter({ hasText: 'Delete Made-up project?' });
   await expect.element(confirm.getByText('4 chats will be deleted. Files are kept.')).toBeVisible();
   await confirm.getByRole('button', { name: 'Delete' }).click();
 
-  await expect.element(confirm).not.toBeInTheDocument();
   await expect.element(screen.getByText('Made-up other')).toBeVisible();
   await expect.element(screen.getByText('Made-up project')).not.toBeInTheDocument();
   expect(deleted).toEqual(['/api/projects/p']);

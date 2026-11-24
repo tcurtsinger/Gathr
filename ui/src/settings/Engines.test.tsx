@@ -91,7 +91,6 @@ test('Remove asks first: Escape keeps the account and Settings open, Remove dele
   await remove();
   await question.getByRole('button', { name: 'Remove' }).click();
   await expect.poll(() => removed).toEqual(['DELETE /api/accounts/b']);
-  await expect.element(screen.getByRole('button', { name: 'Add' })).toHaveFocus();
 });
 
 test('a check that takes several looks ends as failed, with Check back and no Up to date', async () => {

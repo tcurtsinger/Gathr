@@ -1,8 +1,9 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
+import { api, type Chat, type Failure, type Named, type TurnEvent, type TurnTimeline } from '../api';
 import { useCard } from '../components/Corner';
 import { Dropdown } from '../components/Dropdown';
+import { Face } from '../components/Face';
 import { Page } from './Row';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
@@ -50,7 +51,11 @@ function Reference({ reference }: { reference: string }) {
   );
 }
 
-function Turns({ chat, turn }: Omit<Props, 'reference'>) {
+function Turns({ chat: open, turn }: Omit<Props, 'reference'>) {
+  const [chats, setChats] = useState<Chat[]>([]);
+  // The chat Settings opened over, or another picked here.
+  const [chat, setChat] = useState(open);
+  const [agents, setAgents] = useState<Named[]>([]);
   const [list, setList] = useState<TurnTimeline[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
@@ -59,20 +64,30 @@ function Turns({ chat, turn }: Omit<Props, 'reference'>) {
   const [picked, setPicked] = useState<string | undefined>(turn);
 
   useEffect(() => {
+    api.chats().then((c) => {
+      setChats(c);
+      setChat((now) => now ?? c[0]?.id);
+    }, setFailure);
+    api.agents().then((a) => setAgents([...a.agents, ...a.removed]), setFailure);
+  }, []);
+
+  useEffect(() => {
     if (!chat) return;
+    setList(null);
     api.turns(chat).then((t) => {
       setList(t);
-      setPicked((p) => p ?? t.at(-1)?.id);
+      setPicked((p) => (p && t.some((x) => x.id === p) ? p : t.at(-1)?.id));
     }, setFailure);
   }, [chat]);
 
   // Opening at a turn shows it, whatever the filters were before (DESIGN.md).
   useEffect(() => {
     if (!turn) return;
+    setChat(open);
     setPicked(turn);
     setFilter('All');
     setFind('');
-  }, [turn]);
+  }, [turn, open]);
 
   const shown = useMemo(() => {
     const q = find.trim().toLowerCase();
@@ -81,13 +96,31 @@ function Turns({ chat, turn }: Omit<Props, 'reference'>) {
       .filter((t) => !q || t.ref.startsWith(q) || String(t.n) === q || t.asked?.toLowerCase().includes(q))
       .reverse();
   }, [list, filter, find]);
-  const current = list?.find((t) => t.id === picked);
+  // A turn the filters hide isn't shown beside a list it isn't in.
+  const current = shown.find((t) => t.id === picked);
+  const who = (id: string | null) => agents.find((a) => a.id === id);
+  const count = list
+    ? shown.length === list.length
+      ? `${list.length} turn${list.length === 1 ? '' : 's'}`
+      : `${shown.length} of ${list.length} turns`
+    : '';
 
-  if (!chat) return <Page wide title="Turns" line="No chat open" />;
   return (
-    <Page wide title="Turns" line="In this chat, step by step.">
+    <Page wide title="Turns" line="Each turn, step by step.">
       <div className="toolbar">
-        <label htmlFor="diagnostics-filter">Turns</label>
+        <label htmlFor="diagnostics-chat">Chat</label>
+        <Dropdown
+          id="diagnostics-chat"
+          className="turns-chat"
+          value={chat ?? ''}
+          placeholder="No chats"
+          onChange={(c) => {
+            setChat(c);
+            setPicked(undefined);
+          }}
+          choices={chats.map((c) => ({ value: c.id, label: c.title }))}
+        />
+        <label htmlFor="diagnostics-filter">Show</label>
         <Dropdown
           id="diagnostics-filter"
           value={filter}
@@ -98,38 +131,52 @@ function Turns({ chat, turn }: Omit<Props, 'reference'>) {
           Find{' '}
           <input value={find} placeholder="Turn or reference" onChange={(e) => setFind(e.target.value)} />
         </label>
-        {list && <span className="muted">{list.length === 1 ? '1 turn' : `${list.length} turns`}</span>}
+        <span className="muted">{count}</span>
       </div>
       {list?.length === 0 && <p className="settings-empty">No turns yet</p>}
       {list && list.length > 0 && (
         <div className="split">
           <div className="turnlist">
-            {shown.map((t) => (
-              <button
-                type="button"
-                key={t.id}
-                className="turnpick"
-                aria-pressed={t.id === picked}
-                onClick={() => setPicked(t.id)}
-              >
-                Turn {t.n}: <b data-status={t.status}>{said(t.status)}</b>
-                <span>{t.asked}</span>
-                <span>{facts(t).summary}</span>
-              </button>
-            ))}
+            {shown.length === 0 && <p className="settings-empty">No turns match</p>}
+            {shown.map((t) => {
+              const agent = who(t.agent);
+              return (
+                <button
+                  type="button"
+                  key={t.id}
+                  className="turnpick"
+                  aria-pressed={t.id === picked}
+                  onClick={() => setPicked(t.id)}
+                >
+                  {agent && <Face agent={agent} size={16} />}
+                  <span className="turnpick-words">
+                    <span className="turnpick-head">
+                      Turn {t.n}
+                      {agent && ` · ${agent.name}`} · <b data-status={t.status}>{said(t.status)}</b>
+                    </span>
+                    {t.asked && <span>{t.asked}</span>}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          {current && <Timeline turn={current} />}
+          {current && <Timeline turn={current} agent={who(current.agent)} />}
         </div>
       )}
     </Page>
   );
 }
 
-function Timeline({ turn }: { turn: TurnTimeline }) {
+function Timeline({ turn, agent }: { turn: TurnTimeline; agent?: Named }) {
   const f = facts(turn);
   return (
     <div className="trace">
-      <h4>Turn {turn.n}</h4>
+      <h4>
+        {agent && <Face agent={agent} size={16} />}
+        Turn {turn.n}
+        {agent && ` · ${agent.name}`}
+      </h4>
+      {turn.status === 'failed' && turn.why && <p className="turn-why">{turn.why}</p>}
       <dl className="facts">
         <div>
           <dt>Ended</dt>
@@ -162,7 +209,6 @@ function Timeline({ turn }: { turn: TurnTimeline }) {
           </div>
         )}
       </dl>
-      {turn.status === 'failed' && turn.why && <p>{turn.why}</p>}
       <Steps events={turn.events} />
     </div>
   );

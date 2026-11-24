@@ -39,7 +39,9 @@
   border-right: 1px solid var(--hair);
 }
 .turnpick {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   width: 100%;
   min-height: 0;
   margin-bottom: 2px;
@@ -57,7 +59,13 @@
 .turnpick b[data-status="failed"] {
   color: var(--danger);
 }
-.turnpick span {
+.turnpick > .face {
+  margin-top: 2px;
+}
+.turnpick-words {
+  min-width: 0;
+}
+.turnpick-words > span {
   display: block;
   overflow: hidden;
   color: var(--muted);
@@ -75,13 +83,28 @@
 .settings-wide > .trace {
   padding-left: 0;
 }
+.turnpick-words > .turnpick-head {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
 .trace h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 10px;
   font-size: 15px;
   font-weight: 500;
 }
 .trace > p {
   margin: 0 0 12px;
+}
+.trace > .turn-why {
+  color: var(--danger);
+}
+.toolbar .turns-chat {
+  width: 180px;
 }
 .facts {
   display: grid;

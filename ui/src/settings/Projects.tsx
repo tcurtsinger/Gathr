@@ -1,13 +1,14 @@
 import { ChevronLeft, ChevronRight, Folder, Plus } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
 import { AddedBy } from '../components/AddedBy';
 import { danger } from '../components/Confirm';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
-import { DeleteConfirm } from '../DeleteConfirm';
+import { DeleteInline } from '../DeleteConfirm';
 import { listen } from '../live';
+import { report } from '../report';
 import { FolderField } from './FolderField';
 import { Team } from './ProjectTeam';
 import { Page, Row } from './Row';
@@ -16,8 +17,8 @@ import './projects.css';
 export type Seat = { agent: string; role: Role };
 
 /**
- * Settings > Projects: the projects listed, each with its folder and team; one opens a page of its own, its
- * name, folder and team in one draft with one Save.
+ * Settings > Projects: the projects listed, each with its folder and team; one opens a page of its own, where its
+ * name, folder and team save as they change.
  */
 export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -25,8 +26,6 @@ export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
   const [opened, setOpened] = useState<string | null>(start ?? null);
-  /** The project last saved, so its page says so until it changes again. */
-  const [saved, setSaved] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api.projects().then(setProjects, setFailure);
@@ -47,12 +46,8 @@ export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }
         key={project.id}
         project={project}
         agents={agents}
-        saved={saved === project.id}
         onBack={() => setOpened(null)}
-        onSaved={(done) => {
-          setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
-          setSaved(done.id);
-        }}
+        onSaved={(done) => setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null)}
         onDeleted={(left) => {
           setProjects((list) => list?.filter((p) => p.id !== project.id) ?? null);
           setOpened(null);
@@ -78,14 +73,7 @@ export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }
         <ul className="settings-rows settings-top">
           {projects.map((p) => (
             <li key={p.id}>
-              <button
-                type="button"
-                className="project-open"
-                onClick={() => {
-                  setOpened(p.id);
-                  setSaved(null);
-                }}
-              >
+              <button type="button" className="project-open" onClick={() => setOpened(p.id)}>
                 <Row
                   lead={
                     <span className="project-tile" aria-hidden="true">
@@ -111,52 +99,76 @@ export function Projects({ start, onAdd }: { start?: string; onAdd: () => void }
   );
 }
 
-type Fields = Pick<Project, 'name' | 'folder'> & { team: Seat[] };
-
 interface PageProps {
   project: Project;
   agents: Agent[];
-  saved: boolean;
   onBack: () => void;
   onSaved: (project: Project) => void;
   /** What the delete couldn't remove yet, if anything. */
   onDeleted: (left: Failure | null) => void;
 }
 
-function ProjectPage({ project, agents, saved, onBack, onSaved, onDeleted }: PageProps) {
-  /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
-  const [deleting, setDeleting] = useState<HTMLElement | null>(null);
-  // Only the fields edited here, over the project as saved, so Save never writes an untouched one back.
-  const [edits, setEdits] = useState<Partial<Fields>>({});
-  const [busy, setBusy] = useState(false);
+type Part = 'name' | 'folder' | 'team';
+
+/** A project's page: each change saves as it is made, as every other Settings row does (the owner's pick 1A, 2026-11-24). */
+function ProjectPage({ project, agents, onBack, onSaved, onDeleted }: PageProps) {
+  const [deleting, setDeleting] = useState(false);
+  const [name, setName] = useState(project.name);
+  const [folder, setFolder] = useState(project.folder);
+  const [saved, setSaved] = useState<Part | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useCard(failure);
   const team = project.members.map(({ agent, role }) => ({ agent, role }));
-  const fields: Fields = { ...project, team, ...edits };
-  const edit = (more: Partial<Fields>) => setEdits((e) => ({ ...e, ...more }));
 
-  const change: ProjectChange = {};
-  if (fields.name.trim() !== project.name) change.name = fields.name.trim();
-  if (fields.folder.trim() !== project.folder) change.folder = fields.folder.trim();
-  if (JSON.stringify(fields.team) !== JSON.stringify(team)) change.members = fields.team;
-  const changed = Object.keys(change).length > 0;
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+  const save = (part: Part, change: ProjectChange) => {
     setFailure(null);
+    setSaved(null);
     api.saveProject(project.id, change).then(
       (done) => {
-        setBusy(false);
-        setEdits({});
         onSaved(done);
+        setSaved(part);
       },
       (f: Failure) => {
-        setBusy(false);
         setFailure(f);
+        if (part === 'name') setName(project.name);
+        if (part === 'folder') setFolder(project.folder);
       },
     );
   };
+  const saveName = (text: string) => {
+    const next = text.trim();
+    if (!next) setName(project.name);
+    else if (next !== project.name) save('name', { name: next });
+  };
+  const saveFolder = (text: string) => {
+    const next = text.trim();
+    if (!next) setFolder(project.folder);
+    else if (next !== project.folder) save('folder', { folder: next });
+  };
+
+  // A name typed and not yet left still saves when the page goes (Escape, another page, Settings closed).
+  const unsaved = useRef({ name, project });
+  unsaved.current = { name, project };
+  useEffect(
+    () => () => {
+      const { name, project } = unsaved.current;
+      const next = name.trim();
+      if (next && next !== project.name)
+        api
+          .saveProject(project.id, { name: next })
+          .catch((f: Failure) =>
+            report({ name: 'gathr.ui.project.save', error: f.error, attrs: { why: f.why } }),
+          );
+    },
+    [],
+  );
+
+  const status = (part: Part) =>
+    saved === part ? (
+      <span className="muted" role="status">
+        Saved
+      </span>
+    ) : undefined;
   return (
     <Page
       title={project.name}
@@ -168,63 +180,50 @@ function ProjectPage({ project, agents, saved, onBack, onSaved, onDeleted }: Pag
         </button>
       }
       action={
-        <Button
-          type="button"
-          variant="outline"
-          className={danger}
-          disabled={busy}
-          onClick={(e) => setDeleting(e.currentTarget)}
-        >
-          Delete
-        </Button>
+        deleting ? (
+          <DeleteInline
+            kind="project"
+            id={project.id}
+            name={project.name}
+            onCancel={() => setDeleting(false)}
+            onDeleted={onDeleted}
+          />
+        ) : (
+          <Button type="button" variant="outline" className={danger} onClick={() => setDeleting(true)}>
+            Delete
+          </Button>
+        )
       }
     >
-      {deleting && (
-        <DeleteConfirm
-          kind="project"
-          id={project.id}
-          name={project.name}
-          opener={deleting}
-          onCancel={() => setDeleting(null)}
-          onDeleted={onDeleted}
-        />
-      )}
-      <form className="project-form" aria-label={project.name} onSubmit={submit}>
+      <div className="project-form">
         <div className="settings-rows settings-top">
-          <Row name={<label htmlFor="project-name">Name</label>}>
+          <Row name={<label htmlFor="project-name">Name</label>} line={status('name')}>
             <input
               id="project-name"
-              value={fields.name}
+              value={name}
               maxLength={80}
-              onChange={(e) => edit({ name: e.target.value })}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={(e) => saveName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveName(e.currentTarget.value)}
             />
           </Row>
-          <Row name={<label htmlFor="project-folder">Folder</label>}>
+          <Row name={<label htmlFor="project-folder">Folder</label>} line={status('folder')}>
             <FolderField
               id="project-folder"
               title="Project folder"
-              value={fields.folder}
-              onChange={(folder) => edit({ folder })}
+              value={folder}
+              onChange={setFolder}
+              onCommit={saveFolder}
             />
           </Row>
         </div>
-        <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
-        <footer className="settings-foot">
-          <span className="muted" role="status">
-            {saved && !changed ? 'Saved' : ''}
-          </span>
-          <Button type="button" variant="outline" onClick={() => setEdits({})} disabled={busy || !changed}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={busy || !changed || !fields.name.trim() || !fields.folder.trim()}
-          >
-            Save
-          </Button>
-        </footer>
-      </form>
+        <Team
+          seats={team}
+          agents={agents}
+          status={saved === 'team' ? 'Saved' : undefined}
+          onChange={(seats) => save('team', { members: seats })}
+        />
+      </div>
     </Page>
   );
 }
