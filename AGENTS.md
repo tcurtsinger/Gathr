@@ -52,7 +52,7 @@ Gathr is an open-source desktop app for working with your own AI agents, from di
 - **Small files, readable lines:** CI fails a source file over 1,000 lines or a line over 200 characters.
 - **Comments only where they earn it:** why, a constraint, a lesson. Never what the next line plainly does.
 - `rustfmt` and `clippy -D warnings` for Rust; Biome and `tsc` for the UI. No dead code.
-- **Words in the window** are short and plain: [DESIGN.md: Copy](DESIGN.md#copy). No hover text. Every setting has a control in Settings. Never design a feature around one particular agent.
+- **Words in the window** are short and plain: [DESIGN.md: Copy](.impeccable/design-full.md#copy). No hover text. Every setting has a control in Settings. Never design a feature around one particular agent.
 
 ## Reference
 
@@ -63,5 +63,5 @@ Facts, not rules. Read the one your task touches.
 - [docs/window.md](docs/window.md): use and check a screen in the window.
 - [docs/architecture.md](docs/architecture.md): what is built, part by part.
 - [docs/api.md](docs/api.md), [api-engines](docs/api-engines.md), [api-approvals](docs/api-approvals.md), [api-tasks](docs/api-tasks.md): the service's API.
-- [DESIGN.md](DESIGN.md) and [designs/README.md](designs/README.md): the design system and its previews. The previews' chat parts still show the chat that was replaced.
+- [DESIGN.md](DESIGN.md) (a map; the full text is [.impeccable/design-full.md](.impeccable/design-full.md)) and [designs/README.md](designs/README.md): the design system and its previews. The previews' chat parts still show the chat that was replaced.
 - [docs/archive/README.md](docs/archive/README.md): what was archived, and why.
