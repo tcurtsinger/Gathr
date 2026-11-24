@@ -16,7 +16,7 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
 import { BrowserTile, BrowserView } from './Browser';
-import { Changes, ChangesTile, useChanges } from './Changes';
+import { Changes, ChangesTile, count, useChanges } from './Changes';
 import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
@@ -237,7 +237,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const shown = at < fits ? items.slice(0, fits) : [...items.slice(0, fits - 1), items[at]];
   const rest = items.length - shown.length;
   const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
-  const agents = tree?.agents.length ?? 0;
+  const folders = tree ? [tree.project, tree.shared, ...tree.agents].filter(Boolean).length : 0;
   return (
     <>
       <div className="workspace-tabs">
@@ -311,14 +311,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                   Files
                 </span>
                 <span className="home-tile-sub">
-                  {tree &&
-                    ([
-                      tree.project?.name ?? (tree.shared ? 'Shared' : ''),
-                      agents === 1 ? tree.agents[0].name : agents ? `${agents} agents` : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' + ') ||
-                      'None yet')}
+                  {tree && (folders ? count(folders, 'folder') : 'None yet')}
                 </span>
               </button>
               <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
@@ -378,7 +371,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   );
 }
 
-/** Home's Designs tile: how many designs, and who is writing one. */
+/** Home's Designs tile: how many designs, and whether one is being written. */
 function DesignsTile({
   chat,
   room,
@@ -400,7 +393,7 @@ function DesignsTile({
       </span>
       <span className="home-tile-sub">
         {list &&
-          (list.length ? [list.length, by && `${by.name} writing`].filter(Boolean).join(' · ') : 'None yet')}
+          (list.length ? (by ? `${list.length} · writing` : count(list.length, 'design')) : 'None yet')}
       </span>
     </button>
   );
