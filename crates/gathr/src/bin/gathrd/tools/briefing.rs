@@ -97,16 +97,28 @@ pub fn facts(
         .find(|m| Some(m.agent.as_str()) == agent)
         .map(|m| m.role)
         .filter(|_| !standing_chat);
+    // Each teammate with what the person wrote it is for, so the lead can hand work to who fits.
     let others = match members.is_empty() {
         true => worked_here(conn, chat, agent)?,
-        false => members
-            .iter()
-            .filter(|m| Some(m.agent.as_str()) != agent)
-            .map(|m| match title_of(m.role).filter(|_| !standing_chat) {
-                Some(role) => format!("{} ({role})", m.name),
-                None => m.name.clone(),
-            })
-            .collect(),
+        false => {
+            let mut described =
+                conn.prepare_cached("SELECT description FROM agents WHERE id = ?1")?;
+            let mut others = Vec::new();
+            for m in members.iter().filter(|m| Some(m.agent.as_str()) != agent) {
+                let what: Option<String> = described
+                    .query_row([&m.agent], |r| r.get(0))
+                    .optional()?
+                    .flatten();
+                let role = title_of(m.role).filter(|_| !standing_chat);
+                others.push(match (role, what) {
+                    (Some(role), Some(what)) => format!("{} ({role}: {what})", m.name),
+                    (Some(role), None) => format!("{} ({role})", m.name),
+                    (None, Some(what)) => format!("{} ({what})", m.name),
+                    (None, None) => m.name.clone(),
+                });
+            }
+            others
+        }
     };
     let plain: bool = conn
         .query_row(
@@ -235,13 +247,25 @@ filed under that message. Never start your answer to the person with REPLY.";
 /// A team chat's lead and its checks, which the assistant's own chat has neither of.
 const ROOM_LEAD: &str = "- One of you is the lead. A message from the person that names nobody goes to it, and its plan or answer is \
 checked by the teammates who took no part, before the person relies on it.
+- The lead plans the work and hands out its parts with @Name. When you are handed a part, do that part and \
+report back to the lead with @Name. Other work you notice, tell the lead instead of doing it.
 - Before you ask the person to pick between ways or designs, have a teammate look first: end your turn with \
 @Name, the question you will ask and where its pages are, and call ask_person once they have answered. A small \
 yes or no needs no look.";
 
-/// For a team chat's lead alone.
-const LEAD: &str = "- When a teammate reports to you and work is left, make sure someone is on it before your turn \
-ends: do it, or name who does with @Name.";
+/// For a team chat's lead alone: how it runs a piece of work.
+const LEAD: &str = "As the lead, you run the work and answer for its result. Hand the work out rather than doing it all: \
+take a part yourself only when no teammate fits it.
+- First look into it: read the code, reproduce the problem, and post what you found and your plan, with @Name \
+for the teammates who should check it. Change nothing yet.
+- Once they agree, or you have settled what they questioned, hand out the parts with @Name, each to the \
+teammate it fits.
+- Each change is reviewed by a teammate who didn't make it before it is merged, and you merge it.
+- When it is done, tell the person once what changed and what is still open.
+- A quick answer or a change of a few lines needs no plan or check, and neither does anything the person says \
+to just do.
+- When a teammate reports to you and work is left, make sure someone is on it before your turn ends: do it, or \
+name who does with @Name.";
 
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.
 const ROOM: &str = "- Only your last words in a turn are posted as your message; what you write before them stays \
@@ -383,10 +407,12 @@ pub fn text(facts: &Facts) -> String {
         if facts.standing.is_none() {
             lines.push(ROOM_LEAD.to_string());
         }
-        if facts.role == Some(Role::Supervisor) {
-            lines.push(LEAD.to_string());
-        }
     }
-    lines.extend([ROOM.to_string(), unavailable]);
+    lines.push(ROOM.to_string());
+    // After the room's rules, so its list doesn't read as the lead's.
+    if facts.team && !facts.others.is_empty() && facts.role == Some(Role::Supervisor) {
+        lines.push(LEAD.to_string());
+    }
+    lines.push(unavailable);
     lines.join("\n")
 }
