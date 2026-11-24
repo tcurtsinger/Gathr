@@ -15,6 +15,10 @@ export interface AgentSet {
   account: string;
   /** None is the engine's own default. */
   model: string | null;
+  /** Its face; none picked, the window works each out from the agent's id. */
+  shape?: string | null;
+  eyes?: string | null;
+  colour?: string | null;
 }
 
 /** A change the assistant proposed to an agent with `propose_agent_change`: the agent then, and as it would be. */
@@ -80,7 +84,15 @@ export function AgentChangeCard({ message, change }: { message: string; change: 
   const { was, to } = change;
   const before = useRunsOn(was);
   const after = useRunsOn(to);
-  const agent = acts?.agents.find((a) => a.id === change.agent);
+  const face = (set: AgentSet) => ({
+    id: change.agent,
+    name: set.name,
+    shape: set.shape,
+    eyes: set.eyes,
+    colour: set.colour,
+  });
+  const look = ['shape', 'eyes', 'colour'] as const;
+  const restyled = look.some((k) => (was[k] ?? null) !== (to[k] ?? null));
   const rows: [string, string, string][] = [
     ['Name', was.name, to.name],
     ['About', was.description, to.description],
@@ -98,7 +110,7 @@ export function AgentChangeCard({ message, change }: { message: string; change: 
   return (
     <div className="proposal">
       <div className="proposal-who">
-        <Face agent={agent ?? { id: change.agent, name: was.name }} size={28} />
+        <Face agent={face(change.saved ? to : was)} size={28} />
         <span>
           <b>{change.saved ? to.name : was.name}</b>
           {was.description && <span className="proposal-about">{was.description}</span>}
@@ -109,6 +121,16 @@ export function AgentChangeCard({ message, change }: { message: string; change: 
           <span key={field}>{field}</span>,
           <Changed key={`${field}-v`} was={from} now={now} />,
         ])}
+        {restyled && (
+          <>
+            <span>Look</span>
+            <span className="proposal-change">
+              <Face agent={face(was)} size={20} />
+              <span aria-hidden="true">→</span>
+              <Face agent={face(to)} size={20} />
+            </span>
+          </>
+        )}
       </div>
       <div className="proposal-foot">
         {change.saved ? (

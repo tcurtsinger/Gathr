@@ -31,6 +31,12 @@ pub struct ProposeAgentChange {
     account: Option<String>,
     /// A model its account lists.
     model: Option<String>,
+    /// Its face's colour: red, orange, amber, lime, green, teal, sky, blue, violet, plum, pink or grey.
+    colour: Option<String>,
+    /// Its face's shape: circle, tile, cloud, flower, hexagon, pebble, shield, drop, star, diamond, bubble or leaf.
+    shape: Option<String>,
+    /// Its face's eyes: lines, glance, side, squint, dots, rings, ovals, happy, rest, wink, calm or quirk.
+    eyes: Option<String>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -51,7 +57,8 @@ pub struct ProposeProjectChange {
 impl Tools {
     #[tool(
         description = "In your own chat as the person's assistant: propose a change to one of the person's agents: \
-                       its name, what it is for, its account or model. Give only what changes. The person saves it \
+                       its name, what it is for, its account or model, its face's colour, shape or eyes. Give only what changes; for \
+                       several agents, one call each. The person saves it \
                        from the card shown; nothing changes before."
     )]
     async fn propose_agent_change(
@@ -242,6 +249,14 @@ fn agent_change(
             to.model = None;
         }
     }
+    let pick = |asked: &Option<String>, now: &mut Option<String>| {
+        if let Some(picked) = asked {
+            *now = Some(picked.trim().to_lowercase());
+        }
+    };
+    pick(&ask.colour, &mut to.colour);
+    pick(&ask.shape, &mut to.shape);
+    pick(&ask.eyes, &mut to.eyes);
     if ask.model.is_none() && to == was {
         return refuse(nothing());
     }
@@ -266,6 +281,9 @@ fn agent_change(
         Some(Refused::Name(_)) => "The name must be 1 to 80 characters.".into(),
         Some(Refused::Description) => {
             "The description must be one line of at most 80 characters.".into()
+        }
+        Some(Refused::Picture) => {
+            "Give a colour, shape and eyes from their lists in this tool's description.".into()
         }
         Some(other) => format!("{}.", other.why()),
     };

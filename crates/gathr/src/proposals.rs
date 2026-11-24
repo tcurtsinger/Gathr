@@ -301,7 +301,7 @@ pub struct AgentChange {
     pub saved: bool,
 }
 
-/// What `propose_agent` sets on an agent: what `propose_agent_change` may change.
+/// What `propose_agent` sets on an agent, and its face: what `propose_agent_change` may change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSet {
     pub name: String,
@@ -311,6 +311,13 @@ pub struct AgentSet {
     /// `None` is the engine's own default.
     #[serde(default)]
     pub model: Option<String>,
+    /// Its face's shape, eyes and colour: none picked, the window works each out from its id.
+    #[serde(default)]
+    pub shape: Option<String>,
+    #[serde(default)]
+    pub eyes: Option<String>,
+    #[serde(default)]
+    pub colour: Option<String>,
 }
 
 impl AgentSet {
@@ -320,6 +327,9 @@ impl AgentSet {
             description: agent.description.clone().unwrap_or_default(),
             account: agent.account.clone(),
             model: agent.model.clone(),
+            shape: agent.shape.clone(),
+            eyes: agent.eyes.clone(),
+            colour: agent.colour.clone(),
         }
     }
 }
@@ -341,6 +351,9 @@ impl AgentChange {
             description: differs(&was.description, &to.description).map(Some),
             model: (account.is_some() || was.model != to.model).then(|| to.model.clone()),
             account,
+            shape: (was.shape != to.shape).then(|| to.shape.clone()),
+            eyes: (was.eyes != to.eyes).then(|| to.eyes.clone()),
+            colour: (was.colour != to.colour).then(|| to.colour.clone()),
             ..Default::default()
         }
     }
