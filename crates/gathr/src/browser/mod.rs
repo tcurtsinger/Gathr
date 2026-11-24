@@ -52,6 +52,8 @@ enum Cmd {
     Moved(String, f64, f64),
     /// The pointer a page shows where the mouse is, as it answered.
     Pointed(String, Option<String>),
+    /// A while after the shown page got its nth size: unless a newer one came, its picture is sent again.
+    Settled(u64),
 }
 
 impl Browser {
