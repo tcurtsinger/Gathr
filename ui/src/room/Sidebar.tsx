@@ -1,4 +1,4 @@
-import { ChevronDown, File as FileIcon, Folder, Globe, House, Search, X } from 'lucide-react';
+import { ChevronDown, File as FileIcon, Folder, Globe, House, LoaderCircle, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   DropdownMenu,
@@ -21,7 +21,7 @@ import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
 import { isPage } from './PageFrame';
-import { pageName, say, useBrowser } from './pages';
+import { pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
 import type { RoomState } from './useRoom';
 import './panel.css';
@@ -129,10 +129,15 @@ interface PanelProps {
   onNote: (text: string, agent?: string) => void;
 }
 
-/** The narrowest a file's tab gets before the rest go in the "+N" list, and that list's button. */
-const NARROWEST = 74;
+/** A named tab's widest, the gap between tabs, and the "+N" list's button. */
+const WIDEST = 180;
 const GAP = 3;
 const MORE = 44;
+/** A tab's width beside its name: padding, icon and gap; the shown tab's close mark adds `CLOSE`. */
+const AROUND = 41;
+const CLOSE = 15;
+/** The least room a tab is cut short to, rather than go in the list. */
+const LEAST = 90;
 
 /** A page's or a file's tab in the strip after the fixed ones, and its row in the "+N" list. */
 interface Item {
@@ -147,10 +152,35 @@ interface Item {
   page?: string;
 }
 
-/** How many file tabs fit in `width`, with room for the "+N" button when not all do. */
-function fitting(count: number, width: number) {
-  if (count * (NARROWEST + GAP) - GAP <= width) return count;
-  return Math.max(1, Math.floor((width - MORE) / (NARROWEST + GAP)));
+let ruler: CanvasRenderingContext2D | null | undefined;
+/** How wide `name` is in a tab, by the strip's own font. */
+function nameWidth(name: string, strip: HTMLElement | null) {
+  ruler ??= document.createElement('canvas').getContext('2d');
+  if (!ruler || !strip) return name.length * 7;
+  ruler.font = `13px ${getComputedStyle(strip).fontFamily}`;
+  return ruler.measureText(name).width;
+}
+
+/** The tabs that fit in `width` as wide as their names, in order, the shown one always among them. */
+function fitting(items: Item[], width: number, strip: HTMLElement | null) {
+  const wide = items.map((i) =>
+    Math.min(WIDEST, Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.selected ? CLOSE : 0)),
+  );
+  const all = wide.reduce((sum, w) => sum + w + GAP, -GAP);
+  if (all <= width) return items;
+  const at = items.findIndex((i) => i.selected);
+  let room = width - MORE - (at < 0 ? 0 : wide[at] + GAP);
+  return items.filter((_, n) => {
+    if (n === at) return true;
+    if (wide[n] + GAP > room) {
+      // The first that doesn't fit takes what room is left, cut short, when that shows enough of its name.
+      const fits = room >= LEAST;
+      room = 0;
+      return fits;
+    }
+    room -= wide[n] + GAP;
+    return true;
+  });
 }
 
 function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
@@ -218,9 +248,13 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const nameOf = (f: Opened) => f.crumbs.at(-1) ?? f.path;
   const pages: Item[] = browser.pages.map((p) => ({
     key: pageKey(p.id),
-    icon: <Globe aria-hidden="true" />,
+    icon: p.loading ? (
+      <LoaderCircle aria-hidden="true" className="workspace-loading" />
+    ) : (
+      <Globe aria-hidden="true" />
+    ),
     name: pageName(p),
-    where: p.url,
+    where: site(p.url),
     selected: tabs.at === BROWSER && browser.shown === p.id,
     page: p.id,
     select: () => {
@@ -266,9 +300,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     for (const p of pages) if (p !== keep) p.close();
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
-  const fits = fitting(items.length, width);
+  const shown = fitting(items, width, strip.current);
   const at = items.findIndex((i) => i.selected);
-  const shown = at < fits ? items.slice(0, fits) : [...items.slice(0, fits - 1), items[at]];
   const rest = items.length - shown.length;
   const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
   const folders = tree ? [tree.project, tree.shared, ...tree.agents].filter(Boolean).length : 0;
@@ -429,11 +462,11 @@ interface TabProps {
   icon: ReactNode;
   name: string;
   onSelect: () => void;
-  /** A file's tab: it closes, and shows its name; the others show their icon only. */
+  /** A tab that closes, and shows its name; Home shows its icon only. */
   onClose?: () => void;
 }
 
-/** One tab: Home, Files, Designs, Changes and Browser by their icon, a page or a file by its name with a close mark. */
+/** One tab: Home by its icon; a view, a page or a file by its name, with a close mark. */
 function Tab({ id, controls, selected, icon, name, onSelect, onClose }: TabProps) {
   return (
     <div className="workspace-tab" data-selected={selected} data-file={!!onClose || undefined}>

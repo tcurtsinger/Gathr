@@ -36,6 +36,7 @@ export function BrowserView({ open }: { open: boolean }) {
     return (
       <div className="filetab-none">
         <Globe aria-hidden="true" />
+        <strong>No browser</strong>
         <span>{missing}</span>
       </div>
     );
@@ -71,13 +72,18 @@ export function BrowserView({ open }: { open: boolean }) {
           {secure ? <Lock aria-hidden="true" /> : <Globe aria-hidden="true" />}
           <input
             ref={address}
-            value={typed ?? url ?? ''}
+            value={typed ?? url?.replace(/^https:\/\//, '') ?? ''}
             placeholder="Address"
             aria-label="Address"
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => setTyped(e.target.value)}
-            onFocus={(e) => e.target.select()}
+            onFocus={(e) => {
+              // The whole address while typing; a secure page's shows without its https:// otherwise.
+              const field = e.target;
+              setTyped(url ?? '');
+              requestAnimationFrame(() => field.select());
+            }}
             onBlur={() => setTyped(undefined)}
             onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
           />
