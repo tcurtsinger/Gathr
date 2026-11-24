@@ -610,7 +610,10 @@ impl Actor {
             asking: false,
         };
         let opening = self.opening.take();
-        if opening.is_some() || self.shown.is_none() {
+        // A page the shown one opened, by a link to a new window or `window.open`, is shown, as an
+        // everyday browser brings it to the front. The browser names its opener even for `noopener`.
+        let opened = self.shown.is_some() && info["openerId"].as_str() == self.shown.as_deref();
+        if opening.is_some() || self.shown.is_none() || opened {
             self.shown = Some(page.id.clone());
             self.point(ARROW);
         }
