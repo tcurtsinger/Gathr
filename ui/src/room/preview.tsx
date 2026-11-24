@@ -6,7 +6,7 @@ import { type FaceOf, KnownFaces } from '../components/Face';
 import type { Picked } from '../components/mention';
 import { WorkspaceToggle } from '../components/workspace';
 import { TopLine } from '../TopLine';
-import { Questions } from './Question';
+import { NeedsYou } from './Question';
 import { people, Room } from './Room';
 import { RoomSidebar } from './Sidebar';
 import type { RoomState } from './useRoom';
@@ -211,7 +211,6 @@ window.fetch = (url, init) =>
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
-  const [asking, setAsking] = useState<number | null>();
   const [sidebar, setSidebar] = useState(true);
   const [chosen, setChosen] = useState('mira');
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
@@ -229,7 +228,6 @@ function Preview() {
     answer,
     approve: (request: string) =>
       setState((s) => ({ ...s, approvals: s.approvals.filter((a) => a.request !== request) })),
-    ask: setAsking,
     like: (message: string, give: boolean) =>
       setState((s) => ({
         ...s,
@@ -250,12 +248,11 @@ function Preview() {
           <h1>Orders export</h1>
         </div>
         <div className="room-actions">
-          <Questions
+          <NeedsYou
             questions={state.questions}
+            approvals={state.approvals}
+            turns={state.turns}
             people={everyone}
-            at={asking}
-            onOpen={setAsking}
-            onAnswer={answer}
           />
           <WorkspaceToggle open={sidebar} onToggle={() => setSidebar(!sidebar)} />
         </div>

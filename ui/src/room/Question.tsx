@@ -2,7 +2,8 @@ import { Check } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { Failure, Question } from '../api';
+import type { Failure, Question, Turn } from '../api';
+import { type Approval, asked, titleOf } from '../components/Approval';
 import { Composer } from '../components/Composer';
 import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
@@ -25,16 +26,11 @@ export type OnAnswer = (
 
 /**
  * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open, its
- * choices as rows to pick and Answer (or, with no `onAnswer`, Answer, which opens the questions panel on it). Its
- * blue frame says it waits on the person. Answered, the answer sits under it; the asker's name is under the card.
+ * choices as rows to pick and Answer (none in an archived chat, which reads only). Its blue frame says it waits on the
+ * person. Answered, the answer sits under it; the asker's name is under the card.
  */
-export function QuestionCard(props: {
-  question: Question;
-  people: People;
-  onOpen: (id: number) => void;
-  onAnswer?: OnAnswer;
-}) {
-  const { question: q, people, onOpen, onAnswer } = props;
+export function QuestionCard(props: { question: Question; people: People; onAnswer?: OnAnswer }) {
+  const { question: q, people, onAnswer } = props;
   const open = waits(q);
   const answer = split(q.words ?? '');
   return (
@@ -46,17 +42,12 @@ export function QuestionCard(props: {
       <article
         className="room-card room-question"
         data-open={open || undefined}
+        data-asked={q.id}
         aria-label={open ? `${q.name}, needs you` : q.name}
       >
         <Words className="room-body" text={q.question} chat={q.chat} names={people.names} agent={q.agent} />
-        {open && onAnswer ? (
-          <Choose question={q} onAnswer={onAnswer} />
-        ) : open ? (
-          <div className="room-asks">
-            <Button type="button" variant="outline" size="sm" data-answer={q.id} onClick={() => onOpen(q.id)}>
-              Answer
-            </Button>
-          </div>
+        {open ? (
+          onAnswer && <Choose question={q} onAnswer={onAnswer} />
         ) : q.closed ? (
           <p className="room-closed">Closed when archived</p>
         ) : (
@@ -166,23 +157,51 @@ function Choose({ question: q, onAnswer }: { question: Question; onAnswer: OnAns
 }
 
 /**
- * The top line's Questions button and its panel: the chat's open questions, each with its choices and a box for the
- * person's own words. The button's dot is filled while one is open. `at`: undefined while the panel is closed, else
- * the question it opens on, or null for none.
+ * The top line's Needs you button and its panel: what waits on the person, the chat's open questions then its
+ * approvals, one row each. A row closes the panel and goes to its card in the chat, where it is answered. The button's
+ * dot is lit while one waits.
  */
-export function Questions(props: {
+export function NeedsYou(props: {
   questions: Question[];
+  approvals: Approval[];
+  turns: Record<string, Turn>;
   people: People;
-  at: number | null | undefined;
-  onOpen: (at: number | null | undefined) => void;
-  onAnswer: OnAnswer;
 }) {
-  const { people, at, onOpen, onAnswer } = props;
-  const open = props.questions.filter(waits);
+  const { people } = props;
+  const [open, setOpen] = useState(false);
+  const ask = props.questions.filter(waits);
+  const rows = [
+    ...ask.map((q) => ({
+      key: `q${q.id}`,
+      agent: q.agent,
+      card: `[data-asked="${q.id}"]`,
+      time: clock(q.asked),
+      what: null,
+      text: firstLine(q.question),
+    })),
+    ...props.approvals.map((a) => ({
+      key: `a${a.request}`,
+      agent: props.turns[a.turn]?.agent ?? '',
+      card: `[data-approval="${a.request}"]`,
+      time: null,
+      what: titleOf(a.tool),
+      text: asked(a).command ?? '',
+    })),
+  ];
+  const go = (card: string) => {
+    setOpen(false);
+    const el = document.querySelector<HTMLElement>(card);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // The card's short tint, as a search hit's: set again so it plays again.
+    el.removeAttribute('data-flash');
+    requestAnimationFrame(() => el.setAttribute('data-flash', ''));
+    setTimeout(() => el.removeAttribute('data-flash'), 1700);
+  };
   return (
-    <Popover.Root open={at !== undefined} onOpenChange={(o) => onOpen(o ? null : undefined)}>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <IconButton aria-label="Questions" className="head-button">
+        <IconButton aria-label="Needs you" className="head-button needs-button">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -193,55 +212,40 @@ export function Questions(props: {
             aria-hidden="true"
           >
             <path d="M13 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4v-6" />
-            <circle
-              cx="18.5"
-              cy="5.5"
-              r="2.5"
-              className="questions-dot"
-              data-open={open.length > 0 || undefined}
-            />
+            <circle cx="18.5" cy="5.5" r="2.5" />
             <path d="M7.5 13h7M7.5 17h4" />
           </svg>
+          {rows.length > 0 && <span className="head-dot" />}
         </IconButton>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="popover-panel questions"
+          className="popover-panel needs"
           side="bottom"
           align="end"
           sideOffset={8}
           collisionPadding={16}
           role="dialog"
-          aria-label="Questions"
-          onOpenAutoFocus={(e) => {
-            if (show(at)) e.preventDefault();
-          }}
-          // Radix dismisses on the click after a card's Answer has set the question. That click isn't a click away:
-          // it moves the open panel to its question, even when that is already the one set.
-          onInteractOutside={(e) => {
-            const answer = e.target instanceof HTMLElement && e.target.closest<HTMLElement>('[data-answer]');
-            if (!answer) return;
-            e.preventDefault();
-            show(Number(answer.dataset.answer));
-          }}
+          aria-label="Needs you"
         >
-          <h3>Questions</h3>
-          {open.length === 0 && <p className="questions-none">No questions</p>}
-          {open.map((q) => (
-            <section key={q.id} className="questions-item" data-question={q.id} aria-label={q.name}>
-              <div className="room-line">
-                <Face agent={people.face(q.agent)} size={20} />
-                <b>{q.name}</b> <span className="room-time">{clock(q.asked)}</span>
-              </div>
-              <Words
-                className="room-said"
-                text={q.question}
-                chat={q.chat}
-                names={people.names}
-                agent={q.agent}
-              />
-              <Answer question={q} onAnswer={onAnswer} />
-            </section>
+          <h3>Needs you {rows.length > 0 && <span className="needs-count">{rows.length}</span>}</h3>
+          {rows.length === 0 && <p className="needs-none">Nothing</p>}
+          {rows.map((r) => (
+            <button key={r.key} type="button" className="needs-row" onClick={() => go(r.card)}>
+              <span className="needs-face">
+                <Face agent={people.face(r.agent)} size={20} />
+              </span>
+              <span className="needs-main">
+                <span className="needs-top">
+                  <b>{people.name(r.agent)}</b>
+                  {r.what && <span className="needs-what">{r.what}</span>}
+                  {r.time && <span className="room-time">{r.time}</span>}
+                </span>
+                <span className="needs-text" data-code={r.what ? '' : undefined}>
+                  {r.text}
+                </span>
+              </span>
+            </button>
           ))}
         </Popover.Content>
       </Popover.Portal>
@@ -249,63 +253,6 @@ export function Questions(props: {
   );
 }
 
-/** Scrolls the panel to a question and puts the cursor in its answer; null while it isn't shown. */
-function show(at: number | null | undefined) {
-  const item = document.querySelector(`[data-question="${at}"]`);
-  item?.scrollIntoView({ block: 'nearest' });
-  item?.querySelector<HTMLElement>('button, textarea')?.focus();
-  return item;
-}
-
-/** A choice answers at once, with any words typed; the words alone answer with Send. */
-function Answer(props: { question: Question; onAnswer: OnAnswer }) {
-  const { question: q, onAnswer } = props;
-  const [words, setWords] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [sending, setSending] = useState(false);
-  const [refused, setRefused] = useState<Failure>();
-  useCard(refused);
-  const send = (pick?: string) => {
-    if (sending) return;
-    setSending(true);
-    onAnswer(q, pick, words, files).then(
-      () => setRefused(undefined),
-      (f: Failure) => {
-        setRefused(f);
-        setSending(false);
-      },
-    );
-  };
-  return (
-    <div className="room-asks">
-      {q.choices.length > 0 && (
-        <div className="room-choices">
-          {q.choices.map((c) => (
-            <Button
-              key={c.label}
-              type="button"
-              variant="outline"
-              className="h-auto min-h-8 py-1 whitespace-normal text-left"
-              disabled={sending}
-              onClick={() => send(c.label)}
-            >
-              <span>
-                {c.label}
-                {c.detail && <small className="room-choice-detail">{c.detail}</small>}
-              </span>
-            </Button>
-          ))}
-        </div>
-      )}
-      <Composer
-        draft={words}
-        onDraft={(text) => setWords(text)}
-        files={files}
-        onFiles={setFiles}
-        onSend={() => send()}
-        hint="Answer"
-        label="Answer"
-      />
-    </div>
-  );
-}
+/** A question's first line, as plain words: its markdown marks taken out. */
+const firstLine = (text: string) =>
+  (text.split('\n').find((l) => l.trim()) ?? '').replace(/[*_`#>]/g, '').trim();

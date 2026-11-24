@@ -65,16 +65,14 @@ export function LeadMark({ people, agent }: { people: People; agent: string }) {
   return <span className="room-lead">Lead</span>;
 }
 
-/** What the person can do on a card: answer its approval, open its question, like it. */
+/** What the person can do on a card: answer its approval or question, like it. */
 export interface Acts {
   approve: (request: string, allow: boolean) => void;
-  /** Opens the questions panel on this question. */
-  ask: (question: number) => void;
   /** Unset in an archived chat, which reads only. */
   like?: (message: string, give: boolean) => void;
   /** Opens the chat's Changes tab. */
   changes?: () => void;
-  /** Answers a question from its card; unset, the card's Answer opens the questions panel. */
+  /** Answers a question from its card; unset in an archived chat. */
   answer?: OnAnswer;
   /** Sends the person's message that started a failed turn again, to the same agent. Unset in an archived chat. */
   retry?: (message: Message, agent: string) => void;
@@ -135,13 +133,7 @@ export function Room({ chat, project, state, people, acts, found, header, after,
                 </p>
               );
             return (
-              <QuestionCard
-                key={item.id}
-                question={item.question}
-                people={people}
-                onOpen={acts.ask}
-                onAnswer={acts.answer}
-              />
+              <QuestionCard key={item.id} question={item.question} people={people} onAnswer={acts.answer} />
             );
           })}
           {after}

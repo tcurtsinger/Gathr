@@ -256,11 +256,14 @@ apart.
   replies · Rev, Ann · 9:21", then Hide replies once open. Each reply is a 20px picture, the name and time on a
   13.5px line, the words at 14.5px and its own row starting with Copy. A reply that waits on an approval is
   never folded, and a search hit in one opens them.
-- **A question to the person** is the same card, ringed in blue while it waits, its head saying Needs you,
-  with Answer, which opens the Questions panel on it. Answered, a quiet block under it from You: the choice in
-  bold, then the words. Closed when archived says so. The Questions panel (420px, from the top line's
-  Questions button, whose dot is blue while one waits) lists each open question with its choices as outline
-  buttons and an Answer box; with none, No questions.
+- **A question to the person** is the same card, ringed in blue while it waits, with its choices as rows to
+  pick, Something else… and Answer. Answered, a quiet block under it from You: the choice in bold, then the
+  words. Closed when archived says so. The Needs you panel (380px, from the top line's Needs you button, whose
+  dot is blue while anything waits) lists each open question, then each approval waiting, one row each: face,
+  name, time and first line, or "Run a command?" and the command. A row goes to its card, tinted for a moment;
+  answering is only on the card. With none, Nothing.
+- **The top line's dot** (7px, blue, on Needs you and Agents alike) means only that something there needs the
+  person: an open question or approval, an agent nearly full or signed out. A running command lights nothing.
 - **A search hit** opened here is tinted blue for a moment.
 
 Code blocks are one frame with no bar: no language row, no Download, no line numbers; Copy sits in the top
@@ -347,7 +350,7 @@ Agents show their picture beside their name: Gathr's own drawing of a shape (twe
 Flower, Hexagon, Pebble, Shield, Drop, Star, Diamond, Bubble, Leaf), a pair of eyes (twelve: Lines, Glance, Side,
 Squint, Dots, Rings, Ovals, Happy, Rest, Wink, Calm, Quirk) and a line colour (twelve, Red to Grey), lines only on
 no background, the same everywhere: 56 on an agent's page and the new chat, 28 on a card, 24 in the @ list, the
-Agents panel and a project's team, 20 on a reply, in the Questions panel, in the To line, in the Agents
+Agents panel and a project's team, 20 on a reply, in the Needs you panel, in the To line, in the Agents
 screen's Assistant pick and on a proposed project's rows, 16 on the assistant's row, in the new chat's agent picker and
 on a joined line. Each colour has a light value for
 the dark theme and a deep one for the light theme (OKLCH 0.80 and 0.50, the same hue). The line is 3 in the 48

@@ -31,7 +31,7 @@ import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
 import { useUnseen } from './Changes';
-import { Questions } from './Question';
+import { NeedsYou } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
 import { openChanges, openTab, RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
@@ -94,8 +94,6 @@ export function RoomView(props: Props) {
   // A refused Stop, Pause or like.
   const [refused, setRefused] = useState<Failure>();
   useCard(refused);
-  // The questions panel: closed, open, or open on one question.
-  const [asking, setAsking] = useState<number | null>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
   const fresh = !chat.id;
   // A new chat in a project asks what to build there, under its lead's face; with no project, the greeting.
@@ -177,7 +175,6 @@ export function RoomView(props: Props) {
   const resume = () => attempt(() => props.onPause('resume', run.scope ?? thisChat));
   const acts = {
     approve,
-    ask: setAsking,
     changes: () => {
       props.onSidebar(true);
       openChanges(chat.id);
@@ -225,13 +222,14 @@ export function RoomView(props: Props) {
               background={state.background}
               turns={state.turns}
               people={team}
+              signedOut={props.signedOut}
+              onSignIn={props.onSignIn}
             />
-            <Questions
+            <NeedsYou
               questions={state.questions}
+              approvals={state.approvals.filter((a) => !a.answer || a.answer.failure)}
+              turns={state.turns}
               people={team}
-              at={asking}
-              onOpen={setAsking}
-              onAnswer={answer}
             />
             <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={() => props.onSidebar(!sidebar)} />
           </div>
