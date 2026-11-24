@@ -149,6 +149,10 @@ pub fn flags(program: &Path, profile: &Path) -> Vec<String> {
         // The pipe alone makes `navigator.webdriver` true, and a sign-in page may then refuse the
         // person: it is their own browser, used by them.
         "--disable-blink-features=AutomationControlled".into(),
+        // Without a window the browser takes the PC's dark theme for the page's own scroll bar when
+        // the page names no colour scheme, and draws it dark on a light page. It is light then, as
+        // a page is (1 is light); what pages are told to prefer is unchanged.
+        "--blink-settings=preferredRootScrollbarColorScheme=1".into(),
         format!("--user-data-dir={}", profile.display()),
         "--remote-debugging-pipe".into(),
         "--no-startup-window".into(),
