@@ -86,8 +86,8 @@ pub(crate) struct Actor {
     watchers: Watchers,
     /// The window that acted last: its tab's size is the page's.
     sizer: Option<u64>,
-    /// The page whose picture is sent, by its session, at what size.
-    casting: Option<(String, Size)>,
+    /// The page whose picture is sent, by its session.
+    casting: Option<String>,
     /// The address the next page to open goes to, shown: a new page's, or one the person opened with
     /// none open.
     opening: Option<String>,
@@ -519,11 +519,7 @@ impl Actor {
                         self.shown = next.map(|p| p.id.clone());
                         self.point(ARROW);
                     }
-                    if self
-                        .casting
-                        .as_ref()
-                        .is_some_and(|(s, _)| *s == gone.session)
-                    {
+                    if self.casting.as_ref() == Some(&gone.session) {
                         self.casting = None;
                     }
                     self.fit();
@@ -560,7 +556,7 @@ impl Actor {
             }
             "Page.navigatedWithinDocument" => look(cdp, &self.said, page),
             "Page.screencastFrame" => {
-                let casting = self.casting.as_ref().is_some_and(|(s, _)| s == session);
+                let casting = self.casting.as_deref() == Some(session);
                 if let (true, Some(frame)) =
                     (casting, decode(params["data"].as_str().unwrap_or_default()))
                 {
@@ -697,21 +693,19 @@ impl Actor {
         }
         let seen = self.watchers.values().any(|w| w.visible);
         let want = match (seen, self.shown_page(), size) {
-            (true, Some(page), Some(size)) => Some((page.session.clone(), size)),
+            (true, Some(page), Some(_)) => Some(page.session.clone()),
             _ => None,
         };
         if want != self.casting
             && let Some(cdp) = cdp
         {
-            if let Some((session, _)) = &self.casting {
+            if let Some(session) = &self.casting {
                 cdp.send("Page.stopScreencast", json!({}), Some(session));
             }
-            if let Some((session, size)) = &want {
-                let device = |side: u32| (side as f64 * size.ratio).ceil() as u32;
-                let cast = json!({
-                    "format": "jpeg", "quality": 90, "everyNthFrame": 1,
-                    "maxWidth": device(size.width), "maxHeight": device(size.height),
-                });
+            // With no largest size, each frame is the page's size as it is then, so the picture
+            // keeps up with a new size without starting again.
+            if let Some(session) = &want {
+                let cast = json!({ "format": "jpeg", "quality": 90, "everyNthFrame": 1 });
                 cdp.send("Page.startScreencast", cast, Some(session));
             }
             self.casting = want;
