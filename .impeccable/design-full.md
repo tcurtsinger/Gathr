@@ -36,18 +36,18 @@ streaming, account controls and task transitions are not production contracts.
 Operate mode: variance 2, motion 2, density 5. One centred chat (the room, `ui/src/room`), the
 chats' sidebar, the message box and a resizable sidebar of tabs beside the chat. No Overview screen.
 
-The source record and component map are in [prototype-reference.md](designs/prototype-reference.md).
-The portable reference is [system.html](designs/system.html). It demonstrates
+The source record and component map are in [prototype-reference.md](../designs/prototype-reference.md).
+The portable reference is [system.html](../designs/system.html). It demonstrates
 tokens and static component anatomy, not replacement runtime components.
 
 ## Colors
 
 Surfaces take four steps. `shell` is the window's own surface, under the rail and the top line and
-around the frame ([0070](docs/archive/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
+around the frame ([0070](../docs/archive/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
 frame in light, with `shell-edge` (7% foreground) as the frame's 1px ring. `frame` is navigation and the
 workspace. `background` is the chat. An agent's message is a card on the chat: a `border` ring and the
 foreground at 3% over the chat. The person's message is a bubble in `accent-surface`. In dark the chat is darkest
-and the frame lighter ([0068](docs/archive/decisions/0068-the-windows-colours.md)):
+and the frame lighter ([0068](../docs/archive/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
@@ -316,7 +316,7 @@ sight isn't drawn.
 ### State marks
 
 An agent's picture carries no state (the owner's call of 2026-11-21). A state shows only where it is said
-beside words ([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)): Needs you (a blue dot), Can't
+beside words ([0071](../docs/archive/decisions/0071-an-agents-state-is-one-mark.md)): Needs you (a blue dot), Can't
 run (a red disc with !) and Working (a three-quarter blue ring). A card's head says "Working · 1m" or a question's
 "Needs you" with its mark at 11px. A Working mark turns once in 1.6s
 (the owner's call of 2026-11-19: a ring standing still read as stuck); under reduced motion it is still.
@@ -343,7 +343,7 @@ dismisses it. Search matches titles and message text, supports arrow selection a
 Enter, and retains its query. Archived chats are included and labelled Archived. Chats precede Messages; one
 keyboard cursor spans both groups. A hit opens its chat. In-chat find is separate work.
 
-Search uses [title first](designs/search/v1.html), selected 2026-11-10. Snippet first (v2) is retired. Search
+Search uses [title first](../designs/search/v1.html), selected 2026-11-10. Snippet first (v2) is retired. Search
 has the icon-button close.
 The portable reference demonstrates empty, loading, no matches and referenced errors.
 
@@ -368,7 +368,7 @@ is open and shares the chat-list scroll region. Archived rows are not indented;
 More appears on hover and keyboard focus. Restore returns a
 chat to its original project or Chats without restarting cancelled work.
 The separate Archived button and flyout are retired. See
-[the system page](designs/system.html#archive-stale).
+[the system page](../designs/system.html#archive-stale).
 
 The top line's More has Pause (Resume, or Restart after a stop), Rename, Archive and Delete, each after a
 separator; a chat's row in the sidebar has Rename, Archive and Delete, and a project's Settings and Delete, in the
