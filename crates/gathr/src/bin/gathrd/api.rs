@@ -30,6 +30,7 @@ pub struct State {
     pub codex_updates: Arc<crate::updates::Updates>,
     pub app: Arc<crate::app_update::AppUpdates>,
     pub sign_ins: Arc<crate::sign_in::SignIns>,
+    pub browser: gathr::browser::Browser,
     pub models: crate::models::Models,
     /// Set once shutdown starts, before the server waits on its requests: a request waiting on
     /// an engine ends at once instead of holding the stop.
@@ -82,6 +83,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::models::routes())
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
+        .merge(crate::browser::routes())
         .nest_service("/mcp", crate::tools::service(state.clone()))
         // An AI app outside Gathr, through `gathr connect`: guarded as the rest of `/api` is.
         .nest_service(
@@ -236,9 +238,10 @@ fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
         .find_map(|pair| pair.trim().strip_prefix(name)?.strip_prefix('='))
 }
 
-/// A browser can't set headers on a WebSocket, so the live socket may carry the token in its query.
+/// A browser can't set headers on a WebSocket, so the live socket and the Browser tab's may carry
+/// the token in their query.
 fn live_token(uri: &Uri) -> Option<&str> {
-    if uri.path() != "/api/live" {
+    if uri.path() != "/api/live" && uri.path() != crate::browser::PATH {
         return None;
     }
     uri.query()?

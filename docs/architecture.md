@@ -128,8 +128,8 @@ Local Theme and panel widths persist in the client. Vite builds the UI; Biome, T
 [0012](archive/decisions/0012-ui-shell.md), [0016](archive/decisions/0016-macos.md), [0022](archive/decisions/0022-ui-tooling.md).
 
 The window has a rail (Home, Agents, Memory, Plugins, Designs, Scheduled, Settings), the chat list and the chat.
-A chat's right panel is tabs: Home (Find file, the Files, Designs and Changes tiles, and the board), and a tab for
-each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
+A chat's right panel is tabs: Home (Find file, the Files, Designs, Changes and Browser tiles, and the board), and a tab for
+each browser page and each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
 PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today
 (`"csp": null` in `crates/gathr-app/tauri.conf.json`). Changes shows what each agent changed in its
 worktree that isn't on the project's main line yet, and what it wrote in other checkouts (`changes.rs`, through git);
@@ -138,6 +138,16 @@ window's messages and live events leave out). A turn's file steps keep the files
 lines added and removed (`changed`), and once the turn ends its card lists them, those steps leaving its steps line
 (`ui/src/room/FilesCard.tsx`). `ui/src/registry` keeps the assistant-ui and
 shadcn files as published ([0030](archive/decisions/0030-ui-foundation.md)).
+
+The Browser tab is a real browser the service runs for the person (`crates/gathr/src/browser`): Edge on Windows,
+Chrome or Edge on a Mac, found in its usual place, started without a window the first time a window shows the tab,
+started again if it dies, and closed (then stopped) with the service, in the job or process group that ends
+everything the service starts. Its profile is `<data>/browser`, its own, so sign-ins made there stay; sign-in to the
+browser itself and sync are off. The service drives it over the Chrome DevTools debugging pipe, never a port: on
+Unix the browser's file descriptors 3 and 4, set up by `/bin/sh`; on Windows handles named on its command line,
+which `gathrd --browser-relay` passes on from its own stdin and stdout, as only an inherited handle can be named
+there. The window talks to it over `/api/browser` ([api.md](api.md)); nothing about pages is stored, and its events
+(`gathr.browser.start`, `.stop`, `.crash`) never carry a page's address or words.
 The signed window updater and service handover are built. The stopped service leaves its token and the page's
 sign-in in `handover.json` for the start that follows, so the window and page stay signed in; a newer copy a check
 installed is kept until Update switches to it (`crates/gathr/src/app/`).

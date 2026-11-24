@@ -10,6 +10,7 @@ pub mod archive;
 pub mod assistant;
 pub mod background;
 pub mod board;
+pub mod browser;
 pub mod carry;
 pub mod changes;
 pub mod claude;

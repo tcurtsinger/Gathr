@@ -307,9 +307,13 @@ tab. A file in a message is a square tile where it stands: a picture cropped to 
 other file opens as a tab. An @Name of the chat's agents in an agent's words is blue.
 
 The chat's sidebar (`ui/src/room/Sidebar.tsx`) is tabs: Home, always first and never closed, with Find file at its
-top, then Open (the Files, Designs and Changes tiles, Changes with its count of changed files once read)
-and the Board (To do, Doing in blue, In review in `review`, Done in `free`; No work yet). Files, Designs and
-Changes, once opened, then a tab per open file or design, each with its close X; a tab is at most 180px, the
+top, then Open (the Files, Designs, Changes and Browser tiles, Changes with its count of changed files once
+read, Browser with its open pages; two a row in a narrow panel) and the Board (To do, Doing in blue, In review
+in `review`, Done in `free`; No work yet). Files, Designs, Changes and Browser (lucide's Globe), once opened,
+then a tab per open browser page (the globe and its title) and per open file or design, each with its close X.
+The Browser tab: one row of Back, Forward and Reload (Stop while loading) as icon buttons and the address in the
+panel's find box, then the page in a bordered 10px-round box with a quiet ring when it has the keys, a line
+about what isn't built yet floating over its foot. A tab is at most 180px, the
 open one on the chat's own surface with a border. The file tabs scroll sideways, and a tab partly out of
 sight isn't drawn.
 
