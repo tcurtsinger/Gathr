@@ -199,6 +199,15 @@ pub fn set_key(conn: &Connection, id: &str, key: &str) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<Tool, Error> {
+    get(conn, id)?;
+    conn.execute(
+        "UPDATE tools SET name = ?2 WHERE id = ?1",
+        params![id, name],
+    )?;
+    get(conn, id)
+}
+
 pub fn set_enabled(conn: &Connection, id: &str, on: bool) -> Result<(), Error> {
     get(conn, id)?;
     conn.execute(

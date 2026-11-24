@@ -151,7 +151,7 @@ impl Tools {
 }
 
 /// Refused unless the caller is the person's assistant in its own chat.
-fn assistants_own(
+pub(super) fn assistants_own(
     c: &rusqlite::Connection,
     (chat, caller): (&str, Option<&str>),
     what: &str,

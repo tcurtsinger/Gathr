@@ -73,7 +73,7 @@ a picture or page must be a file the chat's folders already show), add a
 tool or a skill when the person asks (`add_tool`, `add_skill`; a tool on this PC is refused only when one runs the same
 command with the same variables), schedule work in the chat (`schedule`,
 `unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`) and, the assistant in its own chat,
-send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`).
+send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`), or a change to one (`propose_project_change`, `propose_agent_change`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 When a turn ends and the chat is quiet (no turn running or queued, not archived or paused, no question, approval or
 sign-in waiting), each agent whose board line still says `doing` and whose engine runs nothing in the background gets

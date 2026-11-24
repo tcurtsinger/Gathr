@@ -134,36 +134,40 @@ async fn create(
 }
 
 #[derive(Deserialize)]
-struct Settings {
-    name: Option<String>,
-    folder: Option<PathBuf>,
-    members: Option<Vec<Seat>>,
+pub struct Settings {
+    pub name: Option<String>,
+    pub folder: Option<PathBuf>,
+    pub members: Option<Vec<Seat>>,
 }
 
-/// Changes what the body names and leaves the rest. A new folder or team applies to chats made
-/// from then on: a chat keeps the ones it copied (0028).
 async fn change(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Id(id): Id<String>,
     Json(body): Json<Settings>,
 ) -> Answer {
+    change_to(&s, &t, id, body).await
+}
+
+/// Changes what `body` names and leaves the rest. A new folder or team applies to chats made
+/// from then on: a chat keeps the ones it copied (0028).
+pub async fn change_to(s: &Arc<State>, t: &Trace, id: String, body: Settings) -> Answer {
     const ERROR: &str = "Save failed";
-    find(&s, &t, &id, ERROR).await?;
+    find(s, t, &id, ERROR).await?;
     let name = match &body.name {
         Some(name) => Some(
             projects::name(name)
-                .map_err(|why| bad(&t, ERROR, why))?
+                .map_err(|why| bad(t, ERROR, why))?
                 .to_string(),
         ),
         None => None,
     };
     let team = match body.members {
-        Some(seats) => Some(checked(&s, &t, seats, ERROR).await?),
+        Some(seats) => Some(checked(s, t, seats, ERROR).await?),
         None => None,
     };
     let folder = match &body.folder {
-        Some(folder) => Some(crate::team::project(&t, folder, ERROR).await?),
+        Some(folder) => Some(crate::team::project(t, folder, ERROR).await?),
         None => None,
     };
     let changed: Vec<&str> = [
@@ -181,7 +185,7 @@ async fn change(
         .attr("changed", changed);
     let change = Change { name, folder, team };
     let key = id.clone();
-    let saved = db(&s, &t, ERROR, move |conn| {
+    let saved = db(s, t, ERROR, move |conn| {
         Ok(json!(projects::update(conn, &key, change)?))
     })
     .await?;

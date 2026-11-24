@@ -507,7 +507,16 @@ export function App() {
         <OpenMemory.Provider value={openMemory}>
           <OpenPlugin.Provider value={openPlugin}>
             <OpenScheduled.Provider value={openScheduled}>
-              <ProposalActs.Provider value={{ agents, change: setProposing, open: openChat, toAgents }}>
+              <ProposalActs.Provider
+                value={{
+                  agents,
+                  change: setProposing,
+                  open: openChat,
+                  toAgents,
+                  toProject: (project) =>
+                    setSettings({ page: 'projects', project, opener: document.activeElement as HTMLElement }),
+                }}
+              >
                 <RoomView
                   key={screen.chat.id || 'new'}
                   {...screen}

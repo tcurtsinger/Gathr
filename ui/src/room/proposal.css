@@ -75,3 +75,35 @@
 .proposal-foot > .room-kept {
   margin-left: -6px;
 }
+/* A proposed change: each field that changes, the old value struck through, then the new. */
+.proposal-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.proposal-change s,
+.proposal-change > span:not(.face) {
+  color: var(--muted-foreground);
+}
+/* A face that changes: the old one, an arrow, the new one. */
+.proposal-change:has(> .face) {
+  align-items: center;
+}
+.proposal-change b {
+  font-weight: 600;
+}
+.proposal-set + .proposal-set {
+  border-top: 1px solid var(--border);
+}
+.proposal-team {
+  padding-bottom: 0;
+}
+.proposal-leaves {
+  opacity: 0.55;
+}
+.proposal-leaves b {
+  text-decoration: line-through;
+}

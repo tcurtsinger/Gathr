@@ -15,6 +15,7 @@ mod note;
 mod outside;
 mod person;
 mod propose;
+mod propose_change;
 mod react;
 pub mod relay;
 mod schedule;

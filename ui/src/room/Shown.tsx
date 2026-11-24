@@ -15,6 +15,7 @@ import { Drawing } from './Drawing';
 import { Flow } from './Flow';
 import { PageFrame } from './PageFrame';
 import { AgentProposal, Proposal } from './Proposal';
+import { AgentChangeCard, ProjectChangeCard } from './ProposedChange';
 import './shown.css';
 
 type Table = NonNullable<Block['table']>;
@@ -203,6 +204,10 @@ function draw(chat: string, block: Block) {
     return <Proposal message={block.message} project={block.project} />;
   if (block.kind === 'agent' && block.message && typeof block.agent?.name === 'string')
     return <AgentProposal message={block.message} agent={block.agent} />;
+  if (block.kind === 'agent_change' && block.message && block.agent_change?.was)
+    return <AgentChangeCard message={block.message} change={block.agent_change} />;
+  if (block.kind === 'project_change' && block.message && Array.isArray(block.project_change?.to?.team))
+    return <ProjectChangeCard message={block.message} change={block.project_change} />;
   return null;
 }
 

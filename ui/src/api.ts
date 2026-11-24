@@ -795,6 +795,9 @@ export const api = {
   /** Add agent, from the card of an agent the assistant proposed: as proposed, or as the Agents screen's form says. */
   addProposedAgent: (message: string, agent?: AgentDraft) =>
     call<{ agent: Agent; message: Message }>('POST', `/api/proposals/${message}/add`, agent ?? {}),
+  /** Save, from the card of a change the assistant proposed to an agent or a project. */
+  saveProposedChange: (message: string) =>
+    call<{ message: Message }>('POST', `/api/proposals/${message}/save`),
   saveAgent: ({ id, ...agent }: AgentDraft & { id: string }) =>
     call<Agent>('PATCH', `/api/agents/${id}`, agent),
   /** What deleting the project or agent would do, for the confirm's words. */
