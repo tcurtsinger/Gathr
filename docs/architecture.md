@@ -76,7 +76,7 @@ command with the same variables), schedule work in the chat (`schedule`,
 send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 When a turn ends and the chat is quiet (no turn running or queued, not archived or paused, no question, approval or
-sign-in waiting), each member whose board line still says `doing` and whose engine runs nothing in the background gets
+sign-in waiting), each agent whose board line still says `doing` and whose engine runs nothing in the background gets
 one turn back (`nudge.rs`, opened `nudge`, `gathr.turn.nudge`), once until the person writes in the chat again.
 The assistant's chat (`assistant.rs`): one chat that never ends, its id the `assistant_chat` setting until it is archived or
 deleted. The assistant leads it; an agent its words or the person's name joins as a guest and leaves by `send_out`,

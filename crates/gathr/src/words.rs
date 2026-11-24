@@ -40,7 +40,7 @@ pub enum Opened {
     /// Words an AI app outside Gathr sent for the person (`from_app`): Gathr's line names the app, then the words, drawn
     /// under the app's logo and brand.
     App,
-    /// A member's line on the board still said doing when its chat went quiet (`nudge`): Gathr's line hands
+    /// An agent's line on the board still said doing when its chat went quiet (`nudge`): Gathr's line hands
     /// it its turn back, once until the person writes again.
     Nudge,
     Person,
