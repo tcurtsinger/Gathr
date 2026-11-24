@@ -417,6 +417,9 @@ export function App() {
     onRestore: () => restore(chat),
   };
 
+  // The rail's attention dot means a sign-in is needed: Settings opens where that happens.
+  const anySignedOut = agents.some((a) => signedOut(a.id));
+
   const app = (
     <div className={nav ? 'app' : 'app nav-closed'}>
       <NavButtons
@@ -432,8 +435,8 @@ export function App() {
           setPluginAt(undefined);
           setOpened(open);
         }}
-        onSettings={(opener) => openSettings('engines', undefined, opener)}
-        signedOut={agents.some((a) => signedOut(a.id))}
+        onSettings={(opener) => openSettings(anySignedOut ? 'engines' : 'general', undefined, opener)}
+        signedOut={anySignedOut}
         update={{
           ready: readyVersion(appUpdate.app),
           updating: appUpdate.app?.state === 'updating',
