@@ -1,6 +1,7 @@
 //! `@Name` in an agent's words wakes that member when its turn ends (0081): into its running turn in
 //! the chat, joined to its turn queued there, or a turn of its own answering the sender's, which a
-//! pause holds. Each counts as a hand-off; past the limit the chat pauses.
+//! pause holds. Each counts as a hand-off; past the limit the chat pauses. Then the team's check, and
+//! once the chat is quiet, the hand-back to a member whose board line still says doing.
 
 use std::sync::Arc;
 
@@ -19,7 +20,8 @@ pub struct Ended {
 
 /// Wakes each member the ended turn's words name, when it ended `done`. Apart from the agent's own
 /// task, which calls it: delivery waits on the member's task, which may be waiting on this one. The
-/// lead's answer is then checked (0080), once whoever was woken has its turn queued.
+/// lead's answer is then checked (0080), once whoever was woken has its turn queued; and with nothing
+/// queued or running, each member whose board line still says doing gets its turn back (`nudge`).
 pub fn wake(chats: Arc<Chats>, ended: Ended, done: bool) {
     tokio::spawn(async move {
         if done {
@@ -40,7 +42,27 @@ pub fn wake(chats: Arc<Chats>, ended: Ended, done: bool) {
             }
             None => {}
         }
+        hand_back(&chats, &ended).await;
     });
+}
+
+async fn hand_back(chats: &Arc<Chats>, ended: &Ended) {
+    let asks = chats.states.asks(&ended.chat);
+    let (chat, trace) = (ended.chat.clone(), ended.trace.clone());
+    let handed = chats
+        .writer
+        .call(move |c| gathr::nudge::hand_back(c, &chat, asks, &trace));
+    match handed.await {
+        Some(Ok(starts)) => chats.start(starts),
+        Some(Err(e)) => {
+            let event = Event::point("gathr.turn.nudge")
+                .trace(&ended.trace)
+                .chat(&ended.chat)
+                .error("sqlite");
+            chats.writer.record(event.attr("why", e.to_string()));
+        }
+        None => {}
+    }
 }
 
 async fn woken(chats: &Arc<Chats>, ended: &Ended) {

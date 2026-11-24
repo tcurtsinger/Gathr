@@ -118,6 +118,10 @@ impl States {
     }
 
     /// Whether an approval waits in the chat.
+    pub fn asks(&self, chat: &str) -> bool {
+        Self::asked(&self.known.lock().expect("never poisoned"), chat)
+    }
+
     fn asked(known: &Known, chat: &str) -> bool {
         known.asking.values().any(|c| c == chat)
     }

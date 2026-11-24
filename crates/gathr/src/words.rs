@@ -14,6 +14,7 @@ pub const PICKED: i64 = 1;
 pub const SCHEDULED: i64 = 1;
 pub const BRIEF: i64 = 1;
 pub const APP: i64 = 2;
+pub const NUDGE: i64 = 1;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +40,9 @@ pub enum Opened {
     /// Words an AI app outside Gathr sent for the person (`from_app`): Gathr's line names the app, then the words, drawn
     /// under the app's logo and brand.
     App,
+    /// A member's line on the board still said doing when its chat went quiet (`nudge`): Gathr's line hands
+    /// it its turn back, once until the person writes again.
+    Nudge,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -58,6 +62,7 @@ impl Opened {
             Opened::Scheduled => "scheduled",
             Opened::Brief => "brief",
             Opened::App => "app",
+            Opened::Nudge => "nudge",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -76,6 +81,7 @@ impl Opened {
             Opened::Scheduled => Some(SCHEDULED),
             Opened::Brief => Some(BRIEF),
             Opened::App => Some(APP),
+            Opened::Nudge => Some(NUDGE),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }

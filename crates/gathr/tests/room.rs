@@ -3,7 +3,8 @@
 //! a turn that goes on in its conversation hears what came since its last turn, without its own; a
 //! member hears other members' lines cut to their first sentence, the lead hears every line whole,
 //! a very long line is capped; the message that opened the turn is never a line; a chat of one hears
-//! nothing; and what each turn was told is counted on its trace.
+//! nothing; and what each turn was told is counted on its trace. And when the chat goes quiet with a
+//! member's board line still doing, that member gets its turn back once.
 
 mod common;
 
@@ -280,4 +281,70 @@ fn a_chat_of_one_agent_hears_nothing_of_it() {
     ended(&service, &chat, &next);
     let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.room.heard'";
     assert_eq!(rows(&data.0, sql)[0]["n"], 0);
+}
+
+/// Ann's hand-backs (`nudge`), oldest first: each turn's status and Gathr's words in it.
+fn nudges(data: &Path, ann: &str) -> Vec<Value> {
+    let sql = format!(
+        "SELECT t.id, t.status, t.opened_version, (SELECT group_concat(m.body, ' | ') FROM messages m
+             WHERE m.turn_id = t.id AND m.role = 'gathr') AS body
+         FROM turns t WHERE t.opened_by = 'nudge' AND t.agent_id = '{ann}' ORDER BY t.created_ts"
+    );
+    rows(data, &sql)
+}
+
+/// What starts nothing does so at once: long enough for the chat's quiet moment to have been read.
+fn after_quiet() {
+    std::thread::sleep(std::time::Duration::from_secs(1));
+}
+
+#[test]
+fn a_quiet_chat_hands_a_doing_line_back_to_its_member_once() {
+    let data = TempDir::new();
+    let (service, chat, _) = team(&data.0, &engine(&data.0, &[], 5), &[]);
+    let ann = member(&service, &chat, "Ann");
+    let seed = Seed::new(&data.0, &chat);
+    let line = |state: &str| {
+        let sql = "INSERT INTO board_lines (id, chat_id, owner, text, state) VALUES (1, ?1, ?2, 'Export page', ?3)
+                   ON CONFLICT (id) DO UPDATE SET state = excluded.state";
+        seed.conn.execute(sql, [&chat, &ann, state]).unwrap();
+    };
+    line("doing");
+
+    let first = say_to(&service, &chat, &ann, "Build the export");
+    ended(&service, &chat, &first);
+    let nudge = until(30, "Ann's hand-back to end", || {
+        let found = nudges(&data.0, &ann);
+        (found.first()?["status"] == "done").then(|| found[0].clone())
+    });
+    let words = "Your line on the board still says doing: \"Export page\". Nothing of yours is at work on it. \
+                 Do it now. If part of it is left for someone else or you're blocked, say so plainly and set \
+                 the line to what is true.";
+    assert_eq!(
+        (&nudge["body"], &nudge["opened_version"]),
+        (&json!(words), &json!(1))
+    );
+    read_once(&data.0, nudge["id"].as_str().unwrap(), words);
+    after_quiet();
+    assert_eq!(
+        nudges(&data.0, &ann).len(),
+        1,
+        "its line still says doing: no second one"
+    );
+
+    // The person writes again, so a hand-back is due once more, but not for a line that's done.
+    line("done");
+    let next = say_to(&service, &chat, &ann, "Next");
+    ended(&service, &chat, &next);
+    after_quiet();
+    assert_eq!(nudges(&data.0, &ann).len(), 1, "a done line");
+
+    // Nor while a question to the person is open.
+    line("doing");
+    let sql = "INSERT INTO questions (chat_id, agent, question, asked_ts) VALUES (?1, ?2, 'Which page?', 0)";
+    seed.conn.execute(sql, [&chat, &ann]).unwrap();
+    let last = say_to(&service, &chat, &ann, "Again");
+    ended(&service, &chat, &last);
+    after_quiet();
+    assert_eq!(nudges(&data.0, &ann).len(), 1, "a question open");
 }
