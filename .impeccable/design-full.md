@@ -312,7 +312,7 @@ read, Browser with its open pages; two a row in a narrow panel) and the Board (T
 in `review`, Done in `free`; No work yet). Files, Designs, Changes and Browser (lucide's Globe), once opened,
 then a tab per open browser page (the globe and its title) and per open file or design, each with its close X.
 The Browser tab: one row of Back, Forward and Reload (Stop while loading) as icon buttons and the address in the
-panel's find box, then the page in a bordered 10px-round box with a quiet ring when it has the keys, a line
+panel's find box (a secure page's without its https:// until clicked), then the page in a bordered 10px-round box with a quiet ring when it has the keys, a line
 about what isn't built yet floating over its foot. A tab is as wide as its name, at most 180px, the
 open one on the chat's own surface with a border and its close X; another's X shows only under the pointer, over
 its name's faded end. Tabs that don't fit go in a "+N" list (a page by its site); the last shown may be cut short.
