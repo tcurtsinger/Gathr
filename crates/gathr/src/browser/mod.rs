@@ -20,7 +20,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use crate::event::Event;
 use crate::writer::Writer;
 
-pub use pages::Out;
+pub use pages::{Out, decode};
 
 /// The argument that makes `gathrd` the browser's relay on Windows (`relay`).
 pub const RELAY: &str = "--browser-relay";

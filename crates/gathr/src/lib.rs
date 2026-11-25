@@ -15,6 +15,7 @@ pub mod carry;
 pub mod changes;
 pub mod claude;
 pub mod codex;
+pub mod computer;
 pub mod context;
 pub mod crash_log;
 pub mod data;

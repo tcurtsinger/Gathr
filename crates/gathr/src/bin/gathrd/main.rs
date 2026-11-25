@@ -14,6 +14,7 @@ mod browser;
 mod chat_state;
 mod chats;
 mod cleanup;
+mod computer;
 mod copies;
 mod deletes;
 mod documents;
