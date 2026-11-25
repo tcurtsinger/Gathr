@@ -62,6 +62,43 @@ pub async fn top_level(dir: &Path, env: &Vars) -> Result<PathBuf, String> {
     Ok(PathBuf::from(top))
 }
 
+/// Whether `dir` is a folder in a git repository.
+pub async fn in_repo(dir: &Path, env: &Vars) -> bool {
+    dir.is_dir()
+        && git(env, dir, &["rev-parse", "--show-toplevel"], LOCAL_LIMIT)
+            .await
+            .is_ok()
+}
+
+/// Makes `dir` a git repository with its files as they are as the first commit, so worktrees have a
+/// commit to start from: New project's "Set up git and create". A folder already in one is left as it is.
+pub async fn init(dir: &Path, env: &Vars) -> Result<(), String> {
+    if !dir.is_dir() {
+        return Err(format!("{} isn't a folder", dir.display()));
+    }
+    if in_repo(dir, env).await {
+        return Ok(());
+    }
+    git(env, dir, &["init", "--quiet"], LOCAL_LIMIT).await?;
+    git(env, dir, &["add", "--all"], FETCH_LIMIT).await?;
+    // Someone who never set a git name still gets a commit, under Gathr's.
+    let named = git(env, dir, &["config", "user.email"], LOCAL_LIMIT).await;
+    let mut commit = vec!["-c", "commit.gpgsign=false"];
+    if named.map_or(true, |email| email.is_empty()) {
+        commit.extend(["-c", "user.name=Gathr", "-c", "user.email=gathr@localhost"]);
+    }
+    commit.extend([
+        "commit",
+        "--quiet",
+        "--allow-empty",
+        "--no-verify",
+        "-m",
+        "Start",
+    ]);
+    git(env, dir, &commit, FETCH_LIMIT).await?;
+    Ok(())
+}
+
 /// The agent's worktree at `folder`, made from `project` on `branch` if it isn't there yet:
 /// `None` when it was. A branch already there is checked out again, never made afresh.
 pub async fn ensure(

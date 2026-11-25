@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
 import { useCard } from './components/Corner';
@@ -42,6 +42,24 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
     );
     setFailure(null);
   }
+  // A folder that's there but not in a git repository: Create sets git up first (0028 needs one for worktrees).
+  const [bare, setBare] = useState<string | null>(null);
+  useEffect(() => {
+    const path = folder.trim();
+    if (!open || !path) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      api.checkFolder(path).then(
+        (c) => live && setBare(c.folder && !c.repo ? path : null),
+        () => live && setBare(null),
+      );
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [open, folder]);
+  const init = bare !== null && bare === folder.trim();
   useCard(open ? failure : null);
   const taken = projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase());
   const ready = name.trim() && folder.trim() && seats.length > 0 && !taken;
@@ -49,7 +67,7 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
   const create = (e: FormEvent) => {
     e.preventDefault();
     if (!ready) return;
-    const asked = { name: name.trim(), folder: folder.trim(), members: seats };
+    const asked = { name: name.trim(), folder: folder.trim(), members: seats, ...(init && { init: true }) };
     if (proposal) {
       api.makeProject(proposal.message, asked).then(onClose, setFailure);
       return;
@@ -83,7 +101,10 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
               required
             />
           </Row>
-          <Row name={<label htmlFor="new-project-folder">Folder</label>}>
+          <Row
+            name={<label htmlFor="new-project-folder">Folder</label>}
+            line={init ? 'Not a git repo' : undefined}
+          >
             <FolderField id="new-project-folder" title="Project folder" value={folder} onChange={setFolder} />
           </Row>
           <Lead seats={seats} agents={agents} onChange={setSeats} />
@@ -94,7 +115,7 @@ export function NewProject({ open, agents, projects, proposal, onClose, onCreate
             Cancel
           </Button>
           <Button type="submit" disabled={!ready}>
-            Create
+            {init ? 'Set up git and create' : 'Create'}
           </Button>
         </footer>
       </form>
