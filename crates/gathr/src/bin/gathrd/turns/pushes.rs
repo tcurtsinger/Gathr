@@ -22,6 +22,22 @@ impl Task {
         input: Value,
         reply: oneshot::Sender<bool>,
     ) {
+        // Only the person runs it, whatever the agent's Approvals: always a card.
+        if kind == RUN {
+            let why = "The agent asks you to run this yourself.".to_string();
+            let trace = self.turn.as_ref().map(|t| t.ids.trace.clone());
+            let event = Event::point("gathr.approvals.run")
+                .trace(&trace.unwrap_or_else(gathr::ids::trace_id))
+                .chat(chat)
+                .attr("gen_ai.agent.id", self.agent.clone());
+            if let Some(asked) = self
+                .put_service(kind, RUN_TOOL, chat, input, why, reply)
+                .await
+            {
+                self.record(event.ok().attr("asked", asked));
+            }
+            return;
+        }
         let full = self
             .assigned
             .as_ref()
