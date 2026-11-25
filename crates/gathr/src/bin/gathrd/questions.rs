@@ -26,6 +26,16 @@ struct Given {
     /// Files of the question's chat, by their saved names: a line each after the words.
     #[serde(default)]
     files: Vec<String>,
+    /// For several questions asked together: an answer to each, in order, and no pick, words or files above.
+    answers: Option<Vec<Part>>,
+}
+
+#[derive(Deserialize)]
+struct Part {
+    pick: Option<String>,
+    words: Option<String>,
+    #[serde(default)]
+    files: Vec<String>,
 }
 
 async fn answer(
@@ -35,7 +45,10 @@ async fn answer(
     Json(body): Json<Given>,
 ) -> Answer {
     let mut words = body.words.unwrap_or_default();
-    if !body.files.is_empty() {
+    let has_files =
+        !body.files.is_empty() || (body.answers.iter().flatten()).any(|a| !a.files.is_empty());
+    let mut answers: Option<Vec<gathr::questions::Given>> = None;
+    if has_files {
         let Json(chat) = db(&s, &t, "Answer failed", move |c| {
             let chat: Option<String> = c
                 .query_row("SELECT chat_id FROM questions WHERE id = ?1", [id], |r| {
@@ -51,13 +64,39 @@ async fn answer(
         };
         let lines = crate::files::lines(&s, &t, &chat, &body.files, "Answer failed").await?;
         words = gathr::files::with_lines(&words, &lines);
+        if let Some(parts) = &body.answers {
+            let mut given = Vec::new();
+            for p in parts {
+                let lines = crate::files::lines(&s, &t, &chat, &p.files, "Answer failed").await?;
+                let words =
+                    gathr::files::with_lines(p.words.as_deref().unwrap_or_default(), &lines);
+                given.push(gathr::questions::Given {
+                    pick: p.pick.clone(),
+                    words: Some(words),
+                });
+            }
+            answers = Some(given);
+        }
+    }
+    if answers.is_none() {
+        answers = body.answers.as_ref().map(|parts| {
+            (parts.iter())
+                .map(|p| gathr::questions::Given {
+                    pick: p.pick.clone(),
+                    words: p.words.clone(),
+                })
+                .collect()
+        });
     }
     let after: Arc<Mutex<Option<(gathr::store::Start, Value)>>> = Arc::default();
     let kept = after.clone();
     let answered = db(&s, &t, "Answer failed", move |c| {
         let tx = c.transaction()?;
         let pick = body.pick.as_deref();
-        let (question, start) = gathr::questions::answer(&tx, id, pick, Some(&words))?;
+        let (question, start) = match &answers {
+            Some(all) => gathr::questions::answer_all(&tx, id, all)?,
+            None => gathr::questions::answer(&tx, id, pick, Some(&words))?,
+        };
         let questions = gathr::questions::of_chat(&tx, &start.chat)?;
         tx.commit()?;
         let turn = start.turn.clone();

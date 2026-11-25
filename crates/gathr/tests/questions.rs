@@ -107,6 +107,82 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     assert_eq!(row.unwrap()["needs"], false, "{listed}");
 }
 
+/// Several questions in one `ask_person` call: one card with each part, refused an answer that skips one, and
+/// answered whole it opens one turn of the asker's with every answer.
+#[test]
+fn several_questions_are_one_card_answered_in_one_turn() {
+    let data = TempDir::new();
+    let _go = LetGo(data.0.join("go"));
+    let (service, chat, lead) = team(&data.0, &turns(&data.0, &[0], 2), &[]);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Set up computer use", "agent": lead }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let token = first_token(&data.0);
+    let one = json!({ "questions": [{ "topic": "Cursor", "what": "Draw it?" }] });
+    let refused = call_tool(service.info.port, &token, "ask_person", one);
+    assert_eq!(refused["isError"], true, "{refused}");
+    let ask = json!({ "what": "Computer use", "questions": [
+        { "topic": "Cursor", "what": "Draw each agent's cursor?", "why": "Your mouse never moves.",
+          "choices": [{ "label": "Draw it" }, { "label": "Don't" }] },
+        { "topic": "Clipboard", "what": "May agents use your clipboard?",
+          "choices": [{ "label": "No" }, { "label": "Allow it" }] },
+    ] });
+    let asked = call_tool(service.info.port, &token, "ask_person", ask);
+    assert_eq!(asked["isError"], false, "{asked}");
+
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let question = &history["questions"][0];
+    assert_eq!(
+        question["question"],
+        "Computer use\n\n- Cursor: Draw each agent's cursor?\n- Clipboard: May agents use your clipboard?",
+        "{history}"
+    );
+    let parts = &question["parts"];
+    assert_eq!(
+        (&parts[0]["question"], &parts[1]["choices"][1]["label"]),
+        (
+            &json!("Draw each agent's cursor?\n\nYour mouse never moves."),
+            &json!("Allow it")
+        ),
+        "{history}"
+    );
+
+    let path = format!("/api/questions/{}/answer", question["id"]);
+    let alone = service.send("POST", &path, json!({ "pick": "Draw it" }));
+    assert_eq!(alone.status, 409, "{}", alone.body);
+    let skipped = json!({ "answers": [{ "pick": "Draw it" }, {}] });
+    let skipped = service.send("POST", &path, skipped);
+    assert_eq!(skipped.status, 409, "{}", skipped.body);
+
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let answers =
+        json!({ "answers": [{ "pick": "Draw it" }, { "pick": "No", "words": "Not yet." }] });
+    let answered = service.send("POST", &path, answers);
+    assert_eq!(answered.status, 200, "{}", answered.body);
+    let turn = answered.json()["turn"].clone();
+    let history = service.wait_for(&chat, 10, "the answer's turn", |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        turns.iter().any(|t| t["id"] == turn)
+    });
+    let question = &history["questions"][0];
+    assert_eq!(
+        question["answers"],
+        json!([{ "pick": "Draw it", "words": null }, { "pick": "No", "words": "Not yet." }]),
+        "{history}"
+    );
+    let messages = history["messages"].as_array().unwrap().iter();
+    let ask = messages
+        .into_iter()
+        .find(|m| m["turn"] == turn && m["role"] == "gathr");
+    let said = "The person answered your questions \"Computer use\":\n\
+        - Cursor, \"Draw each agent's cursor?\n\nYour mouse never moves.\": Picked: Draw it\n\
+        - Clipboard, \"May agents use your clipboard?\": Picked: No. Their words: Not yet.";
+    assert_eq!(ask.unwrap()["body"], said, "{history}");
+}
+
 /// Archiving closes an open question unanswered: it's refused an answer, and Restore brings the
 /// chat back without needing the person.
 #[test]

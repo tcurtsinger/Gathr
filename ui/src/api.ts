@@ -436,6 +436,17 @@ export interface Question {
   asked: string;
   answered: string | null;
   closed: string | null;
+  /** Several questions asked together, answered whole: each with a word or two naming it. Null when asked alone. */
+  parts: { topic: string; question: string; choices: { label: string; detail: string | null }[] }[] | null;
+  /** Once answered, the answer to each of `parts`, in order. */
+  answers: { pick: string | null; words: string | null }[] | null;
+}
+
+/** The person's answer to one of several questions: a pick, their own words and files, or both. */
+export interface Given {
+  pick?: string;
+  words?: string;
+  files?: readonly File[];
 }
 
 /**
@@ -773,12 +784,27 @@ export const api = {
   like: (chat: string, message: string) =>
     call<{ reaction: Reaction; did: string }>('PUT', `/api/chats/${chat}/messages/${message}/like`, {}),
   /** Answers a room chat's question: it starts the asking agent's turn. */
-  answerQuestion: async (question: Question, pick?: string, words?: string, files: readonly File[] = []) => {
+  answerQuestion: async (
+    question: Question,
+    pick?: string,
+    words?: string,
+    files: readonly File[] = [],
+    all?: readonly Given[],
+  ) => {
     const saved = await upload(question.chat, files);
+    const answers =
+      all &&
+      (await Promise.all(
+        all.map(async (g) => {
+          const named = await upload(question.chat, g.files ?? []);
+          return { pick: g.pick, words: g.words, files: named.length ? named : undefined };
+        }),
+      ));
     return call<{ question: Question; turn: string }>('POST', `/api/questions/${question.id}/answer`, {
       pick,
       words,
       files: saved.length ? saved : undefined,
+      answers,
     });
   },
   /** Takes the like back: the mark goes, and nothing it did is undone. */
