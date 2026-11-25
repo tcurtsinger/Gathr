@@ -129,3 +129,12 @@ export function useTerminals(chat: string) {
 
 /** Chats whose person asked for a new terminal: it shows once it comes. */
 export const asked = new Set<string>();
+
+/**
+ * Starts the person's terminal in `folder`, or the chat's first, and shows it; with `typed`, a command an agent asked
+ * them to run, typed in and run at once, or left for their Enter.
+ */
+export function openTerminal(chat: string, folder?: string, typed?: string, run?: boolean) {
+  asked.add(chat);
+  tell(chat, { type: 'open', folder, typed, run });
+}

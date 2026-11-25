@@ -77,6 +77,7 @@ impl Tools {
             + Tools::propose_router()
             + Tools::propose_change_router()
             + Tools::terminal_router()
+            + Tools::ask_run_router()
     }
 }
 

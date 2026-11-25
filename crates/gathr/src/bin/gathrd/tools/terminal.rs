@@ -13,6 +13,7 @@ use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
+use serde_json::json;
 
 use super::Caller;
 use super::server::{Tools, caller_of};
@@ -55,6 +56,14 @@ pub struct Typed {
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct List {}
+
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+pub struct AskRun {
+    /// The command, as typed in the shell (PowerShell on Windows).
+    command: String,
+    /// Where it runs: your working folder unless set; a folder of this chat.
+    folder: Option<String>,
+}
 
 #[tool_router(router = terminal_router, vis = "pub(super)")]
 impl Tools {
@@ -138,6 +147,44 @@ impl Tools {
             ))
         });
         Ok(self.respond(&caller, "terminal_send", started, said).await)
+    }
+}
+
+#[tool_router(router = ask_run_router, vis = "pub(super)")]
+impl Tools {
+    #[tool(
+        description = "Ask the person to run a command themselves, when only they can: a sign-in, an admin \
+                       step, anything with their own keys. A card in the chat offers Run, Open in terminal and Not \
+                       now; this waits for their answer. Say why in your message first."
+    )]
+    async fn ask_to_run(
+        &self,
+        Parameters(ask): Parameters<AskRun>,
+        Extension(parts): Extension<Parts>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let caller = caller_of(&parts)?;
+        let started = Instant::now();
+        let folder = match ask.folder {
+            Some(folder) => self.allowed(&caller, Path::new(&folder)).await,
+            None => Ok(caller.cwd.clone()),
+        };
+        let said = match folder {
+            Err(why) => Err(why),
+            Ok(_) if ask.command.trim().is_empty() => Err("Give a command".into()),
+            Ok(folder) => {
+                let input = json!({ "command": ask.command.trim(), "folder": folder });
+                let taken = tokio::select! {
+                    taken = self.chats.ask_service(&caller, input, crate::turns::RUN) => taken,
+                    () = self.state.stopped() => false,
+                };
+                Ok(match taken {
+                    true => "The person took it to a terminal of this chat: terminal_list and terminal_read show it.",
+                    false => "The person said not now.",
+                }
+                .to_string())
+            }
+        };
+        Ok(self.respond(&caller, "ask_to_run", started, said).await)
     }
 }
 

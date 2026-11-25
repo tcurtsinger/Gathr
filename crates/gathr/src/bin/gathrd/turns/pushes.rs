@@ -1,5 +1,5 @@
-//! Service-side approvals (0029): a git push from an agent's worktree asks the person on the
-//! engine's active turn.
+//! Service-side approvals (0029): a git push from an agent's worktree, or a command it asks the
+//! person to run themselves, asks the person on the engine's active turn.
 
 use gathr::agents::Approvals;
 use gathr::event::Event;
@@ -7,6 +7,10 @@ use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
 use super::Task;
+
+/// A command an agent asks the person to run themselves (`ask_to_run`), and its card's tool.
+pub const RUN: &str = "run";
+const RUN_TOOL: &str = "Run this yourself";
 
 impl Task {
     /// Full never asks. A push that isn't risky never asks, and one that is inherits an allowed
@@ -54,25 +58,47 @@ impl Task {
             let _ = reply.send(true);
             return;
         }
-        let request_id = format!("gathr-{kind}-{}", gathr::ids::uuid());
         let why = format!(
             "{} {}",
             gathr::approvals::GATHR_ASKS,
             risk.unwrap_or_default()
         );
-        let tool = "git push".to_string();
-        let asked = (tool.clone(), input.clone(), Some(why.clone()));
+        if let Some(asked) = self
+            .put_service(kind, "git push", chat, input, why, reply)
+            .await
+        {
+            self.record(event.ok().attr("asked", asked));
+        }
+    }
+
+    /// Puts a service-side ask on the chat's turn, as the card the person answers: its request id,
+    /// or none, answered no at once, with no turn of the agent's in the chat.
+    async fn put_service(
+        &mut self,
+        kind: &'static str,
+        tool: &str,
+        chat: &str,
+        input: Value,
+        why: String,
+        reply: oneshot::Sender<bool>,
+    ) -> Option<String> {
+        let Some(turn) = self.turn.as_mut().filter(|t| t.ids.chat == chat) else {
+            let _ = reply.send(false);
+            return None;
+        };
+        let request_id = format!("gathr-{kind}-{}", gathr::ids::uuid());
+        let asked = (tool.to_string(), input.clone(), Some(why.clone()));
         turn.approvals.insert(request_id.clone(), asked);
         turn.service_approvals
             .insert(request_id.clone(), (kind, reply));
         let ids = turn.ids.clone();
-        self.record(event.ok().attr("asked", request_id.clone()));
         self.publish(
             &ids.chat,
             json!({ "type": "approval", "turn": ids.turn, "request_id": request_id,
             "tool": tool, "input": input, "why": why }),
         );
         self.chat_state(&ids).await;
+        Some(request_id)
     }
 
     /// Answers the service-side action: false when its caller has already given up.

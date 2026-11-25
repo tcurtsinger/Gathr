@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import type { Failure } from '../api';
+import { openTerminal } from '../room/terminals';
 import { useCard } from './Corner';
 
 export interface Approval {
@@ -23,10 +24,12 @@ interface Actions {
 export function AskApproval({
   approval: a,
   agent,
+  chat,
   actions,
 }: {
   approval: Approval;
   agent: string;
+  chat: string;
   actions: Actions;
 }) {
   const card = useRef<HTMLDivElement>(null);
@@ -40,6 +43,32 @@ export function AskApproval({
     card.current?.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.focus();
   }, [failure, a.answer?.allow]);
   const { tool, command } = asked(a);
+  if (a.tool === RUN_THIS) {
+    // A command an agent asks the person to run: Run runs it in a terminal of theirs, Open in terminal types it in.
+    const folder = (a.input as { folder?: string } | null)?.folder;
+    const take = (run: boolean) => {
+      openTerminal(chat, folder, command, run);
+      actions.approve(a.request, true);
+    };
+    return (
+      <ApprovalCard
+        ref={card}
+        state={sending ? 'running' : 'request'}
+        statusLabel={a.answer?.allow ? 'Opening…' : 'Answering…'}
+        title="Run this yourself?"
+        command={command}
+        data-approval={a.request}
+        style={{ overflowWrap: 'anywhere' }}
+        subtitle={agent}
+        allowOnceLabel="Run"
+        alwaysAllowLabel="Open in terminal"
+        denyLabel="Not now"
+        onAllowOnce={() => take(true)}
+        onAlwaysAllow={() => take(false)}
+        onDeny={() => actions.approve(a.request, false)}
+      />
+    );
+  }
   return (
     <ApprovalCard
       ref={card}
@@ -61,6 +90,9 @@ export function AskApproval({
   );
 }
 
+/** The tool of a command an agent asks the person to run themselves (`ask_to_run`). */
+const RUN_THIS = 'Run this yourself';
+
 /** What an engine's own tools ask, in plain words (the owner's pick, 2026-11-23); any other is "Allow <tool>?". */
 const TITLES: Record<string, string> = {
   Bash: 'Run a command?',
@@ -73,6 +105,7 @@ const TITLES: Record<string, string> = {
   WebFetch: 'Fetch a page?',
   mcp__gathr__terminal_run: 'Run in a terminal?',
   mcp__gathr__terminal_send: 'Type in a terminal?',
+  'Run this yourself': 'Run this yourself?',
 };
 export const titleOf = (tool: string) => TITLES[tool] ?? `Allow ${tool}?`;
 
