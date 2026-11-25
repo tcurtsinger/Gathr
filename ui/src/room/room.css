@@ -411,6 +411,11 @@
 .room-card > .room-steps:first-child:last-child {
   padding-block: 5px;
 }
+/* A running turn with nothing yet (no words, no steps) keeps that card's height, empty, so its picture, "Lead" and
+   name stand as they will once a step comes. */
+.room-card[data-live]:empty {
+  min-height: 37.5px;
+}
 .room-work {
   display: inline-flex;
   align-items: center;
