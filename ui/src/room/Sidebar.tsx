@@ -258,6 +258,15 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     return () => seen.disconnect();
   }, []);
   const browser = useBrowser();
+  const pageCount = useRef(browser.pages.length);
+  useEffect(() => {
+    const before = pageCount.current;
+    pageCount.current = browser.pages.length;
+    if (before && !browser.pages.length) {
+      const current = tabsOf(chat);
+      change(chat, { ...current, browser: false, at: current.at === BROWSER ? HOME : current.at });
+    }
+  }, [browser.pages.length, chat]);
   const terminals = useTerminals(chat).list;
   const pageKey = (id: string) => `page:${id}`;
   const order = [
