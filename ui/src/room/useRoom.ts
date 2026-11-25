@@ -3,6 +3,7 @@ import {
   api,
   type Background,
   type Failure,
+  type Given,
   type History,
   type Member,
   type Message,
@@ -206,8 +207,14 @@ export function useRoom(chat: string) {
 
   // The answer shows at once; the live event brings the same.
   const answer = useCallback(
-    async (asked: Question, pick?: string, words?: string, files?: readonly File[]) => {
-      const { question } = await api.answerQuestion(asked, pick, words, files);
+    async (
+      asked: Question,
+      pick?: string,
+      words?: string,
+      files?: readonly File[],
+      all?: readonly Given[],
+    ) => {
+      const { question } = await api.answerQuestion(asked, pick, words, files, all);
       setState((s) => ({ ...s, questions: s.questions.map((q) => (q.id === asked.id ? question : q)) }));
     },
     [],

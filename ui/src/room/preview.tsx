@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { BoardLine, Member, Message, Question, ToolBody, Turn } from '../api';
+import type { BoardLine, Given, Member, Message, Question, ToolBody, Turn } from '../api';
 import { Composer } from '../components/Composer';
 import { type FaceOf, KnownFaces } from '../components/Face';
 import type { Picked } from '../components/mention';
@@ -165,6 +165,8 @@ const questions: Question[] = [
     asked: at(8),
     answered: at(9),
     closed: null,
+    parts: null,
+    answers: null,
   },
   {
     id: 2,
@@ -182,6 +184,49 @@ const questions: Question[] = [
     asked: at(21.5),
     answered: null,
     closed: null,
+    parts: null,
+    answers: null,
+  },
+  {
+    id: 3,
+    chat: 'preview',
+    agent: 'mira',
+    name: 'Mira',
+    question:
+      '3 questions\n\n- Name: What does the file download as?\n- Dates: Which time zone?\n- Empty: When no orders match?',
+    choices: [],
+    pick: null,
+    words: null,
+    asked: at(22),
+    answered: null,
+    closed: null,
+    parts: [
+      {
+        topic: 'Name',
+        question: 'What does the file download as?\n\nBo suggested the date in the name.',
+        choices: [
+          { label: 'orders-2026-11-24.csv', detail: 'dated' },
+          { label: 'orders.csv', detail: null },
+        ],
+      },
+      {
+        topic: 'Dates',
+        question: 'Which time zone do dates go out in?',
+        choices: [
+          { label: "The shop's", detail: 'as the page shows them' },
+          { label: 'UTC', detail: null },
+        ],
+      },
+      {
+        topic: 'Empty',
+        question: 'When no orders match the filter?',
+        choices: [
+          { label: 'Header only', detail: 'an empty file' },
+          { label: 'Disable Export', detail: null },
+        ],
+      },
+    ],
+    answers: null,
   },
 ];
 
@@ -271,12 +316,24 @@ function Preview() {
   const [chosen, setChosen] = useState('mira');
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
   const everyone = people(members, agents);
-  const answer = async ({ id }: { id: number }, pick?: string, words?: string) =>
+  const answer = async (
+    { id }: { id: number },
+    pick?: string,
+    words?: string,
+    _files?: readonly File[],
+    all?: readonly Given[],
+  ) =>
     setState((s) => ({
       ...s,
       questions: s.questions.map((q) =>
         q.id === id
-          ? { ...q, pick: pick ?? null, words: words?.trim() || null, answered: new Date().toISOString() }
+          ? {
+              ...q,
+              pick: pick ?? null,
+              words: words?.trim() || null,
+              answers: all?.map((g) => ({ pick: g.pick ?? null, words: g.words?.trim() || null })) ?? null,
+              answered: new Date().toISOString(),
+            }
           : q,
       ),
     }));

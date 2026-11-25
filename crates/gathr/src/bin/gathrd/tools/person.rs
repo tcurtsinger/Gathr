@@ -24,6 +24,23 @@ pub struct AskPerson {
     choices: Option<Vec<ChoiceIn>>,
     /// Files for the person to open with it: full paths, in this chat's folders.
     files: Option<Vec<String>>,
+    /// To ask 2 to 4 things at once, answered together in one card: each with its own topic, what, why and
+    /// choices. `what` is then a short title for them all. Ask related questions together, not one after another.
+    questions: Option<Vec<PartIn>>,
+}
+
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+pub struct PartIn {
+    /// A word or two naming it, shown as its tab (at most 24 characters).
+    topic: String,
+    /// The question, in one line.
+    what: String,
+    /// Why, and what the person needs to know to answer.
+    why: Option<String>,
+    /// Your pick first, each with a few words on it.
+    choices: Option<Vec<ChoiceIn>>,
+    /// Files for the person to open with it: full paths, in this chat's folders.
+    files: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -49,32 +66,57 @@ impl Tools {
             caller.agent.clone().unwrap_or_default(),
         );
         let what = ask.what.unwrap_or_default();
-        let question = match ask.why.as_deref().map(str::trim) {
-            Some(why) if !why.is_empty() => format!("{}\n\n{why}", what.trim()),
-            _ => what,
-        };
-        let choices: Vec<gathr::questions::Choice> = ask
-            .choices
-            .unwrap_or_default()
-            .into_iter()
-            .map(|c| gathr::questions::Choice {
-                label: c.label,
-                detail: c.detail,
-            })
-            .collect();
+        let question = with_why(&what, ask.why.as_deref());
+        let choices = choices_of(ask.choices);
         let (files, data) = (
             ask.files.unwrap_or_default(),
             self.chats.data.path().to_path_buf(),
         );
+        // Several asked together: each with its own files, the call's files with the first.
+        let parts: Option<Vec<_>> = ask.questions.map(|parts| {
+            let mut parts: Vec<_> = parts
+                .into_iter()
+                .map(|p| {
+                    let question = with_why(&p.what, p.why.as_deref());
+                    (
+                        p.topic,
+                        question,
+                        choices_of(p.choices),
+                        p.files.unwrap_or_default(),
+                    )
+                })
+                .collect();
+            if let Some(first) = parts.first_mut() {
+                first.3.extend(files.iter().cloned());
+            }
+            parts
+        });
         let asked = self
             .chats
             .writer
             .call(move |c| {
                 // Each file as the line a person's message names its files with.
                 let roots = gathr::files::tree(c, &data, &chat)?.roots();
-                let lines = gathr::files::attached(&roots, &files)?;
-                let question = gathr::files::with_lines(&question, &lines);
-                let id = gathr::questions::ask(c, (&chat, &agent), &question, &choices)?;
+                let id = match parts {
+                    Some(parts) => {
+                        let mut all = Vec::new();
+                        for (topic, question, choices, files) in parts {
+                            let lines = gathr::files::attached(&roots, &files)?;
+                            let question = gathr::files::with_lines(&question, &lines);
+                            all.push(gathr::questions::Part {
+                                topic,
+                                question,
+                                choices,
+                            });
+                        }
+                        gathr::questions::ask_all(c, (&chat, &agent), &what, &all)?
+                    }
+                    None => {
+                        let lines = gathr::files::attached(&roots, &files)?;
+                        let question = gathr::files::with_lines(&question, &lines);
+                        gathr::questions::ask(c, (&chat, &agent), &question, &choices)?
+                    }
+                };
                 Ok::<_, Error>((id, gathr::questions::of_chat(c, &chat)?))
             })
             .await
@@ -89,4 +131,23 @@ impl Tools {
         let said = said.map_err(|e| e.to_string());
         Ok(self.respond(&caller, "ask_person", started, said).await)
     }
+}
+
+/// `what` with `why` below it, when there is one.
+fn with_why(what: &str, why: Option<&str>) -> String {
+    match why.map(str::trim) {
+        Some(why) if !why.is_empty() => format!("{}\n\n{why}", what.trim()),
+        _ => what.to_string(),
+    }
+}
+
+fn choices_of(choices: Option<Vec<ChoiceIn>>) -> Vec<gathr::questions::Choice> {
+    choices
+        .unwrap_or_default()
+        .into_iter()
+        .map(|c| gathr::questions::Choice {
+            label: c.label,
+            detail: c.detail,
+        })
+        .collect()
 }
