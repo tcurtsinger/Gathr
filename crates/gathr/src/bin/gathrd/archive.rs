@@ -63,6 +63,7 @@ async fn archive_now(s: &Arc<State>, t: &Trace, chat: &str, error: &'static str)
     })
     .await?;
     s.chats.end_chat(chat, false).await;
+    s.terminals.stop_chat(chat);
     s.chats.pauses_changed().await;
     crate::chat_state::changed(&s.chats, chat, &t.0).await;
     Ok(ended)
@@ -121,6 +122,7 @@ pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>
     // Nothing may still run in its worktrees when they're removed.
     let ended = async {
         s.chats.end_chat(&chat, true).await;
+        s.terminals.close_chat(&chat);
     };
     let exited = tokio::time::timeout(EXIT_WAIT, ended).await;
     s.chats.pauses_changed().await;

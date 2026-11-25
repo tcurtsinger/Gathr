@@ -39,6 +39,7 @@ mod sign_in;
 mod skills;
 mod startup;
 mod team;
+mod terminals;
 mod tool_sign_in;
 mod tools;
 mod turns;
@@ -233,6 +234,7 @@ async fn serve(
         app: app.clone(),
         sign_ins: sign_ins.clone(),
         browser: gathr::browser::Browser::new(data.path().join("browser"), writer.clone()),
+        terminals: gathr::terminal::Terminals::load(data.path().join("terminals")),
         models: Default::default(),
         stopping: Default::default(),
         writer: writer.clone(),
@@ -299,6 +301,7 @@ async fn serve(
     app.stop();
     app.stopped();
     sign_ins.cancel_all().await;
+    state.terminals.stop_all();
     tokio::join!(
         chats.close_all(),
         state.models.closed(),

@@ -31,6 +31,7 @@ pub struct State {
     pub app: Arc<crate::app_update::AppUpdates>,
     pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub browser: gathr::browser::Browser,
+    pub terminals: gathr::terminal::Terminals,
     pub models: crate::models::Models,
     /// Set once shutdown starts, before the server waits on its requests: a request waiting on
     /// an engine ends at once instead of holding the stop.
@@ -85,6 +86,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
         .merge(crate::browser::routes())
+        .merge(crate::terminals::routes())
         .nest_service("/mcp", crate::tools::service(state.clone()))
         // An AI app outside Gathr, through `gathr connect`: guarded as the rest of `/api` is.
         .nest_service(
@@ -242,7 +244,9 @@ fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 /// A browser can't set headers on a WebSocket, so the live socket and the Browser tab's may carry
 /// the token in their query.
 fn live_token(uri: &Uri) -> Option<&str> {
-    if uri.path() != "/api/live" && uri.path() != crate::browser::PATH {
+    let path = uri.path();
+    let terminals = path.starts_with("/api/chats/") && path.ends_with(crate::terminals::END);
+    if path != "/api/live" && path != crate::browser::PATH && !terminals {
         return None;
     }
     uri.query()?

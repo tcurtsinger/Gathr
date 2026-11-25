@@ -16,6 +16,7 @@ flate2 = { version = "1.1.11", default-features = false, features = ["rust_backe
 getrandom = "0.4.3"
 hyper = { version = "1.12.0", features = ["server", "http1"] }
 hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
+portable-pty = "0.9.0"
 process-wrap = { version = "10.0.1", default-features = false, features = ["tokio1", "job-object", "creation-flags", "process-group", "kill-on-drop"] }
 rmcp = { version = "3.9.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server", "client", "transport-streamable-http-client-reqwest", "reqwest-native-tls", "auth", "transport-child-process"] }
 rusqlite = { version = "0.41.1", features = ["bundled"] }

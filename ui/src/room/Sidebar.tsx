@@ -1,4 +1,14 @@
-import { ChevronDown, File as FileIcon, Folder, Globe, House, LoaderCircle, Search, X } from 'lucide-react';
+import {
+  ChevronDown,
+  File as FileIcon,
+  Folder,
+  Globe,
+  House,
+  LoaderCircle,
+  Search,
+  SquareTerminal,
+  X,
+} from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   DropdownMenu,
@@ -10,6 +20,7 @@ import {
 import { api, type FileTree } from '../api';
 import { ChangesMark } from '../components/ChangesMark';
 import { DesignsMark } from '../components/DesignsMark';
+import { Face } from '../components/Face';
 import { pathSteps as steps, onWindows as windows } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -23,6 +34,8 @@ import { Find } from './Find';
 import { isPage } from './PageFrame';
 import { pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
+import { openTerminal, type StartFolder, TerminalTile, TerminalView } from './Terminal';
+import { asked, tell, useTerminals } from './terminals';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
@@ -200,8 +213,11 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     return () => seen.disconnect();
   }, []);
   const browser = useBrowser();
+  const terminals = useTerminals(chat).list;
   const pageKey = (id: string) => `page:${id}`;
+  const termKey = (id: string) => `term:${id}`;
   const order = [HOME, FILES, DESIGN, CHANGES, BROWSER, ...browser.pages.map((p) => pageKey(p.id))];
+  order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
   // Files, Designs, Changes and Browser are drawn once opened, and kept until their tab closes.
   const go = (at: string) =>
@@ -229,6 +245,16 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       at: next === undefined ? tabs.at : next === null ? HOME : next.page ? BROWSER : next.key,
     });
   };
+  // The person's New shows the terminal it opens; one an agent starts waits for a look.
+  const known = useRef<string[] | null>(null);
+  useEffect(() => {
+    const before = known.current;
+    known.current = terminals.map((t) => t.id);
+    if (!before) return;
+    const fresh = terminals.find((t) => !t.agent && !before.includes(t.id));
+    if (fresh && asked.delete(chat)) go(termKey(fresh.id));
+    else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
+  });
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string) => (
     <Tab key={key} id={id(key)} selected={tabs.at === key} icon={icon} name={name} onSelect={() => go(key)} />
@@ -263,6 +289,27 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     },
     close: () => say({ type: 'close', page: p.id }),
   }));
+  const nameOfAgent = (agent: string) => room.members.find((m) => m.agent === agent)?.name ?? '';
+  const terms: Item[] = terminals.map((t) => ({
+    key: termKey(t.id),
+    icon: t.agent ? (
+      <Face agent={{ id: t.agent, name: nameOfAgent(t.agent) }} size={16} />
+    ) : (
+      <SquareTerminal aria-hidden="true" />
+    ),
+    name: t.name,
+    where: t.folder,
+    selected: tabs.at === termKey(t.id),
+    select: () => go(termKey(t.id)),
+    close: () => {
+      close([termKey(t.id)]);
+      tell(chat, { type: 'close', id: t.id });
+    },
+  }));
+  const starts: StartFolder[] = [
+    tree?.project ? { name: tree.project.name } : { name: 'Home' },
+    ...(tree?.agents ?? []).map((a) => ({ name: a.name, path: a.path })),
+  ];
   const files: Item[] = tabs.open.map((f) => ({
     key: f.path,
     icon: f.design ? <DesignsMark /> : <FileIcon aria-hidden="true" />,
@@ -294,10 +341,10 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     ...viewTab(CHANGES, tabs.changes, <ChangesMark />, 'Changes'),
     ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe aria-hidden="true" />, 'Browser'),
   ];
-  const items = [...views, ...pages, ...files];
+  const items = [...views, ...pages, ...terms, ...files];
   const closeAll = (keep?: Item) => {
     close([...views, ...files].filter((i) => i !== keep).map((i) => i.key));
-    for (const p of pages) if (p !== keep) p.close();
+    for (const p of [...pages, ...terms]) if (p !== keep) p.close();
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
   const shown = fitting(items, width, strip.current);
@@ -372,6 +419,14 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
               <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
               <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
               <BrowserTile onOpen={() => go(BROWSER)} />
+              <TerminalTile
+                chat={chat}
+                onOpen={() => {
+                  const last = terminals.at(-1);
+                  if (last) go(termKey(last.id));
+                  else openTerminal(chat);
+                }}
+              />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -404,6 +459,21 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         )}
       {tabs.changes && view(CHANGES, <Changes chat={chat} changes={changes} />)}
       {tabs.browser && view(BROWSER, <BrowserView open={tabs.at === BROWSER} />)}
+      {terminals.map((t) =>
+        view(
+          termKey(t.id),
+          <TerminalView
+            info={t}
+            by={t.agent ? nameOfAgent(t.agent) : undefined}
+            open={tabs.at === termKey(t.id)}
+            folders={starts}
+            onLink={(url) => {
+              say({ type: 'new', address: url });
+              go(BROWSER);
+            }}
+          />,
+        ),
+      )}
       {tabs.open.map((f) =>
         view(
           f.path,

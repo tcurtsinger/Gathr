@@ -1,0 +1,95 @@
+/* A terminal at the tab's size: its folder, New and Stop in a row as Browser's address row, then the screen. */
+.term {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.term-bar {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px;
+}
+.term-folder {
+  display: flex;
+  flex: 1;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.term-folder > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-folder svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+.term-bar > [data-slot="button"],
+.term-new {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.term-new:hover {
+  background: var(--hover-tint);
+  color: var(--foreground);
+}
+.term-bar svg {
+  width: 14px;
+  height: 14px;
+}
+.term-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 16px 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+}
+.term-screen {
+  flex: 1;
+  min-height: 0;
+  margin: 10px 4px 4px 12px;
+}
+/* Once it ended: its output stays, and this line at its foot runs it again. */
+.term-end {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--frame);
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.term-end > button {
+  height: 28px;
+  margin-left: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 12px;
+  font-weight: 500;
+}
+.term-bar > [aria-label="Stop"] svg {
+  fill: currentColor;
+}
