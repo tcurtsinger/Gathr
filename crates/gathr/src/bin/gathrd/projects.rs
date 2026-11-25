@@ -21,6 +21,7 @@ use crate::team::{Seat, bad, checked, written};
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/projects", get(list).post(create))
+        .route("/api/projects/check", post(check))
         .route(
             "/api/projects/{project}",
             patch(change).delete(crate::deletes::project),
@@ -33,6 +34,20 @@ struct Changed {
     name: Option<String>,
     folder: Option<PathBuf>,
     members: Option<Vec<Seat>>,
+    #[serde(default)]
+    init: bool,
+}
+
+#[derive(Deserialize)]
+struct Folder {
+    folder: PathBuf,
+}
+
+/// New project's Folder row: whether the folder is there and in a git repository. One that isn't in one is
+/// made one when the project is (`"init": true`).
+async fn check(Json(body): Json<Folder>) -> Answer {
+    let (folder, repo) = crate::team::checked_folder(&body.folder).await;
+    Ok(Json(json!({ "folder": folder, "repo": repo })))
 }
 
 /// Make project, from the card of a project the assistant proposed (`propose_project`): as proposed, or with what
@@ -72,7 +87,7 @@ async fn make(
     };
     let seats = checked(&s, &t, seats, ERROR).await?;
     let folder = body.folder.unwrap_or_else(|| PathBuf::from(&p.folder));
-    let folder = crate::team::project(&t, &folder, ERROR).await?;
+    let folder = crate::team::project_made(&t, &folder, body.init, ERROR).await?;
     let made = s
         .writer
         .call(move |c| gathr::proposals::make(c, &message, (&name, &folder), &seats))
@@ -108,6 +123,8 @@ struct NewProject {
     name: String,
     folder: PathBuf,
     members: Vec<Seat>,
+    #[serde(default)]
+    init: bool,
 }
 
 async fn create(
@@ -120,7 +137,7 @@ async fn create(
         .map_err(|why| bad(&t, ERROR, why))?
         .to_string();
     let seats = checked(&s, &t, body.members, ERROR).await?;
-    let folder = crate::team::project(&t, &body.folder, ERROR).await?;
+    let folder = crate::team::project_made(&t, &body.folder, body.init, ERROR).await?;
     let made = db(&s, &t, ERROR, move |conn| {
         Ok(json!(projects::create(conn, &name, &folder, &seats)?))
     })

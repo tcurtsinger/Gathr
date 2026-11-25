@@ -189,6 +189,8 @@ export interface Project extends Added {
 /** What a project's settings change: only what it names; the team whole. */
 export type ProjectChange = Partial<Pick<Project, 'name' | 'folder'>> & {
   members?: { agent: string; role: Role }[];
+  /** Make the folder a git repository first when it isn't in one: New project's "Set up git and create". */
+  init?: boolean;
 };
 
 export interface Chat {
@@ -653,8 +655,15 @@ export const api = {
   createChat: (project?: string, assistant?: boolean) =>
     call<Chat>('POST', '/api/chats', assistant ? { assistant } : project ? { project } : {}),
   projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
-  addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
-    call<Project>('POST', '/api/projects', project),
+  addProject: (project: {
+    name: string;
+    folder: string;
+    members: { agent: string; role: Role }[];
+    init?: boolean;
+  }) => call<Project>('POST', '/api/projects', project),
+  /** Whether a folder is there and in a git repository: New project's Folder row. */
+  checkFolder: (folder: string) =>
+    call<{ folder: boolean; repo: boolean }>('POST', '/api/projects/check', { folder }),
   /** Make project, from the card of a project the assistant proposed: as proposed, or as the New project form says. */
   makeProject: (message: string, change?: ProjectChange) =>
     call<{ project: string; chat: string; turn: string; message: Message }>(

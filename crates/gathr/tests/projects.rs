@@ -146,3 +146,39 @@ fn a_project_that_fails_to_save_is_found_from_its_reference() {
     let (ok, trace) = gathr(&data.0, &["diag", "trace", error["ref"].as_str().unwrap()]);
     assert!(ok && trace.to_string().contains("forced"), "{trace}");
 }
+
+#[test]
+fn a_folder_outside_git_is_made_a_repository_when_new_project_asks() {
+    let data = TempDir::new();
+    let folders = TempDir::new();
+    let folder = folders.0.join("Game");
+    std::fs::create_dir_all(folder.join("art")).unwrap();
+    std::fs::write(folder.join("art").join("map.txt"), "hills").unwrap();
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+
+    let checked = service.send("POST", "/api/projects/check", json!({ "folder": folder }));
+    assert_eq!(checked.json(), json!({ "folder": true, "repo": false }));
+    let missing = folders.0.join("Gone");
+    let checked = service.send("POST", "/api/projects/check", json!({ "folder": missing }));
+    assert_eq!(checked.json(), json!({ "folder": false, "repo": false }));
+
+    let body =
+        json!({ "name": "Game", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let refused = service.send("POST", "/api/projects", body.clone());
+    assert_eq!(refused.status, 400, "{}", refused.body);
+    assert!(!folder.join(".git").exists());
+
+    let mut asked = body;
+    asked["init"] = json!(true);
+    let made = service.send("POST", "/api/projects", asked);
+    assert_eq!(made.status, 200, "{}", made.body);
+    let checked = service.send("POST", "/api/projects/check", json!({ "folder": folder }));
+    assert_eq!(checked.json(), json!({ "folder": true, "repo": true }));
+    let files = std::process::Command::new("git")
+        .args(["ls-tree", "-r", "--name-only", "HEAD"])
+        .current_dir(&folder)
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&files.stdout).trim(), "art/map.txt");
+}

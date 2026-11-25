@@ -287,17 +287,45 @@ pub async fn project(
     top_level(dir).await.map_err(|why| bad(t, error, &why))
 }
 
+/// As `project`, but a folder that isn't in a git repository is made one first when `init` (0028).
+pub async fn project_made(
+    t: &Trace,
+    dir: &std::path::Path,
+    init: bool,
+    error: &'static str,
+) -> Result<String, Fail> {
+    if init && dir.is_absolute() {
+        let vars = vars().await;
+        worktree::init(dir, &vars)
+            .await
+            .map_err(|why| bad(t, error, &format!("git wasn't set up: {why}")))?;
+    }
+    project(t, dir, error).await
+}
+
+/// Whether `dir` is a folder, and whether it's in a git repository: New project's Folder row.
+pub async fn checked_folder(dir: &std::path::Path) -> (bool, bool) {
+    if !dir.is_absolute() || !dir.is_dir() {
+        return (false, false);
+    }
+    (true, worktree::in_repo(dir, &vars().await).await)
+}
+
+/// The person's variables as a new shell has them, for git.
+async fn vars() -> env::Vars {
+    let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect())).await;
+    fresh
+        .map(|f| f.vars)
+        .unwrap_or_else(|_| std::env::vars_os().collect())
+}
+
 /// The top folder of the git repository `dir` is in, or why it can't be a project's folder.
 pub async fn top_level(dir: &std::path::Path) -> Result<String, String> {
     if !dir.is_absolute() {
         return Err("Use a full path".into());
     }
-    let dir = dir.to_path_buf();
-    let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect())).await;
-    let vars = fresh
-        .map(|f| f.vars)
-        .unwrap_or_else(|_| std::env::vars_os().collect());
-    let top = worktree::top_level(&dir, &vars).await?;
+    let vars = vars().await;
+    let top = worktree::top_level(dir, &vars).await?;
     Ok(top.display().to_string())
 }
 
