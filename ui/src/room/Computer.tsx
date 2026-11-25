@@ -125,7 +125,7 @@ export function ComputerView({ chat, nameOf }: { chat: string; nameOf: (agent: s
 
 /** One agent: who and where, its latest picture with a mark where its last step landed, and its steps. */
 function User({ user, name, dim }: { user: ComputerUser; name: string; dim: boolean }) {
-  const url = useShot(user.agent, user.shot);
+  const url = useShot(user.shot);
   const [size, setSize] = useState<{ w: number; h: number }>();
   const mark = user.mark &&
     size && { left: `${(user.mark.x / size.w) * 100}%`, top: `${(user.mark.y / size.h) * 100}%` };

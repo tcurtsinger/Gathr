@@ -78,14 +78,14 @@ export const useComputer = () => useSyncExternalStore(subscribe, () => state);
 /** Pauses or resumes every agent's computer use. */
 export const pauseComputer = (paused: boolean) => ask(api.pauseComputer(paused));
 
-/** An agent's latest picture, as a local address; the one before stays shown until the new one has come. */
-export function useShot(agent: string, shot: number | null) {
+/** A picture by its number, as a local address; the one before stays shown until the new one has come. */
+export function useShot(shot: number | null) {
   const [url, setUrl] = useState<string>();
   const shown = useRef<string>(undefined);
   useEffect(() => {
     if (shot === null) return;
     let gone = false;
-    fetch(`/api/computer/agents/${encodeURIComponent(agent)}/shot?n=${shot}`)
+    fetch(`/api/computer/shots/${shot}`)
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
       .then(
         (blob) => {
@@ -99,7 +99,7 @@ export function useShot(agent: string, shot: number | null) {
     return () => {
       gone = true;
     };
-  }, [agent, shot]);
+  }, [shot]);
   useEffect(
     () => () => {
       if (shown.current) URL.revokeObjectURL(shown.current);

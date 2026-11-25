@@ -259,7 +259,7 @@ window.fetch = (url, init) => {
     computer.paused = JSON.parse(String(init?.body)).paused;
     return json(computer);
   }
-  if (path.includes('/api/computer/agents/'))
+  if (path.includes('/api/computer/shots/'))
     return Promise.resolve(new Response(new Blob([calculator], { type: 'image/svg+xml' })));
   return fetched(url, init);
 };
