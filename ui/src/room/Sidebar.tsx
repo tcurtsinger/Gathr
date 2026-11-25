@@ -35,8 +35,8 @@ import { Find } from './Find';
 import { isPage } from './PageFrame';
 import { pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
-import { type StartFolder, TerminalTile, TerminalView } from './Terminal';
-import { asked, openTerminal, tell, useTerminals } from './terminals';
+import { folderName, type StartFolder, TerminalTile, TerminalView } from './Terminal';
+import { asked, openTerminal, tell, useTerminals, waiting } from './terminals';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
@@ -192,10 +192,7 @@ function nameWidth(name: string, strip: HTMLElement | null) {
  */
 function fitting(items: Item[], width: number, strip: HTMLElement | null) {
   const wide = items.map((i) =>
-    Math.min(
-      WIDEST,
-      Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.selected ? CLOSE : 0) + (i.mark ? MARK : 0),
-    ),
+    Math.min(WIDEST, Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.mark ? MARK : i.selected ? CLOSE : 0)),
   );
   // Each tab with the gap after it: the room is the strip's and one gap more.
   const least = (n: number) => Math.min(wide[n], NARROWEST) + GAP;
@@ -236,6 +233,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
   // An agent's running terminal whose tab's close was pressed: it asks at its foot before it stops.
   const [asking, setAsking] = useState<string>();
+  // The person's terminal with a command typed in for them, until they press a key in it.
+  const [typedIn, setTypedIn] = useState<string>();
   useEffect(() => {
     const el = strip.current;
     if (!el) return;
@@ -282,8 +281,10 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     known.current = terminals.map((t) => t.id);
     if (!before) return;
     const fresh = terminals.find((t) => !t.agent && !before.includes(t.id));
-    if (fresh && asked.delete(chat)) go(termKey(fresh.id));
-    else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
+    if (fresh && asked.delete(chat)) {
+      go(termKey(fresh.id));
+      if (waiting.delete(chat)) setTypedIn(fresh.id);
+    } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
   });
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string) => (
@@ -349,8 +350,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         : undefined,
   }));
   const starts: StartFolder[] = [
-    tree?.project ? { name: tree.project.name } : { name: 'Home' },
-    ...(tree?.agents ?? []).map((a) => ({ name: a.name, path: a.path })),
+    tree?.project ? { name: folderName(tree.project.path) } : { name: 'Home' },
+    ...(tree?.agents ?? []).map((a) => ({ name: folderName(a.path), owner: a.name, path: a.path })),
   ];
   const files: Item[] = tabs.open.map((f) => ({
     key: f.path,
@@ -455,9 +456,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                   <Folder aria-hidden="true" />
                   Files
                 </span>
-                <span className="home-tile-sub">
-                  {tree && (folders ? count(folders, 'folder') : 'None yet')}
-                </span>
+                <span className="home-tile-sub">{tree && (folders ? count(folders, 'folder') : 'None')}</span>
               </button>
               <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
               <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
@@ -510,6 +509,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             by={t.agent ? nameOfAgent(t.agent) : undefined}
             open={tabs.at === termKey(t.id)}
             folders={starts}
+            typedIn={typedIn === t.id ? () => setTypedIn(undefined) : undefined}
             asking={
               asking === t.id
                 ? {
@@ -571,8 +571,7 @@ function DesignsTile({
         Designs
       </span>
       <span className="home-tile-sub">
-        {list &&
-          (list.length ? (by ? `${list.length} · writing` : count(list.length, 'design')) : 'None yet')}
+        {list && (list.length ? (by ? `${list.length} · writing` : count(list.length, 'design')) : 'None')}
       </span>
     </button>
   );

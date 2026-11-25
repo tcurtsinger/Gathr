@@ -3,6 +3,7 @@ import { type ILink, Terminal as Xterm } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Folder, Plus, Square, SquareTerminal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,12 @@ export interface StartFolder {
   name: string;
   /** None for the chat's first: its project's, or the home folder. */
   path?: string;
+  /** The agent whose worktree it is. */
+  owner?: string;
 }
+
+/** A folder's own name: the last part of its path. */
+export const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 
 /** Home's Terminal tile: how many of the chat's terminals run. */
 export function TerminalTile({ chat, onOpen }: { chat: string; onOpen: () => void }) {
@@ -97,15 +103,19 @@ interface ViewProps {
   onLink: (url: string) => void;
   /** Its tab's close was pressed while an agent's command runs: Stop or Keep, at its foot. */
   asking?: { stop: () => void; keep: () => void };
+  /** A command was typed in for the person: a line says Enter runs it, until a key is pressed; then this. */
+  typedIn?: () => void;
 }
 
 /** One terminal at the tab's size: its folder, New and Stop over it, and a line at its foot once it ended. */
-export function TerminalView({ info, by, open, folders, onLink, asking }: ViewProps) {
+export function TerminalView({ info, by, open, folders, onLink, asking, typedIn }: ViewProps) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<Xterm | null>(null);
   const fit = useRef<FitAddon | null>(null);
   const link = useRef(onLink);
   link.current = onLink;
+  const pressed = useRef(typedIn);
+  pressed.current = typedIn;
   const { chat, id } = info;
 
   useEffect(() => {
@@ -124,7 +134,10 @@ export function TerminalView({ info, by, open, folders, onLink, asking }: ViewPr
     x.open(el);
     term.current = x;
     fit.current = fitting;
-    x.onData((data) => tell(chat, { type: 'input', id, data }));
+    x.onData((data) => {
+      pressed.current?.();
+      tell(chat, { type: 'input', id, data });
+    });
     x.onResize(({ cols, rows }) => tell(chat, { type: 'resize', id, cols, rows }));
     x.registerLinkProvider({
       provideLinks(y, give) {
@@ -164,7 +177,7 @@ export function TerminalView({ info, by, open, folders, onLink, asking }: ViewPr
     if (info.running) x?.focus();
   }, [open, info.running, chat, id]);
 
-  const name = info.folder.split(/[\\/]/).filter(Boolean).at(-1) ?? info.folder;
+  const name = folderName(info.folder);
   const ended = info.code ? `Failed, code ${info.code}` : 'Ended';
   return (
     <div className="term">
@@ -185,20 +198,30 @@ export function TerminalView({ info, by, open, folders, onLink, asking }: ViewPr
         {!info.running && (
           <div className="term-end" data-failed={!!info.code || undefined}>
             <span>{ended}</span>
-            <button type="button" onClick={() => tell(chat, { type: 'again', id })}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => tell(chat, { type: 'again', id })}
+            >
               Run again
-            </button>
+            </Button>
+          </div>
+        )}
+        {info.running && typedIn && !asking && (
+          <div className="term-end">
+            <span>Enter to run</span>
           </div>
         )}
         {info.running && asking && (
           <div className="term-end" data-asking="">
             <span>{`Stop ${info.name}? ${by} is using it.`}</span>
-            <button type="button" onClick={asking.keep}>
+            <Button type="button" variant="outline" size="sm" onClick={asking.keep}>
               Keep
-            </button>
-            <button type="button" onClick={asking.stop}>
+            </Button>
+            <Button type="button" variant="destructive" size="sm" onClick={asking.stop}>
               Stop
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -224,6 +247,7 @@ function NewTerminal({ chat, folders }: { chat: string; folders: StartFolder[] }
           <DropdownMenuItem key={f.path ?? ''} onSelect={() => openTerminal(chat, f.path)}>
             <Folder aria-hidden="true" />
             {f.name}
+            {f.owner && <span className="term-owner">{f.owner}</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -261,7 +285,7 @@ export function TerminalStep({ chat, agent, tool, text, onOpen }: StepProps) {
       ? list.find((t) => t.id === text)
       : undefined;
   // An id names nothing once its terminal is closed.
-  const what = byId ? found?.name : text;
+  const what = byId ? found && (found.agent ? found.name : 'yours') : text;
   return (
     <span className="room-step-name">
       <span>{STEPS[tool]}</span>

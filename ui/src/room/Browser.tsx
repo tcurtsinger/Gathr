@@ -121,7 +121,7 @@ export function BrowserTile({ onOpen }: { onOpen: () => void }) {
         Browser
       </span>
       <span className="home-tile-sub">
-        {pages.length ? `${pages.length} ${pages.length === 1 ? 'page' : 'pages'}` : 'None yet'}
+        {pages.length ? `${pages.length} ${pages.length === 1 ? 'page' : 'pages'}` : 'None'}
       </span>
     </button>
   );

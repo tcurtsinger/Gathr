@@ -80,21 +80,8 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.term-end > button {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: none;
-  color: var(--foreground);
-  font-size: 12px;
-  font-weight: 500;
-}
 .term-end > span + button {
   margin-left: auto;
-}
-.term-end > button:hover {
-  background: var(--hover-tint);
 }
 .term-end[data-failed] > span {
   color: var(--destructive);
@@ -102,17 +89,13 @@
 .term-end[data-asking] > span {
   color: var(--foreground);
 }
-.term-end[data-asking] > button:last-child {
-  border-color: var(--destructive);
-  background: var(--destructive);
-  color: #fff;
-}
 /* The scrollbar shows only under the pointer: output alone doesn't flash it. */
 .term-screen:not(:hover) .xterm-scrollable-element > .scrollbar {
   opacity: 0;
 }
-.term-bar > [aria-label="Stop"] svg {
-  fill: currentColor;
+.term-bar > [aria-label="Stop"]:hover {
+  background: var(--danger-surface);
+  color: var(--destructive);
 }
 /* A terminal step in the chat: its command or terminal opens the tab. */
 .room-step-term {
@@ -142,4 +125,24 @@
 .workspace-tablist .mark > svg {
   width: 100%;
   height: 100%;
+}
+/* The shown tab's mark sits where its close mark is; the close mark takes its place under the pointer. */
+.workspace-tab[data-selected="true"]:has(.mark) > [role="tab"] {
+  padding-right: 10px;
+}
+.workspace-tab[data-selected="true"]:has(.mark) > .workspace-close {
+  position: absolute;
+  right: 4px;
+  margin: 0;
+}
+.workspace-tab[data-selected="true"]:has(.mark):not(:hover):not(:focus-within) > .workspace-close,
+.workspace-tab:is(:hover, :focus-within) .mark {
+  visibility: hidden;
+}
+/* A New menu row: the folder, then whose it is. */
+.term-owner {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
