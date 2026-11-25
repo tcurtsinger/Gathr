@@ -5,6 +5,7 @@ import {
   Globe,
   House,
   LoaderCircle,
+  Monitor,
   Search,
   SquareTerminal,
   X,
@@ -30,6 +31,7 @@ import { BackgroundTasksMark, BackgroundTile, BackgroundView, runningOf } from '
 import { Board } from './Board';
 import { BrowserTile, BrowserView } from './Browser';
 import { Changes, ChangesTile, count, useChanges } from './Changes';
+import { ComputerTile, ComputerView, useComputerHere } from './Computer';
 import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
@@ -50,6 +52,7 @@ interface Tabs {
   design: boolean;
   changes: boolean;
   browser: boolean;
+  computer: boolean;
   background: boolean;
   open: Opened[];
   at: string;
@@ -59,6 +62,7 @@ const FILES = 'files';
 const DESIGN = 'design';
 const CHANGES = 'changes';
 const BROWSER = 'browser';
+const COMPUTER = 'computer';
 const BACKGROUND = 'background';
 const termKey = (id: string) => `term:${id}`;
 const FRESH: Tabs = {
@@ -66,6 +70,7 @@ const FRESH: Tabs = {
   design: false,
   changes: false,
   browser: false,
+  computer: false,
   background: false,
   open: [],
   at: HOME,
@@ -272,12 +277,13 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     DESIGN,
     CHANGES,
     BROWSER,
+    COMPUTER,
     BACKGROUND,
     ...browser.pages.map((p) => pageKey(p.id)),
   ];
   order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
-  // Files, Designs, Changes and Browser are drawn once opened, and kept until their tab closes.
+  // Files, Designs, Changes, Browser and Computer are drawn once opened, and kept until their tab closes.
   const go = (at: string) =>
     change(chat, {
       ...tabs,
@@ -285,6 +291,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       design: tabs.design || at === DESIGN,
       changes: tabs.changes || at === CHANGES,
       browser: tabs.browser || at === BROWSER,
+      computer: tabs.computer || at === COMPUTER,
       background: tabs.background || at === BACKGROUND,
       at,
     });
@@ -300,6 +307,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       design: tabs.design && !keys.includes(DESIGN),
       changes: tabs.changes && !keys.includes(CHANGES),
       browser: tabs.browser && !keys.includes(BROWSER),
+      computer: tabs.computer && !keys.includes(COMPUTER),
       background: tabs.background && !keys.includes(BACKGROUND),
       open: tabs.open.filter((f) => !keys.includes(f.path)),
       at: next === undefined ? tabs.at : next === null ? HOME : next.page ? BROWSER : next.key,
@@ -317,6 +325,15 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       if (waiting.delete(chat)) setTypedIn(fresh.id);
     } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
   });
+  // An agent of this chat starting to use the computer while it's open brings its tab, without showing it.
+  const usedHere = useComputerHere(chat);
+  const used = useRef({ chat, n: usedHere });
+  useEffect(() => {
+    const was = used.current;
+    if (was.chat === chat && usedHere !== null && was.n !== null && usedHere > was.n)
+      change(chat, { ...tabsOf(chat), computer: true });
+    used.current = { chat, n: usedHere };
+  }, [chat, usedHere]);
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string) => (
     <Tab key={key} id={id(key)} selected={tabs.at === key} icon={icon} name={name} onSelect={() => go(key)} />
@@ -415,6 +432,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     ...viewTab(DESIGN, tabs.design, <DesignsMark />, 'Designs'),
     ...viewTab(CHANGES, tabs.changes, <ChangesMark />, 'Changes'),
     ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe aria-hidden="true" />, 'Browser'),
+    ...viewTab(COMPUTER, tabs.computer, <Monitor aria-hidden="true" />, 'Computer'),
     ...viewTab(
       BACKGROUND,
       tabs.background,
@@ -500,6 +518,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
               <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
               <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
               <BrowserTile onOpen={() => go(BROWSER)} />
+              <ComputerTile chat={chat} onOpen={() => go(COMPUTER)} />
               <TerminalTile
                 chat={chat}
                 onOpen={() => {
@@ -541,6 +560,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         )}
       {tabs.changes && view(CHANGES, <Changes chat={chat} changes={changes} />)}
       {tabs.browser && view(BROWSER, <BrowserView open={tabs.at === BROWSER} />)}
+      {tabs.computer && view(COMPUTER, <ComputerView chat={chat} nameOf={nameOfAgent} />)}
       {tabs.background &&
         view(
           BACKGROUND,

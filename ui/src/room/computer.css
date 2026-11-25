@@ -1,0 +1,133 @@
+/* The Computer tab: Pause for every agent, then each agent of the chat with its latest picture and its steps. */
+.cu {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.cu-bar {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 12px 0;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.cu-bar > p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.cu-bar small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.cu-bar > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.cu-live {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px;
+  border-radius: 50%;
+  background: var(--free);
+}
+.cu-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 0;
+  padding: 14px 12px 16px;
+  overflow-y: auto;
+}
+.cu-user {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cu-who {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13.5px;
+}
+.cu-who > strong {
+  font-weight: 550;
+}
+.cu-who > span {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cu-shot {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--inset-border);
+  border-radius: var(--inset-radius);
+}
+.cu-shot > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cu-shot[data-dim] > img {
+  opacity: 0.55;
+}
+/* Where the last step landed. */
+.cu-mark {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--review);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--review) 20%, transparent);
+  translate: -50% -50%;
+}
+.cu-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.cu-steps > li {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted-foreground);
+}
+.cu-steps b {
+  flex: none;
+  color: var(--foreground);
+  font-weight: 500;
+}
+.cu-steps span,
+.cu-steps em {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cu-steps em {
+  font-style: normal;
+}
+.cu-steps li[data-off] > b {
+  color: var(--muted-foreground);
+}
+.cu-steps time {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
