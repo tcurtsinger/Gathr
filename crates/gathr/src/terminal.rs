@@ -50,6 +50,8 @@ pub enum Out {
 struct Term {
     info: Info,
     kept: VecDeque<u8>,
+    /// Every byte it printed since it started, kept or not: where a read left off.
+    printed: u64,
     size: (u16, u16),
     /// While it runs.
     writer: Option<Box<dyn Write + Send>>,
@@ -84,6 +86,7 @@ impl Terminals {
             let kept = std::fs::read(path.with_extension("log")).unwrap_or_default();
             let term = Term {
                 info,
+                printed: kept.len() as u64,
                 kept: kept.into(),
                 size: (80, 24),
                 writer: None,
@@ -127,6 +130,22 @@ impl Terminals {
         kept.unwrap_or_default()
     }
 
+    /// What it printed after `since` (a mark an earlier read gave, or from what it keeps), as plain
+    /// text, and the mark to read on from.
+    pub fn since(&self, id: &str, since: Option<u64>) -> Option<(String, u64)> {
+        let terms = self.terms.lock().unwrap();
+        let t = terms.get(id)?;
+        let first = t.printed - t.kept.len() as u64;
+        let from = since.unwrap_or(first).clamp(first, t.printed);
+        let bytes: Vec<u8> = t
+            .kept
+            .iter()
+            .skip((from - first) as usize)
+            .copied()
+            .collect();
+        Some((plain(&bytes), t.printed))
+    }
+
     /// Starts a terminal in `folder`: a shell, or `command` in one. Its id.
     pub fn open(
         &self,
@@ -162,6 +181,7 @@ impl Terminals {
         let term = Term {
             info,
             kept: VecDeque::new(),
+            printed: 0,
             size: (80, 24),
             writer: None,
             master: None,
@@ -251,6 +271,7 @@ impl Terminals {
             let mut terms = self.terms.lock().unwrap();
             let Some(t) = terms.get_mut(id) else { break };
             t.kept.extend(&buf[..n]);
+            t.printed += n as u64;
             let over = t.kept.len().saturating_sub(KEPT);
             t.kept.drain(..over);
             let chat: Arc<str> = t.info.chat.as_str().into();
@@ -396,4 +417,44 @@ fn shell(vars: &Vars, command: Option<&str>) -> CommandBuilder {
         cmd.env("COLORTERM", "truecolor");
     }
     cmd
+}
+
+/// What a terminal printed as a person reads it: without colours and other escapes, a line redrawn
+/// in place (`\r`, a progress bar) as it was last drawn.
+pub fn plain(bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    let mut out = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\u{1b}' => match chars.next() {
+                // CSI: parameters, then one final byte.
+                Some('[') => {
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC and the like: to BEL or ESC \.
+                Some(']' | 'P' | '_' | '^') => {
+                    while let Some(c) = chars.next() {
+                        if c == '\u{7}' || (c == '\u{1b}' && chars.next_if_eq(&'\\').is_some()) {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            '\r' if chars.peek() == Some(&'\n') => {}
+            '\r' => {
+                let start = out.rfind('\n').map_or(0, |n| n + 1);
+                out.truncate(start);
+            }
+            '\n' | '\t' => out.push(c),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    out
 }

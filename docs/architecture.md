@@ -72,7 +72,10 @@ set a board line, ask the person, keep a note in Memory (`note`), put a table, a
 a picture or page must be a file the chat's folders already show), add a
 tool or a skill when the person asks (`add_tool`, `add_skill`; a tool on this PC is refused only when one runs the same
 command with the same variables), schedule work in the chat (`schedule`,
-`unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`) and, the assistant in its own chat,
+`unschedule`), read or update a pull request (`pr`, `ci_failures`, `update_pr`), run something that keeps running in a terminal tab of the
+chat (`terminal_run`), see and read every terminal of the chat (`terminal_list`, `terminal_read`, colours and secrets taken
+out) and type in one (`terminal_send`; run and send ask as the agent's Approvals say, as its own commands do; at most 5 of an
+agent's run at once in a chat) and, the assistant in its own chat,
 send an agent it brought in back out (`send_out`) or propose a project (`propose_project`) or an agent (`propose_agent`), or a change to one (`propose_project_change`, `propose_agent_change`).
 The team checks the lead's answer in the open ([0080](archive/decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)), in every chat but the assistant's.
 When a turn ends and the chat is quiet (no turn running or queued, not archived or paused, no question, approval or

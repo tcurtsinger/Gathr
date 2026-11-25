@@ -244,8 +244,8 @@ pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
 /// Gathr's tools an engine asks about as the agent's Approvals say, as it does a tool on the web:
-/// what they add reaches every agent.
-pub const ASKED_TOOLS: &[&str] = &["add_tool", "add_skill"];
+/// what they add reaches every agent, and what they run is a command as the engine's own are.
+pub const ASKED_TOOLS: &[&str] = &["add_tool", "add_skill", "terminal_run", "terminal_send"];
 
 /// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking but
 /// `ASKED_TOOLS`, and the briefing in `briefing`, a file for the same reason as the token (0005,

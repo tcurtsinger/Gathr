@@ -71,6 +71,8 @@ const TITLES: Record<string, string> = {
   NotebookEdit: 'Edit a file?',
   Write: 'Write a file?',
   WebFetch: 'Fetch a page?',
+  mcp__gathr__terminal_run: 'Run in a terminal?',
+  mcp__gathr__terminal_send: 'Type in a terminal?',
 };
 export const titleOf = (tool: string) => TITLES[tool] ?? `Allow ${tool}?`;
 
@@ -99,6 +101,10 @@ export function asked(a: Approval): { tool: string; command?: string } {
   if (adds) {
     const what = input?.[adds[1]] ?? input?.link;
     return { tool: adds[0], command: typeof what === 'string' ? what : undefined };
+  }
+  if (a.tool === 'mcp__gathr__terminal_send') {
+    const typed = input?.stop ? 'Ctrl+C' : input?.text;
+    return { tool: a.tool, command: typeof typed === 'string' ? typed : undefined };
   }
   // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
   const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
