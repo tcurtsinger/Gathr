@@ -179,7 +179,8 @@ fn launch(
     let flags = flags(program, profile);
     let mut command = if cfg!(windows) {
         let mut command = tokio::process::Command::new(std::env::current_exe()?);
-        command.arg(RELAY).arg(program);
+        // Edge given a compatibility layer starts itself again without it, as a new process, and the pipe ends.
+        command.arg(RELAY).arg(program).env_remove("__COMPAT_LAYER");
         command
     } else {
         let mut command = tokio::process::Command::new("/bin/sh");
