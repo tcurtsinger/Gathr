@@ -128,7 +128,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
+        # Named, so a failed release list fails the step (pipefail) instead of leaving Latest behind.
+        shell: bash
         run: |
           rm release/*-*.json 2>/dev/null || true
           gh release create "v$VERSION" release/* --repo "${{ github.repository }}" --target "$SHA" \
-            --title "Gathr $VERSION" --notes "Built from $SHA."
+            --title "Gathr $VERSION" --notes "Built from $SHA." --latest=false
+          # Runs can publish out of order, and the updates are read from Latest: an older build never takes it.
+          newest=$(gh release list --repo "${{ github.repository }}" --exclude-drafts --exclude-pre-releases \
+            --limit 100 --json tagName --jq '.[].tagName' | grep -E '^v0\.1\.[0-9]+$' | sort -V | tail -n 1)
+          if [ "$newest" = "v$VERSION" ]; then
+            gh release edit "v$VERSION" --repo "${{ github.repository }}" --latest
+          else
+            echo "v$VERSION stays out of Latest: $newest is newer."
+          fi
