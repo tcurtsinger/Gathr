@@ -259,6 +259,7 @@ async fn change(
             return Err(fail(StatusCode::CONFLICT, "Save failed", why, &t.0));
         }
     }
+    let (on, starting) = (change.enabled, id.clone());
     let answer = db(&s, &t, "Save failed", move |conn| {
         if let Some(key) = key.filter(|k| !k.is_empty()) {
             web_tools::set_key(conn, &id, &key)?;
@@ -270,6 +271,13 @@ async fn change(
         Ok(json!(web_tools::get(conn, &id)?))
     })
     .await;
+    if answer.is_ok() && on.is_some() && starting == gathr::computer::ID {
+        // Computer use fetches its driver when it's switched on, not at an agent's first call.
+        if on == Some(true) {
+            crate::pc_tools::copy(&s, &starting);
+        }
+        let _ = s.chats.live.send(json!({ "type": "computer" }));
+    }
     told(&s, answer)
 }
 

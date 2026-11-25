@@ -875,7 +875,7 @@ fn address(typed: &str) -> String {
 }
 
 /// Standard base64, as the browser sends a frame.
-fn decode(text: &str) -> Option<Vec<u8>> {
+pub fn decode(text: &str) -> Option<Vec<u8>> {
     let value = |c: u8| match c {
         b'A'..=b'Z' => Some(c - b'A'),
         b'a'..=b'z' => Some(c - b'a' + 26),

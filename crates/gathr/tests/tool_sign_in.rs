@@ -293,7 +293,8 @@ fn a_tool_signs_in_through_the_browser_renews_and_asks_again_when_refused() {
     assert_eq!(again.status, 400, "a state came back twice: {}", again.body);
 
     let tools = service.call("GET", "/api/tools").json();
-    let tool = tools["tools"][0].clone();
+    // Last: computer use (0085) is listed before it.
+    let tool = tools["tools"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(
         (
             &tool["name"],
@@ -358,14 +359,22 @@ fn a_tool_signs_in_through_the_browser_renews_and_asks_again_when_refused() {
     let refused = relay(port, &relayed, &token, "tools/call", call);
     assert!(refused.contains("signed in again"), "{refused}");
     let tools = service.call("GET", "/api/tools").json();
-    assert_eq!(tools["tools"][0]["state"], "sign_in", "{tools}");
+    assert_eq!(
+        tools["tools"].as_array().unwrap().last().unwrap()["state"],
+        "sign_in",
+        "{tools}"
+    );
 
     let handed = desk.lock().unwrap().handed.clone();
     let (ok, events) = gathr(&data.0, &["diag", "query", "SELECT * FROM event_log"]);
     assert!(ok, "{events}");
     let (ok, rows) = gathr(
         &data.0,
-        &["diag", "query", "SELECT hex(sign_in) AS s FROM tools"],
+        &[
+            "diag",
+            "query",
+            "SELECT hex(sign_in) AS s FROM tools WHERE id != 'computer'",
+        ],
     );
     assert!(ok, "{rows}");
     let sealed = rows["rows"][0]["s"].as_str().unwrap().to_string();
@@ -445,7 +454,7 @@ fn a_tool_whose_service_takes_no_app_signs_in_with_a_client_id_and_its_secret() 
     assert!(page.contains(&format!("client_id={CLIENT}")), "{page}");
     // Its tokens run out at once: listing it renews them, with the sign-in read from the database.
     let tools = service.call("GET", "/api/tools").json();
-    let tool = tools["tools"][0].clone();
+    let tool = tools["tools"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(
         (&tool["client_id"], &tool["state"]),
         (&json!(CLIENT), &json!("connected")),
@@ -468,7 +477,11 @@ fn a_tool_whose_service_takes_no_app_signs_in_with_a_client_id_and_its_secret() 
     };
     let before = renewals(&desk);
     let tools = service.call("GET", "/api/tools").json();
-    assert_eq!(tools["tools"][0]["state"], "connected", "{tools}");
+    assert_eq!(
+        tools["tools"].as_array().unwrap().last().unwrap()["state"],
+        "connected",
+        "{tools}"
+    );
     assert!(
         renewals(&desk) > before,
         "{:?}",
@@ -496,7 +509,7 @@ fn a_tool_whose_service_takes_no_app_signs_in_with_a_client_id_and_its_secret() 
         &[
             "diag",
             "query",
-            "SELECT hex(sign_in) AS s, client_id FROM tools",
+            "SELECT hex(sign_in) AS s, client_id FROM tools WHERE id != 'computer'",
         ],
     );
     assert!(ok, "{rows}");
@@ -519,7 +532,11 @@ fn a_tool_whose_service_takes_no_app_signs_in_with_a_client_id_and_its_secret() 
     assert_eq!(removed.status, 200, "{}", removed.body);
     let (ok, rows) = gathr(
         &data.0,
-        &["diag", "query", "SELECT count(*) AS n FROM tools"],
+        &[
+            "diag",
+            "query",
+            "SELECT count(*) AS n FROM tools WHERE id != 'computer'",
+        ],
     );
     assert!(ok, "{rows}");
     assert_eq!(rows["rows"][0]["n"], 0, "{rows}");

@@ -116,6 +116,10 @@ async fn run(s: Arc<State>, id: String, copy: Arc<Copy>) {
             .unwrap_or_else(|e| e.into_inner())
             .push(why)
     };
+    let saved = match saved {
+        Some(Ok(_)) if id == gathr::computer::ID => Some(fetched(&s).await),
+        saved => saved,
+    };
     let started = match saved {
         Some(Ok(runs)) => match pc_tools::find(&runs.program, &vars) {
             Some(program) => pc_tools::start(&runs, &program, vars, copy.printed.clone()).await,
@@ -142,6 +146,28 @@ async fn run(s: Arc<State>, id: String, copy: Arc<Copy>) {
     if copy.asked.load(Ordering::Relaxed) {
         let _ = s.chats.live.send(json!({ "type": "tools" }));
     }
+}
+
+/// The computer tool's run: Gathr's own copy of cua-driver, fetched the first time (`gathr::computer`).
+async fn fetched(s: &Arc<State>) -> Result<Runs, gathr::Error> {
+    let data = s.data.path().to_path_buf();
+    if !gathr::computer::program(&data).is_file() {
+        crate::computer::driver("fetching", None);
+        let _ = s.chats.live.send(json!({ "type": "computer" }));
+    }
+    let folder = data.clone();
+    let got = tokio::task::spawn_blocking(move || {
+        gathr::computer::fetched(&folder, &AtomicBool::new(false))
+    })
+    .await;
+    let got = got.unwrap_or_else(|e| Err(e.to_string()));
+    match &got {
+        Ok(_) => crate::computer::driver("ready", None),
+        Err(why) => crate::computer::driver("failed", Some(why.clone())),
+    }
+    let _ = s.chats.live.send(json!({ "type": "computer" }));
+    got.map(|_| gathr::computer::runs(&data))
+        .map_err(gathr::Error::Refused)
 }
 
 /// The tool's copy, running, for the relay: an agent's call waits for its start.
@@ -314,6 +340,10 @@ pub async fn one(s: &Arc<State>, t: &Trace, tool: Tool) -> Answer {
         }
         state = Some(self::state(&phase));
     }
+    let runs = match tool.id == gathr::computer::ID {
+        true => nameless(gathr::computer::runs(s.data.path())),
+        false => runs,
+    };
     let mut shown = said(&runs, &gathr::run::fresh().await);
     for (key, value) in json!(tool).as_object().into_iter().flatten() {
         shown[key] = value.clone();

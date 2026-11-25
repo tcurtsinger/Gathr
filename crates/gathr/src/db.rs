@@ -92,6 +92,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0082_added_by.sql"),
     include_str!("../migrations/0083_from_app.sql"),
     include_str!("../migrations/0084_background_ended.sql"),
+    include_str!("../migrations/0085_computer.sql"),
 ];
 
 /// The schema version this build writes.
@@ -743,8 +744,13 @@ mod drop_old_tables_test {
             .unwrap();
         assert_eq!(kept, "mira round [\"old-notes\"]");
         let tools: i64 = conn
-            .query_row("SELECT count(*) FROM tools", [], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM tools WHERE id != 'computer'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
+        // 0085 adds computer use, switched off: nothing else.
         assert_eq!(tools, 0);
     }
 

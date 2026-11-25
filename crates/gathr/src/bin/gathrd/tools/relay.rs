@@ -140,7 +140,20 @@ impl ServerHandler for Relay {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         let remote = self.remote(&context).await?;
-        let called = kept(&context, web_tools::call(&remote, request).await);
+        let parts = context.extensions.get::<Parts>();
+        let called = match parts
+            .map(|p| p.uri.path())
+            .unwrap_or_default()
+            .rsplit('/')
+            .next()
+        {
+            Some(gathr::computer::ID) => {
+                let caller = parts.and_then(|p| p.extensions.get::<crate::tools::Caller>());
+                crate::computer::call(&self.0, caller, &remote, request).await
+            }
+            _ => web_tools::call(&remote, request).await,
+        };
+        let called = kept(&context, called);
         // A sign-in that ended during this connection is found by connecting again, to say so.
         match called {
             Err(e) if e.message == web_tools::UNREACHABLE => match self.remote(&context).await {
