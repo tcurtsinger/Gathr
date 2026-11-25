@@ -43,7 +43,7 @@ export function ComputerTile({ chat, onOpen }: { chat: string; onOpen: () => voi
       : computer.paused
         ? 'Paused'
         : here
-          ? `${here} using it`
+          ? `${here} used it`
           : 'None yet';
   return (
     <button type="button" className="home-tile" onClick={onOpen}>

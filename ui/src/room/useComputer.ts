@@ -40,12 +40,21 @@ let state: Computer | null = null;
 const heard = new Set<() => void>();
 let stop: (() => void) | null = null;
 
-function set(next: Computer) {
-  state = next;
-  for (const heed of heard) heed();
+// Each read or Pause is numbered when it is sent: an answer to one sent before the last shown is stale (a read sent
+// before Pause can come back after it, still saying unpaused).
+let sent = 0;
+let last = 0;
+function ask(call: Promise<Computer>) {
+  const n = ++sent;
+  return call.then((next) => {
+    if (n < last) return;
+    last = n;
+    state = next;
+    for (const heed of heard) heed();
+  });
 }
 
-const load = () => api.computer().then(set, () => {});
+const load = () => ask(api.computer()).catch(() => {});
 
 function subscribe(heed: () => void) {
   heard.add(heed);
@@ -67,7 +76,7 @@ function subscribe(heed: () => void) {
 export const useComputer = () => useSyncExternalStore(subscribe, () => state);
 
 /** Pauses or resumes every agent's computer use. */
-export const pauseComputer = (paused: boolean) => api.pauseComputer(paused).then(set);
+export const pauseComputer = (paused: boolean) => ask(api.pauseComputer(paused));
 
 /** An agent's latest picture, as a local address; the one before stays shown until the new one has come. */
 export function useShot(agent: string, shot: number | null) {
