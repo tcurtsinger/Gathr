@@ -1,7 +1,7 @@
 import { BookOpen, Check, ChevronRight, CircleAlert, Copy, Plug, ThumbsUp, User } from 'lucide-react';
 import { type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Member, type Message, type Reaction } from '../api';
+import { api, type Background, type Member, type Message, type Reaction } from '../api';
 import { type Approval, AskApproval } from '../components/Approval';
 import { DesignsMark } from '../components/DesignsMark';
 import { AppLogo, appName } from '../components/EngineLogo';
@@ -119,6 +119,7 @@ export function Room({ chat, project, state, people, acts, found, header, after,
     found: found?.message,
     notes: notesOf(state.messages, state.turns),
     openers: openersOf(state.messages),
+    behind: behindOf(state.background),
   };
   return (
     <>
@@ -160,6 +161,15 @@ interface Ctx {
   notes: Made[];
   /** The person's message that started each turn, by the turn: what Retry sends again. */
   openers: Map<string, Message>;
+  /** When the oldest command each turn left running in the background began, by the turn. */
+  behind: Map<string, string>;
+}
+
+/** When the oldest command each turn left running in the background began, by the turn: its card still works. */
+function behindOf(background: Background[]) {
+  const by = new Map<string, string>();
+  for (const b of background) if (!b.ended && !by.has(b.turn)) by.set(b.turn, b.started);
+  return by;
 }
 
 /** The person's message that started each turn, by the turn. */
@@ -359,7 +369,13 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
       {!running && (
         <Bar
           name={ctx.people.name(agent)}
-          state={card.turn.status !== 'done' && <State card={card} />}
+          state={
+            ctx.behind.has(card.id) ? (
+              <Behind started={ctx.behind.get(card.id) ?? ''} />
+            ) : (
+              card.turn.status !== 'done' && <State card={card} />
+            )
+          }
           text={card.text ?? ''}
           said={card.said}
           last={card.last}
@@ -368,6 +384,17 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
       )}
       {card.replies.length > 0 && <Thread replies={card.replies} ctx={ctx} />}
     </div>
+  );
+}
+
+/** Under a card whose turn ended with a command still running in the background: Working, as long as that has run. */
+function Behind({ started }: { started: string }) {
+  const now = useNow(true);
+  return (
+    <span className="room-state live">
+      <StateMark state="working" size={12} spin />
+      Working · {since(now - Date.parse(started))}
+    </span>
   );
 }
 
@@ -861,7 +888,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           {needs ? (
             <span className="room-state live">Needs you</span>
           ) : (
-            running && <span className="room-state live">Working</span>
+            (running || ctx.behind.has(item.id)) && <span className="room-state live">Working</span>
           )}
         </div>
         {item.text && (

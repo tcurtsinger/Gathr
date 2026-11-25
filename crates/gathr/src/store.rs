@@ -45,10 +45,12 @@ pub fn put_in_project(
     }
 }
 
-/// Whether a turn of chat `c` runs (0040). It names the index's own condition first, which is what
-/// lets SQLite read `turns_live` instead of the chat's turns; `NEEDS` does the same.
-const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
-    AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
+/// Whether a turn of chat `c` runs (0040), or a command an agent left running in the background
+/// there (0084). It names the index's own condition first, which is what lets SQLite read
+/// `turns_live` instead of the chat's turns; `NEEDS` does the same.
+const WORKING: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
+    AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')
+    OR EXISTS (SELECT 1 FROM background g JOIN turns s ON s.id = g.turn_id WHERE s.chat_id = c.id))";
 
 /// Whether a turn of chat `c` will start by itself soon: queued behind its agent's work elsewhere, or
 /// for an engine download or an update. One held for usage or by a pause isn't: that chat has stopped.

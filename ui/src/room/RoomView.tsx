@@ -33,7 +33,7 @@ import { AgentsPanel } from './AgentsPanel';
 import { useUnseen } from './Changes';
 import { NeedsYou } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
-import { openChanges, openTab, openTerminalTab, RoomSidebar } from './Sidebar';
+import { openBackground, openChanges, openTab, openTerminalTab, RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -227,6 +227,10 @@ export function RoomView(props: Props) {
               people={team}
               signedOut={props.signedOut}
               onSignIn={props.onSignIn}
+              onBackground={() => {
+                props.onSidebar(true);
+                openBackground(chat.id);
+              }}
             />
             <NeedsYou
               questions={state.questions}

@@ -114,6 +114,11 @@ pub enum Cmd {
         carried: Option<Arc<HashSet<String>>>,
         done: oneshot::Sender<()>,
     },
+    /// The person's Stop on one background command in the chat (0084): the engine's own stop.
+    StopTask {
+        chat: String,
+        task: String,
+    },
     /// The chat was archived, or with close deleted (F11): its turns and background commands end,
     /// and with close its engines close, answering once each has exited.
     EndChat {

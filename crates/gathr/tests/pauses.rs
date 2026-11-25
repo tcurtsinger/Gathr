@@ -126,7 +126,7 @@ fn an_engine_that_closed_leaves_no_background_command_behind() {
 }
 
 /// What the Agents panel lists: each command the engine still runs, under the agent that started it,
-/// until the engine no longer lists it.
+/// until the engine no longer lists it; then it is kept as ended, as the engine said (0084).
 #[test]
 fn a_background_command_is_in_the_chats_history_until_the_engine_no_longer_lists_it() {
     let data = TempDir::new();
@@ -139,12 +139,18 @@ fn a_background_command_is_in_the_chats_history_until_the_engine_no_longer_lists
     let command = &history["background"][0];
     assert_eq!(command["agent"], lead.as_str(), "{history}");
     assert_eq!(command["description"], "Run first ping in background");
+    assert_eq!(command["kind"], "local_bash", "{history}");
     assert!(command["started"].is_string(), "{history}");
+    assert!(command.get("ended").is_none(), "{history}");
 
     std::fs::write(data.0.join("go"), "").unwrap();
-    service.wait_for(&chat, 20, "the command gone", |h| {
-        h["background"].as_array().is_some_and(|b| b.is_empty())
+    let history = service.wait_for(&chat, 20, "the command ended", |h| {
+        let all = h["background"].as_array().cloned().unwrap_or_default();
+        !all.is_empty() && all.iter().all(|b| b["ended"].is_string())
     });
+    let ended = &history["background"][0];
+    assert_eq!(ended["status"], "done", "{history}");
+    assert_eq!(ended["output"], true, "{history}");
 }
 
 #[test]

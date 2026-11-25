@@ -110,6 +110,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Erro
     let of_turns = "(SELECT id FROM turns WHERE chat_id = ?1)";
     for sql in [
         format!("DELETE FROM background WHERE turn_id IN {of_turns}"),
+        format!("DELETE FROM background_ended WHERE turn_id IN {of_turns}"),
         "DELETE FROM engine_raw WHERE chat_id = ?1".into(),
         "DELETE FROM handoffs WHERE chat_id = ?1".into(),
         "DELETE FROM agent_context WHERE chat_id = ?1".into(),

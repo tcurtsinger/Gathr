@@ -328,6 +328,7 @@ impl Task {
             }
             Frame::TurnEnd(end) => self.turn_ended(end).await,
             Frame::Background(listed) => self.background(listed).await,
+            Frame::TaskEnded { id, status, output } => self.task_ended(id, status, output).await,
             Frame::Limit {
                 status,
                 resets_at,

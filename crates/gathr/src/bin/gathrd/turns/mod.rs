@@ -445,6 +445,7 @@ impl Task {
                 let _ = done.send(());
             }
             Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,
+            Cmd::StopTask { chat, task } => self.stop_task(&chat, &task).await,
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
         }

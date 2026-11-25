@@ -76,8 +76,16 @@ pub enum Frame {
         message: String,
     },
     TurnEnd(TurnEnd),
-    /// Every command running in the background now (`background_tasks_changed`): id and what it is.
-    Background(Vec<(String, String)>),
+    /// Every command running in the background now (`background_tasks_changed`): id, what it is,
+    /// and its kind (`local_bash`, `local_agent`, ...).
+    Background(Vec<crate::background::Listed>),
+    /// A background command ended (`task_notification`): its id, how (`completed`, `failed`,
+    /// `killed`, ...), and the file its output went to.
+    TaskEnded {
+        id: String,
+        status: String,
+        output: Option<String>,
+    },
     /// Where the account stands on usage (`rate_limit_event`): `rejected` turns turns away until
     /// `resets_at` (Unix seconds); `kind` names the limit (`five_hour`, `seven_day`).
     Limit {
@@ -194,9 +202,17 @@ fn read_own(value: &Value, own: bool) -> Vec<Frame> {
         }],
         "system" if text(value, "subtype") == "background_tasks_changed" => {
             let tasks = blocks(&value["tasks"]);
-            let tasks = tasks.map(|t| (text(t, "task_id"), text(t, "description")));
+            let tasks = tasks.map(|t| {
+                let kind = t["task_type"].as_str().map(str::to_string);
+                (text(t, "task_id"), text(t, "description"), kind)
+            });
             vec![Frame::Background(tasks.collect())]
         }
+        "system" if text(value, "subtype") == "task_notification" => vec![Frame::TaskEnded {
+            id: text(value, "task_id"),
+            status: text(value, "status"),
+            output: value["output_file"].as_str().map(str::to_string),
+        }],
         // Documented from Claude Code 2.1.153: sent while a thinking block, a redacted one too,
         // is produced.
         "system" if text(value, "subtype") == "thinking_tokens" => vec![Frame::Thinking {
@@ -898,6 +914,31 @@ notes.txt",
         assert_eq!(thought[..2], [&start, &Frame::Thought]);
         assert!(matches!(thought[2], Frame::Text(_)), "{thought:?}");
         assert_eq!(thought.len(), 4, "one thought, two replies: {thought:?}");
+    }
+
+    /// Recorded on Haiku 5.5: the background command listed with its kind, then its end with how
+    /// it ended and where its output went.
+    #[test]
+    fn a_background_command_is_listed_with_its_kind_and_ends_with_its_output() {
+        let frames = replayed("background");
+        let listed = of(
+            &frames,
+            |f| matches!(f, Frame::Background(l) if !l.is_empty()),
+        );
+        let Frame::Background(first) = listed[0] else {
+            unreachable!()
+        };
+        assert_eq!(first[0].2.as_deref(), Some("local_bash"));
+        let ended = of(&frames, |f| matches!(f, Frame::TaskEnded { .. }));
+        let Frame::TaskEnded { id, status, output } = ended[0] else {
+            unreachable!()
+        };
+        assert_eq!((id.as_str(), status.as_str()), ("bapvhi0xu", "completed"));
+        assert!(
+            output
+                .as_deref()
+                .is_some_and(|o| o.ends_with("bapvhi0xu.output"))
+        );
     }
 
     /// Recorded on Haiku 5.5: the running count while it thinks, 50 then 204, then the block.

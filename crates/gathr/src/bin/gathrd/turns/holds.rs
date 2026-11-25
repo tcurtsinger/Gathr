@@ -307,7 +307,7 @@ impl Task {
 
     /// The engine's background commands, as it lists them now: saved under the running turn, and
     /// the turn of one that ended remembered for the turn the engine starts next by itself.
-    pub(super) async fn background(&mut self, listed: Vec<(String, String)>) {
+    pub(super) async fn background(&mut self, listed: Vec<gathr::background::Listed>) {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
@@ -333,6 +333,7 @@ impl Task {
                     &chat,
                     json!({ "type": "background", "background": running }),
                 );
+                crate::chat_state::changed(&self.chats, &chat, &gathr::ids::trace_id()).await;
             }
             Some(Err(e)) => self.record(
                 Event::point("gathr.engine.background")
@@ -342,6 +343,22 @@ impl Task {
             None => {}
         }
         self.chats.settle_pauses(false).await;
+    }
+
+    /// The engine said how a background command ended and where its output went: kept on its row
+    /// until the engine no longer lists it.
+    pub(super) async fn task_ended(&mut self, id: String, status: String, output: Option<String>) {
+        let told = self
+            .chats
+            .writer
+            .call(move |conn| gathr::background::told(conn, &id, &status, output.as_deref()));
+        if let Some(Err(e)) = told.await {
+            self.record(
+                Event::point("gathr.engine.background")
+                    .error("sqlite")
+                    .attr("why", e.to_string()),
+            );
+        }
     }
 
     /// The engine in `chat` exited, on a close or on its own: its background commands ended with
@@ -354,14 +371,17 @@ impl Task {
         }
         let (agent, c) = (self.agent.clone(), chat.clone());
         let gone = self.chats.writer.call(move |conn| {
-            gathr::background::set(conn, (&c, agent.as_deref()), &[], None)?;
+            gathr::background::gone(conn, &c, agent.as_deref())?;
             gathr::background::in_chat(conn, &c)
         });
         match gone.await {
-            Some(Ok(running)) => self.publish(
-                &chat,
-                json!({ "type": "background", "background": running }),
-            ),
+            Some(Ok(running)) => {
+                self.publish(
+                    &chat,
+                    json!({ "type": "background", "background": running }),
+                );
+                crate::chat_state::changed(&self.chats, &chat, &gathr::ids::trace_id()).await;
+            }
             Some(Err(e)) => self.record(
                 Event::point("gathr.engine.background")
                     .error("sqlite")
