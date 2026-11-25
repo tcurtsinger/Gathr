@@ -12,6 +12,7 @@ import { split } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { clock, LeadMark, type People, Words } from './Room';
 import '../components/popover-panel.css';
+import './questions.css';
 
 /** Whether the question waits for the person's answer: not answered, nor closed when its chat was archived. */
 export const waits = (q: Question) => !q.answered && !q.closed;
