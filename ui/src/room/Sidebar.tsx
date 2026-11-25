@@ -9,7 +9,7 @@ import {
   SquareTerminal,
   X,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,15 +142,14 @@ interface PanelProps {
   onNote: (text: string, agent?: string) => void;
 }
 
-/** A named tab's widest, the gap between tabs, and the "+N" list's button. */
+/** A named tab's widest and narrowest, the gap between tabs, and the "+N" list's button with a two-digit count. */
 const WIDEST = 180;
+const NARROWEST = 84;
 const GAP = 3;
-const MORE = 44;
+const MORE = 54;
 /** A tab's width beside its name: padding, icon and gap; the shown tab's close mark adds `CLOSE`. */
-const AROUND = 41;
+const AROUND = 43;
 const CLOSE = 15;
-/** The least room a tab is cut short to, rather than go in the list. */
-const LEAST = 90;
 
 /** A page's or a file's tab in the strip after the fixed ones, and its row in the "+N" list. */
 interface Item {
@@ -174,26 +173,41 @@ function nameWidth(name: string, strip: HTMLElement | null) {
   return ruler.measureText(name).width;
 }
 
-/** The tabs that fit in `width` as wide as their names, in order, the shown one always among them. */
+/**
+ * The tabs shown in `width`, in order, the shown one always among them, and the widest each may be. Tabs that
+ * don't all fit as wide as their names share the room evenly, a short one keeping its own width, down to
+ * `NARROWEST`; only then do the rest go in the "+N" list.
+ */
 function fitting(items: Item[], width: number, strip: HTMLElement | null) {
   const wide = items.map((i) =>
     Math.min(WIDEST, Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.selected ? CLOSE : 0)),
   );
-  const all = wide.reduce((sum, w) => sum + w + GAP, -GAP);
-  if (all <= width) return items;
-  const at = items.findIndex((i) => i.selected);
-  let room = width - MORE - (at < 0 ? 0 : wide[at] + GAP);
-  return items.filter((_, n) => {
-    if (n === at) return true;
-    if (wide[n] + GAP > room) {
-      // The first that doesn't fit takes what room is left, cut short, when that shows enough of its name.
-      const fits = room >= LEAST;
-      room = 0;
-      return fits;
+  // Each tab with the gap after it: the room is the strip's and one gap more.
+  const least = (n: number) => Math.min(wide[n], NARROWEST) + GAP;
+  let room = width + GAP;
+  let shown = items.map((_, n) => n);
+  if (shown.reduce((sum, n) => sum + least(n), 0) > room) {
+    room -= MORE + GAP;
+    const at = items.findIndex((i) => i.selected);
+    let left = room - (at < 0 ? 0 : least(at));
+    shown = shown.filter((n) => {
+      if (n === at) return true;
+      if (least(n) > left) left = Number.NEGATIVE_INFINITY;
+      left -= least(n);
+      return left >= 0;
+    });
+  }
+  let fit = WIDEST;
+  const sorted = shown.map((n) => wide[n] + GAP).sort((a, b) => a - b);
+  for (const [j, w] of sorted.entries()) {
+    const even = room / (sorted.length - j);
+    if (w > even) {
+      fit = Math.floor(even - GAP);
+      break;
     }
-    room -= wide[n] + GAP;
-    return true;
-  });
+    room -= w;
+  }
+  return { shown: shown.map((n) => items[n]), fit };
 }
 
 function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
@@ -347,7 +361,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     for (const p of [...pages, ...terms]) if (p !== keep) p.close();
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
-  const shown = fitting(items, width, strip.current);
+  const { shown, fit } = fitting(items, width, strip.current);
   const at = items.findIndex((i) => i.selected);
   const rest = items.length - shown.length;
   const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
@@ -358,7 +372,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
           <div className="workspace-fixed">{tab(HOME, <House aria-hidden="true" />, 'Home')}</div>
           {items.length > 0 && <i className="workspace-sep" />}
-          <div className="workspace-files" ref={strip}>
+          <div className="workspace-files" ref={strip} style={{ '--fit': `${fit}px` } as CSSProperties}>
             {shown.map((i) => (
               <Tab
                 key={i.key}
@@ -371,27 +385,27 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                 onClose={i.close}
               />
             ))}
+            {rest > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="workspace-more">
+                  +{rest}
+                  <ChevronDown aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="workspace-more-list">
+                  {items.map((i) => (
+                    <DropdownMenuItem key={i.key} data-on={i.selected || undefined} onSelect={i.select}>
+                      {i.icon}
+                      <span>{i.name}</span>
+                      <small>{i.where}</small>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => closeAll(items[at])}>Close others</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => closeAll()}>Close all</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
-          {rest > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="workspace-more">
-                +{rest}
-                <ChevronDown aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="workspace-more-list">
-                {items.map((i) => (
-                  <DropdownMenuItem key={i.key} data-on={i.selected || undefined} onSelect={i.select}>
-                    {i.icon}
-                    <span>{i.name}</span>
-                    <small>{i.where}</small>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => closeAll(items[at])}>Close others</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => closeAll()}>Close all</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </div>
       {view(

@@ -118,7 +118,8 @@
   align-self: center;
   background: var(--border);
 }
-/* The named tabs: as wide as their names, and those that don't fit go in the "+N" list (Sidebar.tsx). */
+/* The named tabs: as wide as their names, narrower when they don't all fit, and the rest in the "+N" list
+   (Sidebar.tsx), which is last in the strip. */
 .workspace-files {
   display: flex;
   flex: 1;
@@ -128,11 +129,7 @@
 }
 .workspace-tab[data-file] {
   flex: none;
-}
-/* The last may be cut short to fill what room is left. */
-.workspace-tab[data-file]:last-child {
-  flex: 0 1 auto;
-  min-width: 0;
+  max-width: var(--fit);
 }
 .workspace-more {
   display: flex;
