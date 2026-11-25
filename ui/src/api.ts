@@ -4,6 +4,7 @@ import type { Block } from './block';
 import type { Added } from './components/AddedBy';
 import type { Deletable, DeleteCounts } from './deleting';
 import type { MemoryPlace, MemoryShown } from './memory/places';
+import type { Computer } from './room/useComputer';
 import type { Schedule, ScheduleShown } from './scheduled/schedule';
 import type { Connect } from './settings/Connect';
 
@@ -883,6 +884,9 @@ export const api = {
   deleteSchedule: (id: string) => call<unknown>('DELETE', `/api/schedules/${id}`),
   /** A run at once: the next time stays. */
   runSchedule: (id: string) => call<{ chat: string; turn: string }>('POST', `/api/schedules/${id}/run`),
+  /** Computer use: whether it's on, Pause, and each agent using it. */
+  computer: () => call<Computer>('GET', '/api/computer'),
+  pauseComputer: (paused: boolean) => call<Computer>('POST', '/api/computer/pause', { paused }),
   /** Every tool on the web, each enabled one's state asked of it now. */
   tools: () => call<{ tools: WebTool[] }>('GET', '/api/tools').then((t) => t.tools),
   /** One tool, with its actions when it's connected; with a Client ID, the address its admin gives that app. */

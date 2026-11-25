@@ -89,6 +89,8 @@ export type LiveEvent =
   // A schedule was made, run, changed or deleted, by an agent, the person or its time: reload Scheduled.
   | { type: 'schedules' }
   | { type: 'tools'; sign_in?: string; tool?: string; why?: string; ref?: string }
+  // Computer use changed: Pause, its state, or an agent's steps or picture. Reload it.
+  | { type: 'computer' }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };
 

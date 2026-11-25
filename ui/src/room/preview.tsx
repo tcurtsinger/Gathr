@@ -9,6 +9,7 @@ import { TopLine } from '../TopLine';
 import { NeedsYou } from './Question';
 import { people, Room } from './Room';
 import { RoomSidebar } from './Sidebar';
+import type { Computer } from './useComputer';
 import type { RoomState } from './useRoom';
 import '../theme.css';
 import '../app.css';
@@ -209,12 +210,59 @@ const board: BoardLine[] = [
   { id: 3, owner: 'ann', name: 'Ann', text: 'Column picker', state: 'to_do' },
   { id: 4, owner: 'mira', name: 'Mira', text: 'Help line for the export', state: 'to_do' },
 ];
-// The board asks the service for its lines: here they are made up too.
+// Ann works Calculator on the computer (#off: computer use is off). Pause flips here.
+const step = (min: number, tool: string, target: string | null, text: string | null = null) => ({
+  at: at(min),
+  tool,
+  target,
+  text,
+  refused: null,
+  failed: null,
+});
+const computer: Computer = {
+  tool: 'computer',
+  on: location.hash !== '#off',
+  driver: 'ready',
+  why: null,
+  paused: false,
+  agents: [
+    {
+      agent: 'ann',
+      chat: 'preview',
+      window: 'Calculator',
+      shot: 1,
+      mark: { x: 197, y: 318 },
+      steps: [
+        step(20, 'launch_app', 'Calculator'),
+        step(20, 'click', 'One'),
+        step(21, 'click', 'Plus'),
+        step(21, 'click', 'Two'),
+        step(21, 'click', 'Equals'),
+        step(22, 'get_window_state', 'Calculator'),
+      ],
+    },
+  ],
+};
+const keys = '7 8 9 ÷ 4 5 6 × 1 2 3 − 0 . = +'.split(' ');
+const calculator = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360" font-family="Segoe UI, sans-serif">
+<rect width="320" height="360" fill="#f3f3f3"/><rect width="320" height="30" fill="#e6e6e6"/>
+<text x="10" y="20" font-size="12" fill="#444">Calculator</text><text x="304" y="90" font-size="40" text-anchor="end">3</text>
+${keys.map((k, i) => `<rect x="${10 + (i % 4) * 76}" y="${118 + Math.floor(i / 4) * 58}" width="70" height="52" rx="4" fill="#fff"/><text x="${45 + (i % 4) * 76}" y="${150 + Math.floor(i / 4) * 58}" font-size="16" text-anchor="middle">${k}</text>`).join('')}</svg>`;
+const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+// The board and computer use ask the service: here they are made up too.
 const fetched = window.fetch;
-window.fetch = (url, init) =>
-  String(url).endsWith('/board')
-    ? Promise.resolve(new Response(JSON.stringify({ lines: board, agents: 4 })))
-    : fetched(url, init);
+window.fetch = (url, init) => {
+  const path = String(url);
+  if (path.endsWith('/board')) return json({ lines: board, agents: 4 });
+  if (path.endsWith('/api/computer')) return json(computer);
+  if (path.endsWith('/api/computer/pause')) {
+    computer.paused = JSON.parse(String(init?.body)).paused;
+    return json(computer);
+  }
+  if (path.includes('/api/computer/agents/'))
+    return Promise.resolve(new Response(new Blob([calculator], { type: 'image/svg+xml' })));
+  return fetched(url, init);
+};
 
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
