@@ -270,9 +270,14 @@ impl Actor {
         // The window the person uses sets the page's size.
         self.sizer = Some(client);
         self.fit();
-        if kind == "open" || kind == "new" {
-            let typed = (kind == "open").then(|| message["address"].as_str().unwrap_or_default());
-            return self.open(typed).await;
+        if kind == "open" {
+            return self
+                .open(Some(message["address"].as_str().unwrap_or_default()), false)
+                .await;
+        }
+        // A new page, blank or at an address (a link in a terminal).
+        if kind == "new" {
+            return self.open(message["address"].as_str(), true).await;
         }
         if kind == "answer" {
             return self.answer(&message);
@@ -334,9 +339,9 @@ impl Actor {
         }
     }
 
-    /// Goes to what was typed in the address, in the page shown; or opens a new page (`None`), or one
-    /// for the address when none is shown, and shows it.
-    async fn open(&mut self, typed: Option<&str>) {
+    /// Goes to what was typed in the address, in the page shown; or opens a new page (`None`, or
+    /// `new`), or one for the address when none is shown, and shows it.
+    async fn open(&mut self, typed: Option<&str>, new: bool) {
         let url = typed.map_or_else(|| BLANK.to_string(), address);
         if url.is_empty() {
             return;
@@ -348,7 +353,7 @@ impl Actor {
             return;
         };
         self.line = None;
-        match self.shown_page().filter(|_| typed.is_some()) {
+        match self.shown_page().filter(|_| typed.is_some() && !new) {
             Some(page) => {
                 let (session, leaving) = (page.session.clone(), page.leaving());
                 tokio::spawn(async move {

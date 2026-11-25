@@ -63,6 +63,7 @@ pub mod skills;
 pub mod steps;
 pub mod store;
 pub mod team;
+pub mod terminal;
 pub mod text;
 pub mod timeline;
 pub mod titles;

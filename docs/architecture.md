@@ -128,8 +128,9 @@ Local Theme and panel widths persist in the client. Vite builds the UI; Biome, T
 [0012](archive/decisions/0012-ui-shell.md), [0016](archive/decisions/0016-macos.md), [0022](archive/decisions/0022-ui-tooling.md).
 
 The window has a rail (Home, Agents, Memory, Plugins, Designs, Scheduled, Settings), the chat list and the chat.
-A chat's right panel is tabs: Home (Find file, the Files, Designs, Changes and Browser tiles, and the board), and a tab for
-each browser page and each file or design opened. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
+A chat's right panel is tabs: Home (Find file, the Files, Designs, Changes, Browser and Terminal tiles, and the board), and a tab for
+each browser page, each of the chat's terminals and each file or design opened. Terminals are shells the service runs on a
+pseudo console (`portable-pty`, ConPTY on Windows; `terminal.rs`), drawn with xterm.js. A file tab shows Markdown and CSV as they look (with Source), code with its colours, a picture, a
 PDF or a workbook; an HTML page shows as it looks in a sealed frame (`view.rs`). The window itself sets no content security policy today
 (`"csp": null` in `crates/gathr-app/tauri.conf.json`). Changes shows what each agent changed in its
 worktree that isn't on the project's main line yet, and what it wrote in other checkouts (`changes.rs`, through git);
