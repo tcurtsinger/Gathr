@@ -7,8 +7,12 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-/* A reply breaks a long word anywhere, but in a table that shrank a column to one letter: a cell keeps
-   its words whole, and a table too wide for the column scrolls sideways in its frame. */
+/* A reply breaks a long word anywhere (a path, a link, a hash), so none pushes the chat wider than the window, but in
+   a table that shrank a column to one letter: a cell keeps its words whole, and a table too wide for the column
+   scrolls sideways in its frame. */
+.markdown {
+  overflow-wrap: anywhere;
+}
 .markdown [data-streamdown="table"] {
   overflow-wrap: normal;
 }

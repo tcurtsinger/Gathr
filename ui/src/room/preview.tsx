@@ -288,11 +288,17 @@ const computer: Computer = {
     },
   ],
 };
+/** A calculator key: its button in the grid, its label in the middle. */
+function key(k: string, i: number) {
+  const x = 10 + (i % 4) * 76;
+  const y = 118 + Math.floor(i / 4) * 58;
+  return `<rect x="${x}" y="${y}" width="70" height="52" rx="4" fill="#fff"/><text x="${x + 35}" y="${y + 32}" font-size="16" text-anchor="middle">${k}</text>`;
+}
 const keys = '7 8 9 ÷ 4 5 6 × 1 2 3 − 0 . = +'.split(' ');
 const calculator = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360" font-family="Segoe UI, sans-serif">
 <rect width="320" height="360" fill="#f3f3f3"/><rect width="320" height="30" fill="#e6e6e6"/>
 <text x="10" y="20" font-size="12" fill="#444">Calculator</text><text x="304" y="90" font-size="40" text-anchor="end">3</text>
-${keys.map((k, i) => `<rect x="${10 + (i % 4) * 76}" y="${118 + Math.floor(i / 4) * 58}" width="70" height="52" rx="4" fill="#fff"/><text x="${45 + (i % 4) * 76}" y="${150 + Math.floor(i / 4) * 58}" font-size="16" text-anchor="middle">${k}</text>`).join('')}</svg>`;
+${keys.map(key).join('')}</svg>`;
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 // The board and computer use ask the service: here they are made up too.
 const fetched = window.fetch;
