@@ -34,6 +34,7 @@ let state = NONE;
 const heard = new Set<() => void>();
 const drawn = new Set<(frame: Blob) => void>();
 const pointed = new Set<(cursor: string) => void>();
+const emptied = new Set<() => void>();
 let socket: WebSocket | null = null;
 let retryMs = 250;
 /** What the tab last said of itself, said again after the socket comes back. */
@@ -58,7 +59,9 @@ function connect() {
     if (said.type === 'selection') selection = said.text;
     if (said.type === 'cursor') for (const point of pointed) point(said.value);
     if (said.type !== 'state') return;
+    const closed = state.pages.length > 0 && said.pages.length === 0;
     state = said;
+    if (closed) for (const heed of emptied) heed();
     for (const heed of heard) heed();
   };
   ws.onclose = () => {
@@ -78,6 +81,12 @@ function listen(heed: () => void) {
 
 /** The browser's tabs as the service has them; the socket opens on first use and stays open. */
 export const useBrowser = () => useSyncExternalStore(listen, () => state);
+
+/** Hears the last page closing, even while no sidebar is mounted. */
+export function onEmpty(heed: () => void) {
+  emptied.add(heed);
+  return () => emptied.delete(heed);
+}
 
 /** Tells the service what the person did, or what the tab is (`view`: its size and whether it shows). */
 export function say(message: { type: string } & Record<string, unknown>) {

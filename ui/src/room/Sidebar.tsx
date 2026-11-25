@@ -34,7 +34,7 @@ import { Designs, DesignTab, useDesigns } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
 import { isPage } from './PageFrame';
-import { pageName, say, site, useBrowser } from './pages';
+import { onEmpty, pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
 import { folderName, type StartFolder, TerminalTile, TerminalView } from './Terminal';
 import { asked, openTerminal, tell, useTerminals, waiting } from './terminals';
@@ -82,6 +82,12 @@ function change(chat: string, next: Tabs) {
   kept.set(chat, next);
   for (const heed of heard) heed();
 }
+
+onEmpty(() => {
+  for (const [chat, tabs] of kept) {
+    if (tabs.browser) change(chat, { ...tabs, browser: false, at: tabs.at === BROWSER ? HOME : tabs.at });
+  }
+});
 
 /** The one way a file or a design opens: in its own tab, or the tab it already has, at the option asked for. */
 function show(chat: string, file: Opened) {
