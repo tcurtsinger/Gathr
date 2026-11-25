@@ -271,9 +271,12 @@ async fn change(
         Ok(json!(web_tools::get(conn, &id)?))
     })
     .await;
-    // Computer use fetches its driver when it's switched on, not at an agent's first call.
-    if answer.is_ok() && on == Some(true) && starting == gathr::computer::ID {
-        crate::pc_tools::copy(&s, &starting);
+    if answer.is_ok() && on.is_some() && starting == gathr::computer::ID {
+        // Computer use fetches its driver when it's switched on, not at an agent's first call.
+        if on == Some(true) {
+            crate::pc_tools::copy(&s, &starting);
+        }
+        let _ = s.chats.live.send(json!({ "type": "computer" }));
     }
     told(&s, answer)
 }

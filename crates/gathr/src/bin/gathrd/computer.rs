@@ -31,7 +31,7 @@ pub fn routes() -> axum::Router<Arc<State>> {
     axum::Router::new()
         .route("/api/computer", get(read))
         .route("/api/computer/pause", post(pause))
-        .route("/api/computer/agents/{agent}/shot", get(shot))
+        .route("/api/computer/shots/{n}", get(shot))
 }
 
 static PAUSE: AtomicBool = AtomicBool::new(false);
@@ -55,7 +55,6 @@ struct Step {
 
 #[derive(Default)]
 struct Agent {
-    chat: String,
     at: i64,
     window: Option<String>,
     shot: Option<(u64, Vec<u8>, String)>,
@@ -65,7 +64,8 @@ struct Agent {
     tree: String,
 }
 
-static AGENTS: Mutex<Option<HashMap<String, Agent>>> = Mutex::new(None);
+/// By chat and agent: an agent in two chats is two, each showing only its own steps.
+static AGENTS: Mutex<Option<HashMap<(String, String), Agent>>> = Mutex::new(None);
 /// Windows' titles by id, as the driver last named them.
 static TITLES: Mutex<Option<HashMap<u64, String>>> = Mutex::new(None);
 
@@ -159,10 +159,9 @@ fn record(
     let mut agents = lock(&AGENTS);
     let one = agents
         .get_or_insert_with(HashMap::new)
-        .entry(agent.to_string())
+        .entry((chat.to_string(), agent.to_string()))
         .or_default();
     step.target = target(&step.tool, args, &one.tree);
-    one.chat = chat.to_string();
     one.at = step.at;
     if window.is_some() {
         one.window = window;
@@ -253,11 +252,11 @@ async fn state(s: &Arc<State>) -> Value {
         driver = "ready";
     }
     let agents = lock(&AGENTS);
-    let mut all: Vec<(&String, &Agent)> = agents.iter().flatten().collect();
+    let mut all: Vec<(&(String, String), &Agent)> = agents.iter().flatten().collect();
     all.sort_by_key(|(_, a)| std::cmp::Reverse(a.at));
     let agents: Vec<Value> = all
         .into_iter()
-        .map(|(agent, a)| {
+        .map(|((chat, agent), a)| {
             let steps: Vec<Value> = a
                 .steps
                 .iter()
@@ -269,7 +268,7 @@ async fn state(s: &Arc<State>) -> Value {
                 })
                 .collect();
             json!({
-                "agent": agent, "chat": a.chat, "window": a.window,
+                "agent": agent, "chat": chat, "window": a.window,
                 "shot": a.shot.as_ref().map(|(n, ..)| n),
                 "mark": a.mark.map(|(x, y)| json!({ "x": x, "y": y })),
                 "steps": steps,
@@ -297,9 +296,11 @@ async fn pause(Extract(s): Extract<Arc<State>>, Json(p): Json<Pause>) -> Json<Va
     Json(state(&s).await)
 }
 
-async fn shot(Path(agent): Path<String>) -> axum::response::Response {
+/// A picture by its number, while it's still an agent's latest.
+async fn shot(Path(n): Path<u64>) -> axum::response::Response {
     let agents = lock(&AGENTS);
-    match agents.as_ref().and_then(|a| a.get(&agent)?.shot.as_ref()) {
+    let mut shots = agents.iter().flatten().filter_map(|(_, a)| a.shot.as_ref());
+    match shots.find(|(at, ..)| *at == n) {
         Some((_, bytes, mime)) => {
             ([(header::CONTENT_TYPE, mime.clone())], bytes.clone()).into_response()
         }
