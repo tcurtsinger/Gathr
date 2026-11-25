@@ -38,16 +38,52 @@ export function TerminalTile({ chat, onOpen }: { chat: string; onOpen: () => voi
 const MONO = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';
 const URL_AT = /https?:\/\/[^\s"'<>`]+[^\s"'<>`.,;:!?)\]]/g;
 
+/** What programs print in colour, per theme: green, cyan and the rest readable on Gathr's own background. */
+const ANSI = {
+  dark: {
+    black: '#3a3a38',
+    green: '#3fb950',
+    yellow: '#d29922',
+    magenta: '#c49cf0',
+    cyan: '#56b6c2',
+    white: '#c8c8c4',
+    brightGreen: '#56d364',
+    brightYellow: '#e3b341',
+    brightMagenta: '#d2a8ff',
+    brightCyan: '#76d9e3',
+  },
+  light: {
+    black: '#1b1b1a',
+    green: '#1a7f37',
+    yellow: '#9a6700',
+    magenta: '#8250df',
+    cyan: '#0b7285',
+    white: '#55554f',
+    brightGreen: '#1a7f37',
+    brightYellow: '#9a6700',
+    brightMagenta: '#8250df',
+    brightCyan: '#0b7285',
+  },
+};
+
 /** The window's own colours, read again when its theme changes. */
 function colours() {
-  const css = getComputedStyle(document.documentElement);
+  const root = document.documentElement;
+  const css = getComputedStyle(root);
   const v = (name: string) => css.getPropertyValue(name).trim();
   return {
+    ...ANSI[root.classList.contains('light') ? 'light' : 'dark'],
     background: v('--background'),
     foreground: v('--foreground'),
     cursor: v('--foreground'),
     cursorAccent: v('--background'),
     selectionBackground: 'rgba(128, 128, 128, 0.35)',
+    red: v('--destructive'),
+    brightRed: v('--destructive'),
+    blue: v('--attention'),
+    brightBlue: v('--attention'),
+    brightBlack: v('--muted-foreground'),
+    brightWhite: v('--foreground'),
   };
 }
 
@@ -59,10 +95,12 @@ interface ViewProps {
   folders: StartFolder[];
   /** An address in its output, clicked: it opens in Gathr's Browser. */
   onLink: (url: string) => void;
+  /** Its tab's close was pressed while an agent's command runs: Stop or Keep, at its foot. */
+  asking?: { stop: () => void; keep: () => void };
 }
 
 /** One terminal at the tab's size: its folder, New and Stop over it, and a line at its foot once it ended. */
-export function TerminalView({ info, by, open, folders, onLink }: ViewProps) {
+export function TerminalView({ info, by, open, folders, onLink, asking }: ViewProps) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<Xterm | null>(null);
   const fit = useRef<FitAddon | null>(null);
@@ -127,7 +165,7 @@ export function TerminalView({ info, by, open, folders, onLink }: ViewProps) {
   }, [open, info.running, chat, id]);
 
   const name = info.folder.split(/[\\/]/).filter(Boolean).at(-1) ?? info.folder;
-  const ended = info.code ? `Ended, code ${info.code}` : 'Ended';
+  const ended = info.code ? `Failed, code ${info.code}` : 'Ended';
   return (
     <div className="term">
       <div className="term-bar">
@@ -145,10 +183,21 @@ export function TerminalView({ info, by, open, folders, onLink }: ViewProps) {
       <div className="term-body">
         <div className="term-screen" ref={box} />
         {!info.running && (
-          <div className="term-end">
+          <div className="term-end" data-failed={!!info.code || undefined}>
             <span>{ended}</span>
             <button type="button" onClick={() => tell(chat, { type: 'again', id })}>
               Run again
+            </button>
+          </div>
+        )}
+        {info.running && asking && (
+          <div className="term-end" data-asking="">
+            <span>{`Stop ${info.name}? ${by} is using it.`}</span>
+            <button type="button" onClick={asking.keep}>
+              Keep
+            </button>
+            <button type="button" onClick={asking.stop}>
+              Stop
             </button>
           </div>
         )}
@@ -179,5 +228,51 @@ function NewTerminal({ chat, folders }: { chat: string; folders: StartFolder[] }
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Gathr's terminal tools as the steps list names them. */
+const STEPS: Record<string, string> = {
+  mcp__gathr__terminal_run: 'Ran in terminal',
+  mcp__gathr__terminal_read: 'Read terminal',
+  mcp__gathr__terminal_send: 'Typed in terminal',
+  mcp__gathr__terminal_list: 'Listed terminals',
+  mcp__gathr__ask_to_run: 'Asked you to run',
+};
+export const isTerminalStep = (tool: string) => tool in STEPS;
+
+interface StepProps {
+  chat: string;
+  agent: string;
+  tool: string;
+  /** What the step kept: the command, or the terminal's id. */
+  text?: string;
+  onOpen?: (id: string) => void;
+}
+
+/** A terminal tool's step: what it did, then the command or the terminal by name, which opens its tab. */
+export function TerminalStep({ chat, agent, tool, text, onOpen }: StepProps) {
+  const { list } = useTerminals(chat);
+  const ran = tool === 'mcp__gathr__terminal_run';
+  const byId = tool === 'mcp__gathr__terminal_read' || tool === 'mcp__gathr__terminal_send';
+  const found = ran
+    ? list.findLast((t) => t.agent === agent && t.command === text)
+    : byId
+      ? list.find((t) => t.id === text)
+      : undefined;
+  // An id names nothing once its terminal is closed.
+  const what = byId ? found?.name : text;
+  return (
+    <span className="room-step-name">
+      <span>{STEPS[tool]}</span>
+      {what &&
+        (found && onOpen ? (
+          <button type="button" className="room-step-term" onClick={() => onOpen(found.id)}>
+            <code>{what}</code>
+          </button>
+        ) : (
+          <code>{what}</code>
+        ))}
+    </span>
   );
 }

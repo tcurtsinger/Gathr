@@ -5,7 +5,8 @@ use serde_json::Value;
 use crate::steps::{self, StepInput, StepResult, counted};
 
 /// What the item's step keeps, or the name of the field it's read from when the item lacks it.
-/// MCP calls, image views and anything not listed keep nothing.
+/// Gathr's terminal tools keep their command or terminal; other MCP calls, image views and anything
+/// not listed keep nothing.
 pub(super) fn step(item: &Value) -> Result<Option<StepInput>, &'static str> {
     match item["type"].as_str() {
         Some("commandExecution") => {
@@ -23,6 +24,10 @@ pub(super) fn step(item: &Value) -> Result<Option<StepInput>, &'static str> {
         }
         // Empty when the search starts; its words come with the item's end (Codex 0.167.0).
         Some("webSearch") => Ok(steps::input(item["query"].as_str().ok_or("query")?, None)),
+        Some("mcpToolCall") if item["server"] == "gathr" => {
+            let tool = format!("mcp__gathr__{}", item["tool"].as_str().unwrap_or_default());
+            Ok(steps::terminal(&tool, &item["arguments"]))
+        }
         _ => Ok(None),
     }
 }

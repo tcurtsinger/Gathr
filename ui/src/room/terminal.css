@@ -82,14 +82,64 @@
 }
 .term-end > button {
   height: 28px;
-  margin-left: auto;
   padding: 0 12px;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--foreground);
-  color: var(--background);
+  background: none;
+  color: var(--foreground);
   font-size: 12px;
   font-weight: 500;
 }
+.term-end > span + button {
+  margin-left: auto;
+}
+.term-end > button:hover {
+  background: var(--hover-tint);
+}
+.term-end[data-failed] > span {
+  color: var(--destructive);
+}
+.term-end[data-asking] > span {
+  color: var(--foreground);
+}
+.term-end[data-asking] > button:last-child {
+  border-color: var(--destructive);
+  background: var(--destructive);
+  color: #fff;
+}
+/* The scrollbar shows only under the pointer: output alone doesn't flash it. */
+.term-screen:not(:hover) .xterm-scrollable-element > .scrollbar {
+  opacity: 0;
+}
 .term-bar > [aria-label="Stop"] svg {
   fill: currentColor;
+}
+/* A terminal step in the chat: its command or terminal opens the tab. */
+.room-step-term {
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  font: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.room-step-term > code {
+  display: block;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+.room-step-term:hover {
+  color: var(--foreground);
+}
+/* A terminal tab's state after its name: Working while it runs, Can't run once it failed. */
+.workspace-tab .mark {
+  --mark: 9px;
+}
+.workspace-tablist .mark > svg {
+  width: 100%;
+  height: 100%;
 }

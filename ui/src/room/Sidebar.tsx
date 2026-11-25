@@ -24,6 +24,7 @@ import { Face } from '../components/Face';
 import { pathSteps as steps, onWindows as windows } from '../components/files';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
+import { StateMark } from '../components/StateMark';
 import { widest } from '../components/workspace';
 import { Board } from './Board';
 import { BrowserTile, BrowserView } from './Browser';
@@ -56,6 +57,7 @@ const FILES = 'files';
 const DESIGN = 'design';
 const CHANGES = 'changes';
 const BROWSER = 'browser';
+const termKey = (id: string) => `term:${id}`;
 const FRESH: Tabs = { files: false, design: false, changes: false, browser: false, open: [], at: HOME };
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
@@ -101,6 +103,10 @@ export async function openTab(chat: string, path: string, agent?: string) {
   const folder = `${tree.designs.path}${windows(file.path) ? '\\' : '/'}${name}`;
   show(chat, { path: folder, crumbs: [name], design: true, page: file.path });
 }
+
+/** Shows one of the chat's terminals in its tab, as a step that ran in it asks. */
+export const openTerminalTab = (chat: string, id: string) =>
+  change(chat, { ...tabsOf(chat), at: termKey(id) });
 
 /** Opens the chat's Changes tab, as Home's tile does. */
 export const openChanges = (chat: string) => change(chat, { ...tabsOf(chat), changes: true, at: CHANGES });
@@ -150,6 +156,8 @@ const MORE = 54;
 /** A tab's width beside its name: padding, icon and gap; the shown tab's close mark adds `CLOSE`. */
 const AROUND = 43;
 const CLOSE = 15;
+/** A terminal's mark and the gap before it. */
+const MARK = 16;
 
 /** A page's or a file's tab in the strip after the fixed ones, and its row in the "+N" list. */
 interface Item {
@@ -162,6 +170,10 @@ interface Item {
   close: () => void;
   /** A browser page's id, for a page's tab. */
   page?: string;
+  /** A terminal's state after its name: running, or ended with a failure. */
+  mark?: ReactNode;
+  /** What its close mark does instead of closing: an agent's running terminal asks first. */
+  ask?: () => void;
 }
 
 let ruler: CanvasRenderingContext2D | null | undefined;
@@ -180,7 +192,10 @@ function nameWidth(name: string, strip: HTMLElement | null) {
  */
 function fitting(items: Item[], width: number, strip: HTMLElement | null) {
   const wide = items.map((i) =>
-    Math.min(WIDEST, Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.selected ? CLOSE : 0)),
+    Math.min(
+      WIDEST,
+      Math.ceil(nameWidth(i.name, strip)) + AROUND + (i.selected ? CLOSE : 0) + (i.mark ? MARK : 0),
+    ),
   );
   // Each tab with the gap after it: the room is the strip's and one gap more.
   const least = (n: number) => Math.min(wide[n], NARROWEST) + GAP;
@@ -219,6 +234,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   }, [chat]);
   const strip = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
+  // An agent's running terminal whose tab's close was pressed: it asks at its foot before it stops.
+  const [asking, setAsking] = useState<string>();
   useEffect(() => {
     const el = strip.current;
     if (!el) return;
@@ -229,7 +246,6 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const browser = useBrowser();
   const terminals = useTerminals(chat).list;
   const pageKey = (id: string) => `page:${id}`;
-  const termKey = (id: string) => `term:${id}`;
   const order = [HOME, FILES, DESIGN, CHANGES, BROWSER, ...browser.pages.map((p) => pageKey(p.id))];
   order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
@@ -313,12 +329,24 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     ),
     name: t.name,
     where: t.folder,
+    mark: t.running ? (
+      <StateMark state="working" size={9} spin />
+    ) : t.code ? (
+      <StateMark state="cant" size={9} />
+    ) : undefined,
     selected: tabs.at === termKey(t.id),
     select: () => go(termKey(t.id)),
     close: () => {
       close([termKey(t.id)]);
       tell(chat, { type: 'close', id: t.id });
     },
+    ask:
+      t.agent && t.running
+        ? () => {
+            go(termKey(t.id));
+            setAsking(t.id);
+          }
+        : undefined,
   }));
   const starts: StartFolder[] = [
     tree?.project ? { name: tree.project.name } : { name: 'Home' },
@@ -381,8 +409,9 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                 selected={i.selected}
                 icon={i.icon}
                 name={i.name}
+                mark={i.mark}
                 onSelect={i.select}
-                onClose={i.close}
+                onClose={i.ask ?? i.close}
               />
             ))}
             {rest > 0 && (
@@ -481,6 +510,17 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
             by={t.agent ? nameOfAgent(t.agent) : undefined}
             open={tabs.at === termKey(t.id)}
             folders={starts}
+            asking={
+              asking === t.id
+                ? {
+                    stop: () => {
+                      setAsking(undefined);
+                      terms.find((i) => i.key === termKey(t.id))?.close();
+                    },
+                    keep: () => setAsking(undefined),
+                  }
+                : undefined
+            }
             onLink={(url) => {
               say({ type: 'new', address: url });
               go(BROWSER);
@@ -545,13 +585,14 @@ interface TabProps {
   selected: boolean;
   icon: ReactNode;
   name: string;
+  mark?: ReactNode;
   onSelect: () => void;
   /** A tab that closes, and shows its name; Home shows its icon only. */
   onClose?: () => void;
 }
 
 /** One tab: Home by its icon; a view, a page or a file by its name, with a close mark. */
-function Tab({ id, controls, selected, icon, name, onSelect, onClose }: TabProps) {
+function Tab({ id, controls, selected, icon, name, mark, onSelect, onClose }: TabProps) {
   return (
     <div className="workspace-tab" data-selected={selected} data-file={!!onClose || undefined}>
       <button
@@ -565,6 +606,7 @@ function Tab({ id, controls, selected, icon, name, onSelect, onClose }: TabProps
       >
         {icon}
         {onClose && <span>{name}</span>}
+        {mark}
       </button>
       {onClose && (
         <IconButton aria-label={`Close ${name}`} className="workspace-close" onClick={onClose}>
