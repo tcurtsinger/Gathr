@@ -73,10 +73,22 @@ export interface Message {
 }
 
 /** A command an agent's engine still runs in the background: who started it, what it is, since when. */
+/**
+ * A command an agent's engine runs, or ran, in the background (0084): the running ones until `ended`, then how it
+ * ended. `kind` is the engine's own (`local_bash` a command, `local_agent` a helper, ...); `output` says the tab can
+ * show what it wrote.
+ */
 export interface Background {
+  id: string;
   agent: string | null;
+  /** The turn that started it, or the agent's latest when it began between turns. */
+  turn: string;
   description: string;
+  kind: string | null;
   started: string;
+  ended?: string;
+  status?: 'done' | 'failed' | 'stopped';
+  output: boolean;
 }
 
 /** What a reply in a thread answers (0076): a message, or a task. */
@@ -749,6 +761,14 @@ export const api = {
   /** Compacts the agent's conversation in the chat, once its turn and background commands are done. */
   compact: (chat: string, agent: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/agents/${agent}/compact`, {}),
+  /** The end of a background command's output: null once its file is gone. */
+  backgroundOutput: (chat: string, id: string) =>
+    call<{ text: string | null; cut: boolean }>('GET', `/api/chats/${chat}/background/${id}/output`),
+  /** Stop on a running background command: the engine's own stop. */
+  stopBackground: (chat: string, id: string) =>
+    call<{ stopping: boolean }>('POST', `/api/chats/${chat}/background/${id}/stop`, {}),
+  /** Clear: the chat's ended background commands go. */
+  clearBackground: (chat: string) => call<{ cleared: boolean }>('DELETE', `/api/chats/${chat}/background`),
   /** The person's like (0057): it reaches the message's agent. */
   like: (chat: string, message: string) =>
     call<{ reaction: Reaction; did: string }>('PUT', `/api/chats/${chat}/messages/${message}/like`, {}),

@@ -7,14 +7,16 @@ import { useCard } from '../components/Corner';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import { since } from '../components/marks';
+import { StateMark } from '../components/StateMark';
+import { BackgroundTasksMark } from './Background';
 import type { People } from './Room';
 import '../components/popover-panel.css';
 import './agents-panel.css';
 
 /**
  * The top line's Agents button and its panel: each agent of the chat with how full its conversation is, what it is
- * doing (Working, Signed out with Sign in, Compact once nearly full), and what its engine still runs in the
- * background. The button's dot is lit while an agent is nearly full or signed out: what needs the person.
+ * doing (a turning mark while it works or runs anything in the background, Signed out with Sign in, Compact once
+ * nearly full), and what its engine still runs in the background, each opening the chat's Background tab. The button's dot is lit while an agent is nearly full or signed out: what needs the person.
  */
 export function AgentsPanel(props: {
   chat: string;
@@ -26,6 +28,8 @@ export function AgentsPanel(props: {
   signedOut?: (agent: string) => string | undefined;
   /** Settings > Engines, to sign in. */
   onSignIn?: () => void;
+  /** The chat's Background tab, which a running command opens. */
+  onBackground?: () => void;
 }) {
   const { members, background, signedOut } = props;
   const needs = members.some((m) => fillOf(m) >= NEAR || signedOut?.(m.agent));
@@ -60,13 +64,20 @@ export function AgentsPanel(props: {
               key={m.agent}
               chat={props.chat}
               member={m}
-              running={background.filter((b) => b.agent === m.agent)}
+              running={background.filter((b) => b.agent === m.agent && !b.ended)}
               turns={props.turns}
               people={props.people}
               alone={members.length < 2}
               signedOut={!!signedOut?.(m.agent)}
               onSignIn={props.onSignIn}
               onAsked={setAsked}
+              onBackground={
+                props.onBackground &&
+                (() => {
+                  setOpen(false);
+                  props.onBackground?.();
+                })
+              }
             />
           ))}
         </Popover.Content>
@@ -108,8 +119,8 @@ function fillOf(member: Member) {
 
 /**
  * One agent: its face and name, what it is doing, the bar "96K of 500K" once it has used any, and the commands it left
- * running. Signed out comes first, then a compaction under way or Compact once nearly full, then Working, then New
- * before it has used any; idle says nothing.
+ * running. Signed out comes first, then a compaction under way or Compact once nearly full, then New before it has
+ * used any; idle says nothing. A turning mark after its name while it works or runs anything in the background.
  */
 function Block(props: {
   chat: string;
@@ -121,6 +132,7 @@ function Block(props: {
   signedOut: boolean;
   onSignIn?: () => void;
   onAsked: (turn: string) => void;
+  onBackground?: () => void;
 }) {
   const { chat, member, running, people } = props;
   const used = member.context?.used ?? null;
@@ -134,6 +146,7 @@ function Block(props: {
       <div className="agents-head">
         <Face agent={people.face(member.agent)} size={24} />
         <b>{member.name}</b>
+        {(working || running.length > 0) && <StateMark state="working" size={11} spin />}
         {!props.alone && people.lead(member.agent) && <span className="room-tag">Lead</span>}
         <span className="room-grow" />
         {props.signedOut ? (
@@ -155,8 +168,6 @@ function Block(props: {
           </>
         ) : used !== null && (compacting || fill >= NEAR) ? (
           <Compact chat={chat} agent={member.agent} turns={props.turns} onAsked={props.onAsked} />
-        ) : working ? (
-          <span className="agents-word">Working</span>
         ) : (
           used === null && <span className="agents-word">New</span>
         )}
@@ -172,10 +183,18 @@ function Block(props: {
       {running.length > 0 && (
         <ul className="agents-commands">
           {running.map((b) => (
-            <li key={`${b.started}${b.description}`}>
-              <Terminal aria-hidden="true" />
-              <span className="agents-what">{b.description}</span>
-              <Since started={b.started} />
+            <li key={b.id}>
+              <button type="button" disabled={!props.onBackground} onClick={props.onBackground}>
+                {b.kind === 'local_bash' || !b.kind ? (
+                  <Terminal aria-hidden="true" />
+                ) : (
+                  <BackgroundTasksMark />
+                )}
+                <span className="agents-what" data-cmd={b.kind === 'local_bash' || !b.kind || undefined}>
+                  {b.description}
+                </span>
+                <Since started={b.started} />
+              </button>
             </li>
           ))}
         </ul>

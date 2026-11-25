@@ -74,10 +74,23 @@
   font-size: 13px;
 }
 .agents-commands li {
+  min-width: 0;
+}
+/* Each opens the chat's Background tab. */
+.agents-commands button {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: calc(100% + 12px);
   min-width: 0;
+  margin: 0 -6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: inherit;
+  text-align: left;
+}
+.agents-commands button:not(:disabled):hover {
+  background: var(--hover-tint);
 }
 .agents-commands svg {
   flex: none;
@@ -87,11 +100,13 @@
 }
 .agents-what {
   min-width: 0;
-  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
-  font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.agents-what[data-cmd] {
+  font-family: var(--font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12.5px;
 }
 .agents-since {
   margin-left: auto;
@@ -99,4 +114,10 @@
   color: var(--muted-foreground);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The turning mark after a name while the agent works or runs anything in the background. */
+.agents-head > .mark {
+  --mark: 11px;
+  margin-left: -2px;
 }

@@ -26,6 +26,7 @@ import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StateMark } from '../components/StateMark';
 import { widest } from '../components/workspace';
+import { BackgroundTasksMark, BackgroundTile, BackgroundView, runningOf } from './Background';
 import { Board } from './Board';
 import { BrowserTile, BrowserView } from './Browser';
 import { Changes, ChangesTile, count, useChanges } from './Changes';
@@ -49,6 +50,7 @@ interface Tabs {
   design: boolean;
   changes: boolean;
   browser: boolean;
+  background: boolean;
   open: Opened[];
   at: string;
 }
@@ -57,8 +59,17 @@ const FILES = 'files';
 const DESIGN = 'design';
 const CHANGES = 'changes';
 const BROWSER = 'browser';
+const BACKGROUND = 'background';
 const termKey = (id: string) => `term:${id}`;
-const FRESH: Tabs = { files: false, design: false, changes: false, browser: false, open: [], at: HOME };
+const FRESH: Tabs = {
+  files: false,
+  design: false,
+  changes: false,
+  browser: false,
+  background: false,
+  open: [],
+  at: HOME,
+};
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
 const heard = new Set<() => void>();
@@ -110,6 +121,10 @@ export const openTerminalTab = (chat: string, id: string) =>
 
 /** Opens the chat's Changes tab, as Home's tile does. */
 export const openChanges = (chat: string) => change(chat, { ...tabsOf(chat), changes: true, at: CHANGES });
+
+/** Opens the chat's Background tab, as Home's tile does. */
+export const openBackground = (chat: string) =>
+  change(chat, { ...tabsOf(chat), background: true, at: BACKGROUND });
 
 function place(tree: FileTree, path: string, agent?: string): Opened {
   const full = windows(path) || path.startsWith('/');
@@ -245,7 +260,15 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const browser = useBrowser();
   const terminals = useTerminals(chat).list;
   const pageKey = (id: string) => `page:${id}`;
-  const order = [HOME, FILES, DESIGN, CHANGES, BROWSER, ...browser.pages.map((p) => pageKey(p.id))];
+  const order = [
+    HOME,
+    FILES,
+    DESIGN,
+    CHANGES,
+    BROWSER,
+    BACKGROUND,
+    ...browser.pages.map((p) => pageKey(p.id)),
+  ];
   order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
   // Files, Designs, Changes and Browser are drawn once opened, and kept until their tab closes.
@@ -256,6 +279,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       design: tabs.design || at === DESIGN,
       changes: tabs.changes || at === CHANGES,
       browser: tabs.browser || at === BROWSER,
+      background: tabs.background || at === BACKGROUND,
       at,
     });
   // A view's or a file's tab closes; when it was shown, the tab after it shows, or the one before, or Home.
@@ -270,6 +294,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       design: tabs.design && !keys.includes(DESIGN),
       changes: tabs.changes && !keys.includes(CHANGES),
       browser: tabs.browser && !keys.includes(BROWSER),
+      background: tabs.background && !keys.includes(BACKGROUND),
       open: tabs.open.filter((f) => !keys.includes(f.path)),
       at: next === undefined ? tabs.at : next === null ? HOME : next.page ? BROWSER : next.key,
     });
@@ -364,13 +389,14 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   }));
   // Home's tiles open Files, Designs, Changes and Browser as tabs of their own, before the pages and files. Browser's
   // tab stands for the view only while it has no page, since each page has its own tab.
-  const viewTab = (key: string, on: boolean, icon: ReactNode, name: string): Item[] =>
+  const viewTab = (key: string, on: boolean, icon: ReactNode, name: string, mark?: ReactNode): Item[] =>
     on
       ? [
           {
             key,
             icon,
             name,
+            mark,
             where: '',
             selected: tabs.at === key,
             select: () => go(key),
@@ -383,6 +409,13 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     ...viewTab(DESIGN, tabs.design, <DesignsMark />, 'Designs'),
     ...viewTab(CHANGES, tabs.changes, <ChangesMark />, 'Changes'),
     ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe aria-hidden="true" />, 'Browser'),
+    ...viewTab(
+      BACKGROUND,
+      tabs.background,
+      <BackgroundTasksMark />,
+      'Background',
+      runningOf(room.background).length ? <StateMark state="working" size={9} spin /> : undefined,
+    ),
   ];
   const items = [...views, ...pages, ...terms, ...files];
   const closeAll = (keep?: Item) => {
@@ -469,6 +502,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
                   else openTerminal(chat);
                 }}
               />
+              <BackgroundTile tasks={room.background} onOpen={() => go(BACKGROUND)} />
             </div>
             <h2>Board</h2>
             <Board chat={chat} />
@@ -501,6 +535,15 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         )}
       {tabs.changes && view(CHANGES, <Changes chat={chat} changes={changes} />)}
       {tabs.browser && view(BROWSER, <BrowserView open={tabs.at === BROWSER} />)}
+      {tabs.background &&
+        view(
+          BACKGROUND,
+          <BackgroundView
+            chat={chat}
+            tasks={room.background}
+            face={room.members.length > 1 ? nameOfAgent : undefined}
+          />,
+        )}
       {terminals.map((t) =>
         view(
           termKey(t.id),

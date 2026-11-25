@@ -36,4 +36,13 @@ impl Task {
             _ => _ = done.send(()),
         }
     }
+
+    /// The person's Stop on one background command: only while this engine runs in that chat.
+    pub(super) async fn stop_task(&mut self, chat: &str, task: &str) {
+        let here = self.assigned.as_ref().is_some_and(|a| a.chat == chat);
+        if here && self.engine.is_some() {
+            let request = frames::stop_task(&format!("stop-task-{}", span_id()), task);
+            let _ = self.write(&request, None).await;
+        }
+    }
 }
