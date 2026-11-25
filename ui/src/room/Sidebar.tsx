@@ -325,12 +325,14 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       if (waiting.delete(chat)) setTypedIn(fresh.id);
     } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
   });
-  // An agent of this chat using the computer for the first time brings its tab, without showing it.
+  // An agent of this chat starting to use the computer while it's open brings its tab, without showing it.
   const usedHere = useComputerHere(chat);
-  const used = useRef(usedHere);
+  const used = useRef({ chat, n: usedHere });
   useEffect(() => {
-    if (usedHere > used.current) change(chat, { ...tabsOf(chat), computer: true });
-    used.current = usedHere;
+    const was = used.current;
+    if (was.chat === chat && usedHere !== null && was.n !== null && usedHere > was.n)
+      change(chat, { ...tabsOf(chat), computer: true });
+    used.current = { chat, n: usedHere };
   }, [chat, usedHere]);
   const id = (key: string) => order.indexOf(key);
   const tab = (key: string, icon: ReactNode, name: string) => (

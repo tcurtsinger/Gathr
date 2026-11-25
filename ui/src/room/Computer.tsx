@@ -27,15 +27,15 @@ const DONE: Record<string, string> = {
 };
 const done = (tool: string) => DONE[tool] ?? tool.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 
-/** How many agents of this chat have used the computer since the service started. */
+/** How many agents of this chat have used the computer since the service started; null until it has answered. */
 export function useComputerHere(chat: string) {
-  return useComputer()?.agents.filter((a) => a.chat === chat).length ?? 0;
+  return useComputer()?.agents.filter((a) => a.chat === chat).length ?? null;
 }
 
 /** Home's Computer tile: off, paused, or who of this chat has used it. */
 export function ComputerTile({ chat, onOpen }: { chat: string; onOpen: () => void }) {
   const computer = useComputer();
-  const here = useComputerHere(chat);
+  const here = useComputerHere(chat) ?? 0;
   const sub = !computer
     ? ''
     : !computer.on
