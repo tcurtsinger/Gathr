@@ -33,6 +33,7 @@ import {
   stepsLine,
   working,
 } from './shape';
+import { isTerminalStep, TerminalStep } from './Terminal';
 import type { RoomState } from './useRoom';
 import './room.css';
 
@@ -72,6 +73,8 @@ export interface Acts {
   like?: (message: string, give: boolean) => void;
   /** Opens the chat's Changes tab. */
   changes?: () => void;
+  /** Shows one of the chat's terminals in its tab. */
+  terminal?: (id: string) => void;
   /** Answers a question from its card; unset in an archived chat. */
   answer?: OnAnswer;
   /** Sends the person's message that started a failed turn again, to the same agent. Unset in an archived chat. */
@@ -335,7 +338,16 @@ function Main({ card, ctx }: { card: Card; ctx: Ctx }) {
         <Shown chat={ctx.chat} blocks={card.blocks} />
         {!running && <FilesCard steps={card.steps} agent={agent} onView={ctx.acts.changes} />}
         <Kept card={card} ctx={ctx} />
-        {rest.length > 0 && <Steps steps={rest} running={running} failed={card.turn.status === 'failed'} />}
+        {rest.length > 0 && (
+          <Steps
+            steps={rest}
+            running={running}
+            failed={card.turn.status === 'failed'}
+            chat={ctx.chat}
+            agent={agent}
+            onTerminal={ctx.acts.terminal}
+          />
+        )}
         <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
       {running && (
@@ -448,7 +460,15 @@ const failedLine = (s: Step) =>
  * All of the turn's tool runs and working notes as one line; a click opens them, in the order they came. A failed
  * step shows its first line of output under it, and in a failed turn the list starts open.
  */
-function Steps({ steps, running, failed }: { steps: Step[]; running: boolean; failed?: boolean }) {
+function Steps(props: {
+  steps: Step[];
+  running: boolean;
+  failed?: boolean;
+  chat: string;
+  agent: string;
+  onTerminal?: (id: string) => void;
+}) {
+  const { steps, running, failed } = props;
   const [open, setOpen] = useState(() => !!failed && steps.some((s) => failedLine(s)));
   return (
     <div className="room-steps">
@@ -467,10 +487,20 @@ function Steps({ steps, running, failed }: { steps: Step[]; running: boolean; fa
             ) : (
               // biome-ignore lint/suspicious/noArrayIndexKey: a turn's steps only grow, in order
               <li key={i} data-status={s.status}>
-                <span className="room-step-name">
-                  <span>{s.input?.title ?? toolName(s.tool)}</span>
-                  {s.input?.text && <code>{s.input.text}</code>}
-                </span>
+                {isTerminalStep(s.tool) ? (
+                  <TerminalStep
+                    chat={props.chat}
+                    agent={props.agent}
+                    tool={s.tool}
+                    text={s.input?.text}
+                    onOpen={props.onTerminal}
+                  />
+                ) : (
+                  <span className="room-step-name">
+                    <span>{s.input?.title ?? toolName(s.tool)}</span>
+                    {s.input?.text && <code>{s.input.text}</code>}
+                  </span>
+                )}
                 {failedLine(s) && <code className="room-step-out">{failedLine(s)}</code>}
               </li>
             ),

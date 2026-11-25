@@ -33,7 +33,7 @@ import { AgentsPanel } from './AgentsPanel';
 import { useUnseen } from './Changes';
 import { NeedsYou } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
-import { openChanges, openTab, RoomSidebar } from './Sidebar';
+import { openChanges, openTab, openTerminalTab, RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -177,6 +177,10 @@ export function RoomView(props: Props) {
     changes: () => {
       props.onSidebar(true);
       openChanges(chat.id);
+    },
+    terminal: (id: string) => {
+      props.onSidebar(true);
+      openTerminalTab(chat.id, id);
     },
     answer: chat.archived ? undefined : answer,
     retry: chat.archived

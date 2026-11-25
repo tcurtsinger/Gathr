@@ -70,9 +70,7 @@ export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen
         <ChangesMark />
         Changes
       </span>
-      <span className="home-tile-sub">
-        {changes && (all.length ? count(all.length, 'file') : 'None yet')}
-      </span>
+      <span className="home-tile-sub">{changes && (all.length ? count(all.length, 'file') : 'None')}</span>
     </button>
   );
 }

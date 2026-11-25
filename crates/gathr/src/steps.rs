@@ -57,6 +57,21 @@ pub fn command(command: &str, title: Option<&str>) -> Option<StepInput> {
     Some(step)
 }
 
+/// A step of Gathr's own terminal tools, by either engine: a command run or asked of the person,
+/// or the id of the terminal read or typed in, which the chat names and opens.
+pub fn terminal(tool: &str, args: &serde_json::Value) -> Option<StepInput> {
+    let field = match tool.strip_prefix("mcp__gathr__")? {
+        "terminal_run" | "ask_to_run" => "command",
+        "terminal_read" | "terminal_send" => "id",
+        _ => return None,
+    };
+    let text = args[field].as_str()?;
+    match field {
+        "command" => command(text, None),
+        _ => input(text, None),
+    }
+}
+
 /// The first line, secrets hidden, at most `limit` characters; "…" where more followed. Hidden
 /// before the cut, so a key the cut would split is still seen whole.
 fn kept(text: &str, limit: usize) -> Option<String> {
@@ -71,6 +86,23 @@ mod tests {
 
     fn text(of: &str) -> String {
         input(of, None).unwrap().text
+    }
+
+    #[test]
+    fn gathrs_terminal_tools_keep_their_command_or_terminal() {
+        let args = serde_json::json!({ "command": "npm run dev", "id": "t1" });
+        let kept = |tool| terminal(tool, &args).map(|s| s.text);
+        assert_eq!(
+            kept("mcp__gathr__terminal_run").as_deref(),
+            Some("npm run dev")
+        );
+        assert_eq!(
+            kept("mcp__gathr__ask_to_run").as_deref(),
+            Some("npm run dev")
+        );
+        assert_eq!(kept("mcp__gathr__terminal_read").as_deref(), Some("t1"));
+        assert_eq!(kept("mcp__gathr__terminal_list"), None);
+        assert_eq!(kept("mcp__other__terminal_run"), None);
     }
 
     #[test]

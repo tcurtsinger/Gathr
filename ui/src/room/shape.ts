@@ -221,6 +221,7 @@ const COUNTED: Record<string, [string, string]> = {
   Bash: ['Ran', 'command'],
   Shell: ['Ran', 'command'],
   PowerShell: ['Ran', 'command'],
+  mcp__gathr__terminal_run: ['Ran', 'command'],
   WebFetch: ['Fetched', 'page'],
 };
 

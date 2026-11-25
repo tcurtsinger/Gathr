@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import type { Failure } from '../api';
+import { folderName } from '../room/Terminal';
 import { openTerminal } from '../room/terminals';
 import { useCard } from './Corner';
 
@@ -59,7 +60,7 @@ export function AskApproval({
         command={command}
         data-approval={a.request}
         style={{ overflowWrap: 'anywhere' }}
-        subtitle={agent}
+        subtitle={folder ? `In ${folderName(folder)}` : agent}
         allowOnceLabel="Run"
         alwaysAllowLabel="Open in terminal"
         denyLabel="Not now"

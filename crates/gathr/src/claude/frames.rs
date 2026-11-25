@@ -327,8 +327,8 @@ fn thinks(block: &Value) -> bool {
 }
 
 /// What a tool call's step keeps of its input (0041), or the name of the field it's read from
-/// when the call lacks it. Only the tools whose input was seen in real frames; Gathr's own tools,
-/// other MCP tools and anything not listed keep nothing. A sub-agent's steps aren't kept or shown
+/// when the call lacks it. Only the tools whose input was seen in real frames, and Gathr's own
+/// terminal tools; other MCP tools and anything not listed keep nothing. A sub-agent's steps aren't kept or shown
 /// (`own` is false): its call is only checked for the field.
 fn step(tool: &str, input: &Value, own: bool) -> Result<Option<StepInput>, &'static str> {
     let (field, title) = match tool {
@@ -337,7 +337,7 @@ fn step(tool: &str, input: &Value, own: bool) -> Result<Option<StepInput>, &'sta
         "Grep" => ("pattern", None),
         "WebFetch" => ("url", None),
         "Agent" => ("description", None),
-        _ => return Ok(None),
+        _ => return Ok(steps::terminal(tool, input).filter(|_| own)),
     };
     let text = input[field].as_str().ok_or(field)?;
     let step = match field {
