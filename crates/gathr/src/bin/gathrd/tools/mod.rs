@@ -22,6 +22,7 @@ mod schedule;
 mod send_out;
 mod server;
 mod show;
+mod terminal;
 mod work;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};

@@ -34,8 +34,8 @@ import { Find } from './Find';
 import { isPage } from './PageFrame';
 import { pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
-import { openTerminal, type StartFolder, TerminalTile, TerminalView } from './Terminal';
-import { asked, tell, useTerminals } from './terminals';
+import { type StartFolder, TerminalTile, TerminalView } from './Terminal';
+import { asked, openTerminal, tell, useTerminals } from './terminals';
 import type { RoomState } from './useRoom';
 import './panel.css';
 

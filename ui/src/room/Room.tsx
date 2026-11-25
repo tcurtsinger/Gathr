@@ -715,7 +715,13 @@ function Asks({ turn, agent, ctx }: { turn: string; agent: string; ctx: Ctx }) {
   return (
     <div className="room-asks">
       {asks.map((a) => (
-        <AskApproval key={a.request} approval={a} agent={ctx.people.name(agent)} actions={ctx.acts} />
+        <AskApproval
+          key={a.request}
+          approval={a}
+          agent={ctx.people.name(agent)}
+          chat={ctx.chat}
+          actions={ctx.acts}
+        />
       ))}
     </div>
   );

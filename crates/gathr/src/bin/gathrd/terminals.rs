@@ -132,21 +132,31 @@ async fn act(s: &State, t: &Trace, chat: &str, said: &Value) -> Result<(), Strin
                 .await
                 .map_err(|_| "No folder".to_string())?;
             let asked = said["folder"].as_str().map(PathBuf::from);
+            // A folder in one of them: the folder an agent asked the person to run a command in.
             let folder = match asked {
-                Some(asked) => allowed.into_iter().find(|f| *f == asked),
+                Some(asked) => allowed
+                    .iter()
+                    .any(|f| asked.starts_with(f))
+                    .then_some(asked),
                 None => allowed.into_iter().next(),
             };
             let folder = folder.ok_or("That folder isn't one of this chat's")?;
             let vars = gathr::run::fresh().await;
-            let terminals = terminals.clone();
-            let chat = chat.to_string();
-            let opened = tokio::task::spawn_blocking(move || {
-                terminals.open(&chat, &folder, None, None, vars)
-            });
-            opened
+            let (shared, chat) = (terminals.clone(), chat.to_string());
+            let opened =
+                tokio::task::spawn_blocking(move || shared.open(&chat, &folder, None, None, vars));
+            let id = opened
                 .await
                 .map_err(|e| e.to_string())?
                 .map_err(|e| e.to_string())?;
+            // A command an agent asked the person to run, typed in: run at once, or left for their Enter.
+            if let Some(typed) = said["typed"].as_str() {
+                let enter = if said["run"] == true { "\r" } else { "" };
+                let typed = format!("{typed}{enter}");
+                terminals
+                    .input(&id, typed.as_bytes())
+                    .map_err(|e| e.to_string())?;
+            }
         }
         "again" if ours() => {
             let vars = gathr::run::fresh().await;

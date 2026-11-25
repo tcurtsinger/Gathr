@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { IconButton } from '../components/IconButton';
-import { asked, follow, type TerminalInfo, tell, useTerminals } from './terminals';
+import { follow, openTerminal, type TerminalInfo, tell, useTerminals } from './terminals';
 import './terminal.css';
 
 /** A folder a new terminal may start in, by the name the chat's tree gives it. */
@@ -33,12 +33,6 @@ export function TerminalTile({ chat, onOpen }: { chat: string; onOpen: () => voi
       <span className="home-tile-sub">{running ? `${running} running` : 'None'}</span>
     </button>
   );
-}
-
-/** Starts a terminal in `folder`, or the chat's first. */
-export function openTerminal(chat: string, folder?: string) {
-  asked.add(chat);
-  tell(chat, { type: 'open', folder });
 }
 
 const MONO = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';

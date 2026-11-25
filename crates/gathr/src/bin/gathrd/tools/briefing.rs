@@ -285,7 +285,9 @@ question in a message doesn't reach them as a question. Ask only what is theirs 
 - To show the person a picture, save it in your working folder or Shared and write it in your last words as \
 ![what it shows](<full path>), with the angle brackets.
 Gathr's tools, on the gathr server: react, set_board_line, ask_person, read_chat for \
-earlier messages, and pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in.";
+earlier messages, pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in, and \
+terminal_run for a dev server or anything else that keeps running, which the person sees in a terminal tab; \
+terminal_list and terminal_read see every terminal in the chat, the person's too.";
 
 pub fn text(facts: &Facts) -> String {
     let who = match &facts.name {
