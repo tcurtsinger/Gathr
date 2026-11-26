@@ -49,6 +49,7 @@ import './panel.css';
  * browser's pages are the person's one browser's, the same in every chat: Browser shows the page it shows.
  */
 interface Tabs {
+  board: boolean;
   files: boolean;
   design: boolean;
   changes: boolean;
@@ -67,6 +68,7 @@ const COMPUTER = 'computer';
 const BACKGROUND = 'background';
 const termKey = (id: string) => `term:${id}`;
 const FRESH: Tabs = {
+  board: false,
   files: false,
   design: false,
   changes: false,
@@ -109,6 +111,7 @@ function openView(chat: string, at: string) {
   const tabs = tabsOf(chat);
   change(chat, {
     ...tabs,
+    board: tabs.board || at === BOARD,
     files: tabs.files || at === FILES,
     design: tabs.design || at === DESIGN,
     changes: tabs.changes || at === CHANGES,
@@ -247,7 +250,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: view shortcuts live in the title bar, tabs hold only opened pages. */
+/** The panel beside the chat: shortcuts open views and pages as closable tabs. */
 export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
@@ -375,7 +378,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
   const go = (at: string) => openView(chat, at);
-  // A file or terminal closes; when it was shown, the next tab shows, or the one before, or Task board.
+  // A tab closes; when it was shown, the next tab shows, or the one before, or Task board.
   const close = (keys: string[]) => {
     const i = items.findIndex((t) => t.selected);
     const left = items.filter((t) => !keys.includes(t.key));
@@ -384,6 +387,13 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     if (next?.page) say({ type: 'show', page: next.page });
     change(chat, {
       ...tabs,
+      board: tabs.board && !keys.includes(BOARD),
+      files: tabs.files && !keys.includes(FILES),
+      design: tabs.design && !keys.includes(DESIGN),
+      changes: tabs.changes && !keys.includes(CHANGES),
+      browser: tabs.browser && !keys.includes(BROWSER),
+      computer: tabs.computer && !keys.includes(COMPUTER),
+      background: tabs.background && !keys.includes(BACKGROUND),
       open: tabs.open.filter((f) => !keys.includes(f.path)),
       at: next === undefined ? tabs.at : next === null ? BOARD : next.page ? BROWSER : next.key,
     });
@@ -398,7 +408,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     if (fresh && asked.delete(chat)) {
       go(termKey(fresh.id));
       if (waiting.delete(chat)) setTypedIn(fresh.id);
-    } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(BOARD);
+    } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at))
+      change(chat, { ...tabsOf(chat), at: BOARD });
   });
   const id = (key: string) => order.indexOf(key);
   const view = (key: string, body: ReactNode) => (
@@ -474,10 +485,33 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     select: () => go(f.path),
     close: () => close([f.path]),
   }));
-  const items = [...pages, ...terms, ...files];
+  const viewTab = (key: string, on: boolean, icon: ReactNode): Item[] =>
+    on
+      ? [
+          {
+            key,
+            icon,
+            name: VIEW_NAMES[key],
+            where: '',
+            selected: tabs.at === key,
+            select: () => go(key),
+            close: () => close([key]),
+          },
+        ]
+      : [];
+  const views = [
+    ...viewTab(BOARD, tabs.board, <List />),
+    ...viewTab(FILES, tabs.files, <Folder />),
+    ...viewTab(DESIGN, tabs.design, <DesignsMark />),
+    ...viewTab(CHANGES, tabs.changes, <ChangesMark />),
+    ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe />),
+    ...viewTab(COMPUTER, tabs.computer, <Monitor />),
+    ...viewTab(BACKGROUND, tabs.background, <BackgroundTasksMark />),
+  ];
+  const items = [...views, ...pages, ...terms, ...files];
   const closeAll = (keep?: Item) => {
-    close(files.filter((i) => i !== keep).map((i) => i.key));
     for (const p of [...pages, ...terms]) if (p !== keep) p.close();
+    close(items.filter((i) => i !== keep).map((i) => i.key));
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
   const { shown, fit } = fitting(items, width, strip.current);
