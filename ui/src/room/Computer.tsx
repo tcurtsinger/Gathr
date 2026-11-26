@@ -27,35 +27,6 @@ const DONE: Record<string, string> = {
 };
 const done = (tool: string) => DONE[tool] ?? tool.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 
-/** How many agents of this chat have used the computer since the service started; null until it has answered. */
-export function useComputerHere(chat: string) {
-  return useComputer()?.agents.filter((a) => a.chat === chat).length ?? null;
-}
-
-/** Home's Computer tile: off, paused, or who of this chat has used it. */
-export function ComputerTile({ chat, onOpen }: { chat: string; onOpen: () => void }) {
-  const computer = useComputer();
-  const here = useComputerHere(chat) ?? 0;
-  const sub = !computer
-    ? ''
-    : !computer.on
-      ? 'Off'
-      : computer.paused
-        ? 'Paused'
-        : here
-          ? `${here} used it`
-          : 'None yet';
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <Monitor aria-hidden="true" />
-        Computer
-      </span>
-      <span className="home-tile-sub">{sub}</span>
-    </button>
-  );
-}
-
 /**
  * The Computer tab: Pause, for every agent's computer use, then each agent of this chat that used the computer, the one
  * that acted last first, with its latest picture of the window it works in and its steps. Off, it leads to Plugins.

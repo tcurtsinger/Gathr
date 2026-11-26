@@ -21,7 +21,7 @@ interface Props {
   children: ReactNode;
 }
 
-/** A box that finds the chat's files by name: Home's "Find file" and the tree's "Filter files". */
+/** A box that finds the chat's files by name: the Files view's "Find file". */
 export function Find({ chat, icon, label, onOpen, project, changes, children }: Props) {
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Opened[]>();

@@ -1,7 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { type ILink, Terminal as Xterm } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { Folder, Plus, Square, SquareTerminal } from 'lucide-react';
+import { Folder, Plus, Square } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,21 +25,6 @@ export interface StartFolder {
 
 /** A folder's own name: the last part of its path. */
 export const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
-
-/** Home's Terminal tile: how many of the chat's terminals run. */
-export function TerminalTile({ chat, onOpen }: { chat: string; onOpen: () => void }) {
-  const { list } = useTerminals(chat);
-  const running = list.filter((t) => t.running).length;
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <SquareTerminal aria-hidden="true" />
-        Terminal
-      </span>
-      <span className="home-tile-sub">{running ? `${running} running` : 'None'}</span>
-    </button>
-  );
-}
 
 const MONO = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';
 const URL_AT = /https?:\/\/[^\s"'<>`]+[^\s"'<>`.,;:!?)\]]/g;

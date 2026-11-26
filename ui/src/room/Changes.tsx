@@ -28,7 +28,7 @@ function Totals({ added, removed }: { added: number; removed: number }) {
   );
 }
 
-// Each chat's last read change, while the window is open: the tab opened from Home's tile shows it at once, and its
+// Each chat's last read change, while the window is open: the Changes view shows it at once, and its
 // own read replaces it.
 const last = new Map<string, ChatChanges>();
 
@@ -60,20 +60,6 @@ export const filesOf = (a: ChatChanges['agents'][number]) => [
   ...a.files,
   ...a.outside.flatMap((o) => o.files),
 ];
-
-/** Home's Changes tile: how many files the chat's agents changed, once read: short enough for the narrowest panel. */
-export function ChangesTile({ changes, onOpen }: { changes?: ChatChanges; onOpen: () => void }) {
-  const all = changes?.agents?.flatMap(filesOf) ?? [];
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <ChangesMark />
-        Changes
-      </span>
-      <span className="home-tile-sub">{changes && (all.length ? count(all.length, 'file') : 'None')}</span>
-    </button>
-  );
-}
 
 // Each chat's change as the person last saw it with the panel open, while the window is open.
 const seen = new Map<string, string>();

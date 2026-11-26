@@ -6,9 +6,10 @@ import { type FaceOf, KnownFaces } from '../components/Face';
 import type { Picked } from '../components/mention';
 import { WorkspaceToggle } from '../components/workspace';
 import { TopLine } from '../TopLine';
+import { AgentsPanel } from './AgentsPanel';
 import { NeedsYou } from './Question';
 import { people, Room } from './Room';
-import { RoomSidebar } from './Sidebar';
+import { PanelShortcuts, RoomSidebar } from './Sidebar';
 import type { Computer } from './useComputer';
 import type { RoomState } from './useRoom';
 import '../theme.css';
@@ -367,12 +368,20 @@ function Preview() {
           <h1>Orders export</h1>
         </div>
         <div className="room-actions">
+          <AgentsPanel
+            chat="preview"
+            members={members}
+            background={state.background}
+            turns={state.turns}
+            people={everyone}
+          />
           <NeedsYou
             questions={state.questions}
             approvals={state.approvals}
             turns={state.turns}
             people={everyone}
           />
+          <PanelShortcuts chat="preview" open={sidebar} onOpen={() => setSidebar(true)} />
           <WorkspaceToggle open={sidebar} onToggle={() => setSidebar(!sidebar)} />
         </div>
       </TopLine>

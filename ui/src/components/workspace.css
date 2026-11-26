@@ -24,6 +24,9 @@
   padding: 4px 8px;
   border-bottom: 1px solid var(--border);
 }
+.workspace-tabs[hidden] {
+  display: none;
+}
 .workspace-tablist {
   display: flex;
   flex: 1;
@@ -100,23 +103,6 @@
   height: 14px;
   flex: none;
   stroke-width: 1.5;
-}
-/* Home: an icon, always in place. */
-.workspace-fixed {
-  display: flex;
-  flex: none;
-  gap: 2px;
-}
-.workspace-fixed .workspace-tab > [role="tab"] {
-  padding: 0 8px;
-}
-.workspace-sep {
-  flex: none;
-  width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  align-self: center;
-  background: var(--border);
 }
 /* The named tabs: as wide as their names, narrower when they don't all fit, and the rest in the "+N" list
    (Sidebar.tsx), which is last in the strip. */

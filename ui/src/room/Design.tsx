@@ -137,7 +137,7 @@ function Writing() {
 
 /**
  * The chat's designs, newest first, read on each look while `open`, with what the chat's steps say of each: the
- * Designs tab, the tree's Designs and Home's tile. None until the first read.
+ * Designs view and the tree's Designs. None until the first read.
  */
 export function useDesigns(chat: string, room: RoomState, open: boolean) {
   const [designs, setDesigns] = useState<string | null>();
