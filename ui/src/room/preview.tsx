@@ -9,7 +9,7 @@ import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
 import { NeedsYou } from './Question';
 import { people, Room } from './Room';
-import { PanelShortcuts, RoomSidebar } from './Sidebar';
+import { PanelShortcuts, RoomSidebar, usePanelTabs } from './Sidebar';
 import type { Computer } from './useComputer';
 import type { RoomState } from './useRoom';
 import '../theme.css';
@@ -320,6 +320,7 @@ function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
   const [sidebar, setSidebar] = useState(true);
+  const toggleSidebar = usePanelTabs('preview', sidebar, setSidebar);
   const [chosen, setChosen] = useState('mira');
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
   const everyone = people(members, agents);
@@ -382,7 +383,7 @@ function Preview() {
             people={everyone}
           />
           <PanelShortcuts chat="preview" open={sidebar} onOpen={() => setSidebar(true)} />
-          <WorkspaceToggle open={sidebar} onToggle={() => setSidebar(!sidebar)} />
+          <WorkspaceToggle open={sidebar} onToggle={toggleSidebar} />
         </div>
       </TopLine>
       <main className="chat room" aria-label="Orders export">

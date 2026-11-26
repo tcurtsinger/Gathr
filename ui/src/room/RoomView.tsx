@@ -40,6 +40,7 @@ import {
   openTerminalTab,
   PanelShortcuts,
   RoomSidebar,
+  usePanelTabs,
 } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
@@ -129,6 +130,7 @@ export function RoomView(props: Props) {
   const out = ahead && props.signedOut?.(ahead.id);
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   const sidebar = !fresh && props.sidebar;
+  const toggleSidebar = usePanelTabs(chat.id, sidebar, props.onSidebar);
   const unseen = useUnseen(chat.id, state, sidebar || fresh);
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
@@ -246,7 +248,7 @@ export function RoomView(props: Props) {
               people={team}
             />
             <PanelShortcuts chat={chat.id} open={sidebar} onOpen={() => props.onSidebar(true)} />
-            <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={() => props.onSidebar(!sidebar)} />
+            <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={toggleSidebar} />
           </div>
         )}
       </TopLine>

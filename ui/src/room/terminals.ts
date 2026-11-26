@@ -77,7 +77,11 @@ function connect(chat: string) {
     }
     const said = JSON.parse(m.data);
     if (said.type === 'again') restart(c);
-    if (said.type === 'failed') c.state = { ...c.state, failed: said.why };
+    if (said.type === 'failed') {
+      asked.delete(chat);
+      waiting.delete(chat);
+      c.state = { ...c.state, failed: said.why };
+    }
     if (said.type === 'list') c.state = { list: said.terminals, failed: null };
     heed(c);
   };

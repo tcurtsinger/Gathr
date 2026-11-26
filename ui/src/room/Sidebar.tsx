@@ -122,6 +122,28 @@ function openView(chat: string, at: string) {
   });
 }
 
+/** Lives above the panel so external closes are seen while it is hidden. */
+export function usePanelTabs(chat: string, open: boolean, onOpen: (open: boolean) => void) {
+  const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
+  const browser = useBrowser();
+  const terminals = useTerminals(chat).list;
+  const keys = [
+    ...Object.keys(VIEW_NAMES).filter((key) => tabs[key as keyof Tabs] === true),
+    ...(browser.pages.length ? [BROWSER] : []),
+    ...terminals.map((t) => termKey(t.id)),
+    ...tabs.open.map((f) => f.path),
+  ];
+  useEffect(() => {
+    if (!keys.length) {
+      if (open && !asked.has(chat)) onOpen(false);
+    } else if (!keys.includes(tabs.at)) openView(chat, keys[0]);
+  });
+  return () => {
+    if (!open && !keys.length) openView(chat, BOARD);
+    onOpen(!open);
+  };
+}
+
 /** Direct view access, beside Agents and Needs you; available even when the panel is shut. */
 export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boolean; onOpen: () => void }) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
@@ -559,13 +581,14 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           </div>
         </div>
       </div>
-      {view(
-        BOARD,
-        <div className="board-view">
-          <h2>Task board</h2>
-          <Board chat={chat} />
-        </div>,
-      )}
+      {tabs.board &&
+        view(
+          BOARD,
+          <div className="board-view">
+            <h2>Task board</h2>
+            <Board chat={chat} />
+          </div>,
+        )}
       {tabs.files &&
         view(
           FILES,
