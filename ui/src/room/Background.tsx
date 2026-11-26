@@ -28,20 +28,6 @@ export function BackgroundTasksMark() {
 /** The commands still running, oldest first. */
 export const runningOf = (tasks: Background[]) => tasks.filter((t) => !t.ended);
 
-/** Home's Background tile: how many run now. */
-export function BackgroundTile({ tasks, onOpen }: { tasks: Background[]; onOpen: () => void }) {
-  const running = runningOf(tasks).length;
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <BackgroundTasksMark />
-        Background
-      </span>
-      <span className="home-tile-sub">{running ? `${running} running` : 'None'}</span>
-    </button>
-  );
-}
-
 /**
  * The Background tab: what the chat's agents run in the background now, each with how long and Stop, then what
  * ended, newest first, with how long it took or how it failed. A row opens to the end of what it wrote.

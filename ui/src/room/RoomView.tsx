@@ -33,7 +33,14 @@ import { AgentsPanel } from './AgentsPanel';
 import { useUnseen } from './Changes';
 import { NeedsYou } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
-import { openBackground, openChanges, openTab, openTerminalTab, RoomSidebar } from './Sidebar';
+import {
+  openBackground,
+  openChanges,
+  openTab,
+  openTerminalTab,
+  PanelShortcuts,
+  RoomSidebar,
+} from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -238,6 +245,7 @@ export function RoomView(props: Props) {
               turns={state.turns}
               people={team}
             />
+            <PanelShortcuts chat={chat.id} open={sidebar} onOpen={() => props.onSidebar(true)} />
             <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={() => props.onSidebar(!sidebar)} />
           </div>
         )}

@@ -1,9 +1,10 @@
 import {
   ChevronDown,
+  Ellipsis,
   File as FileIcon,
   Folder,
   Globe,
-  House,
+  List,
   LoaderCircle,
   Monitor,
   Search,
@@ -27,24 +28,24 @@ import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StateMark } from '../components/StateMark';
 import { widest } from '../components/workspace';
-import { BackgroundTasksMark, BackgroundTile, BackgroundView, runningOf } from './Background';
+import { BackgroundTasksMark, BackgroundView } from './Background';
 import { Board } from './Board';
-import { BrowserTile, BrowserView } from './Browser';
-import { Changes, ChangesTile, count, useChanges } from './Changes';
-import { ComputerTile, ComputerView, useComputerHere } from './Computer';
-import { Designs, DesignTab, useDesigns } from './Design';
+import { BrowserView } from './Browser';
+import { Changes, useChanges } from './Changes';
+import { ComputerView } from './Computer';
+import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
 import { Find } from './Find';
 import { isPage } from './PageFrame';
 import { onEmpty, pageName, say, site, useBrowser } from './pages';
 import type { OnAnswer } from './Question';
-import { folderName, type StartFolder, TerminalTile, TerminalView } from './Terminal';
+import { folderName, type StartFolder, TerminalView } from './Terminal';
 import { asked, openTerminal, tell, useTerminals, waiting } from './terminals';
 import type { RoomState } from './useRoom';
 import './panel.css';
 
 /**
- * A chat's open tabs, and the one shown: Home, Files, Design, Changes, Browser, or a file's or design's path. The
+ * A chat's open pages, and the view shown: Task board, Files, Designs, Changes, Browser, or an opened path. The
  * browser's pages are the person's one browser's, the same in every chat: Browser shows the page it shows.
  */
 interface Tabs {
@@ -57,7 +58,7 @@ interface Tabs {
   open: Opened[];
   at: string;
 }
-const HOME = 'home';
+const BOARD = 'board';
 const FILES = 'files';
 const DESIGN = 'design';
 const CHANGES = 'changes';
@@ -73,7 +74,7 @@ const FRESH: Tabs = {
   computer: false,
   background: false,
   open: [],
-  at: HOME,
+  at: BOARD,
 };
 // Each chat's tabs, while the window is open, and the panel that shows them.
 const kept = new Map<string, Tabs>();
@@ -90,9 +91,99 @@ function change(chat: string, next: Tabs) {
 
 onEmpty(() => {
   for (const [chat, tabs] of kept) {
-    if (tabs.browser) change(chat, { ...tabs, browser: false, at: tabs.at === BROWSER ? HOME : tabs.at });
+    if (tabs.browser) change(chat, { ...tabs, browser: false, at: tabs.at === BROWSER ? BOARD : tabs.at });
   }
 });
+
+const VIEW_NAMES: Record<string, string> = {
+  [BOARD]: 'Task board',
+  [FILES]: 'Files',
+  [DESIGN]: 'Designs',
+  [CHANGES]: 'Changes',
+  [BROWSER]: 'Browser',
+  [COMPUTER]: 'Computer',
+  [BACKGROUND]: 'Background',
+};
+
+function openView(chat: string, at: string) {
+  const tabs = tabsOf(chat);
+  change(chat, {
+    ...tabs,
+    files: tabs.files || at === FILES,
+    design: tabs.design || at === DESIGN,
+    changes: tabs.changes || at === CHANGES,
+    browser: tabs.browser || at === BROWSER,
+    computer: tabs.computer || at === COMPUTER,
+    background: tabs.background || at === BACKGROUND,
+    at,
+  });
+}
+
+/** Direct view access, beside Agents and Needs you; available even when the panel is shut. */
+export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boolean; onOpen: () => void }) {
+  const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
+  const terminals = useTerminals(chat).list;
+  const selected = (key: string) =>
+    open && (key === 'terminal' ? tabs.at.startsWith('term:') : tabs.at === key);
+  const choose = (key: string) => {
+    onOpen();
+    if (key === 'terminal') {
+      const last = terminals.at(-1);
+      if (last) openTerminalTab(chat, last.id);
+      else openTerminal(chat);
+    } else openView(chat, key);
+  };
+  const shortcuts = [
+    { key: BOARD, name: 'Task board', icon: <List /> },
+    { key: FILES, name: 'Files', icon: <Folder /> },
+    { key: 'terminal', name: 'Terminal', icon: <SquareTerminal /> },
+    { key: BROWSER, name: 'Browser', icon: <Globe /> },
+    { key: DESIGN, name: 'Designs', icon: <DesignsMark /> },
+  ];
+  const more = [
+    { key: CHANGES, name: 'Changes', icon: <ChangesMark /> },
+    { key: COMPUTER, name: 'Computer', icon: <Monitor /> },
+    { key: BACKGROUND, name: 'Background', icon: <BackgroundTasksMark /> },
+  ];
+  return (
+    <>
+      {shortcuts.map((s) => (
+        <IconButton
+          key={s.key}
+          aria-label={s.name}
+          aria-pressed={selected(s.key)}
+          className="head-button"
+          onClick={() => choose(s.key)}
+        >
+          {s.icon}
+        </IconButton>
+      ))}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            aria-label="More panels"
+            className="head-button"
+            data-on={more.some((s) => selected(s.key)) || undefined}
+          >
+            <Ellipsis />
+          </IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {more.map((s) => (
+            <DropdownMenuItem
+              key={s.key}
+              data-on={selected(s.key) || undefined}
+              onSelect={() => choose(s.key)}
+            >
+              {s.icon}
+              {s.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
 
 /** The one way a file or a design opens: in its own tab, or the tab it already has, at the option asked for. */
 function show(chat: string, file: Opened) {
@@ -130,10 +221,10 @@ export async function openTab(chat: string, path: string, agent?: string) {
 export const openTerminalTab = (chat: string, id: string) =>
   change(chat, { ...tabsOf(chat), at: termKey(id) });
 
-/** Opens the chat's Changes tab, as Home's tile does. */
+/** Shows the chat's Changes view. */
 export const openChanges = (chat: string) => change(chat, { ...tabsOf(chat), changes: true, at: CHANGES });
 
-/** Opens the chat's Background tab, as Home's tile does. */
+/** Shows the chat's Background view. */
 export const openBackground = (chat: string) =>
   change(chat, { ...tabsOf(chat), background: true, at: BACKGROUND });
 
@@ -156,7 +247,7 @@ function place(tree: FileTree, path: string, agent?: string): Opened {
   return { path: whole, crumbs };
 }
 
-/** The panel beside the chat: Home always there as an icon, then each view, page, file or design opened from it. */
+/** The panel beside the chat: view shortcuts live in the title bar, tabs hold only opened pages. */
 export function RoomSidebar(props: PanelProps) {
   return (
     <aside className="workspace" aria-label="Chat sidebar">
@@ -272,7 +363,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const terminals = useTerminals(chat).list;
   const pageKey = (id: string) => `page:${id}`;
   const order = [
-    HOME,
+    BOARD,
     FILES,
     DESIGN,
     CHANGES,
@@ -283,19 +374,8 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   ];
   order.push(...terminals.map((t) => termKey(t.id)));
   order.push(...tabs.open.map((f) => f.path));
-  // Files, Designs, Changes, Browser and Computer are drawn once opened, and kept until their tab closes.
-  const go = (at: string) =>
-    change(chat, {
-      ...tabs,
-      files: tabs.files || at === FILES,
-      design: tabs.design || at === DESIGN,
-      changes: tabs.changes || at === CHANGES,
-      browser: tabs.browser || at === BROWSER,
-      computer: tabs.computer || at === COMPUTER,
-      background: tabs.background || at === BACKGROUND,
-      at,
-    });
-  // A view's or a file's tab closes; when it was shown, the tab after it shows, or the one before, or Home.
+  const go = (at: string) => openView(chat, at);
+  // A file or terminal closes; when it was shown, the next tab shows, or the one before, or Task board.
   const close = (keys: string[]) => {
     const i = items.findIndex((t) => t.selected);
     const left = items.filter((t) => !keys.includes(t.key));
@@ -303,14 +383,9 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
       i >= 0 && keys.includes(items[i].key) ? (left[Math.min(i, left.length - 1)] ?? null) : undefined;
     if (next?.page) say({ type: 'show', page: next.page });
     change(chat, {
-      files: tabs.files && !keys.includes(FILES),
-      design: tabs.design && !keys.includes(DESIGN),
-      changes: tabs.changes && !keys.includes(CHANGES),
-      browser: tabs.browser && !keys.includes(BROWSER),
-      computer: tabs.computer && !keys.includes(COMPUTER),
-      background: tabs.background && !keys.includes(BACKGROUND),
+      ...tabs,
       open: tabs.open.filter((f) => !keys.includes(f.path)),
-      at: next === undefined ? tabs.at : next === null ? HOME : next.page ? BROWSER : next.key,
+      at: next === undefined ? tabs.at : next === null ? BOARD : next.page ? BROWSER : next.key,
     });
   };
   // The person's New shows the terminal it opens; one an agent starts waits for a look.
@@ -323,27 +398,16 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     if (fresh && asked.delete(chat)) {
       go(termKey(fresh.id));
       if (waiting.delete(chat)) setTypedIn(fresh.id);
-    } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(HOME);
+    } else if (tabs.at.startsWith('term:') && !terminals.some((t) => termKey(t.id) === tabs.at)) go(BOARD);
   });
-  // An agent of this chat starting to use the computer while it's open brings its tab, without showing it.
-  const usedHere = useComputerHere(chat);
-  const used = useRef({ chat, n: usedHere });
-  useEffect(() => {
-    const was = used.current;
-    if (was.chat === chat && usedHere !== null && was.n !== null && usedHere > was.n)
-      change(chat, { ...tabsOf(chat), computer: true });
-    used.current = { chat, n: usedHere };
-  }, [chat, usedHere]);
   const id = (key: string) => order.indexOf(key);
-  const tab = (key: string, icon: ReactNode, name: string) => (
-    <Tab key={key} id={id(key)} selected={tabs.at === key} icon={icon} name={name} onSelect={() => go(key)} />
-  );
   const view = (key: string, body: ReactNode) => (
     <section
       key={key}
       id={`room-view-${id(key)}`}
       role="tabpanel"
-      aria-labelledby={`room-tab-${id(key)}`}
+      aria-label={VIEW_NAMES[key]}
+      aria-labelledby={VIEW_NAMES[key] ? undefined : `room-tab-${id(key)}`}
       className="workspace-view"
       hidden={tabs.at !== key}
     >
@@ -410,40 +474,9 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
     select: () => go(f.path),
     close: () => close([f.path]),
   }));
-  // Home's tiles open Files, Designs, Changes and Browser as tabs of their own, before the pages and files. Browser's
-  // tab stands for the view only while it has no page, since each page has its own tab.
-  const viewTab = (key: string, on: boolean, icon: ReactNode, name: string, mark?: ReactNode): Item[] =>
-    on
-      ? [
-          {
-            key,
-            icon,
-            name,
-            mark,
-            where: '',
-            selected: tabs.at === key,
-            select: () => go(key),
-            close: () => close([key]),
-          },
-        ]
-      : [];
-  const views: Item[] = [
-    ...viewTab(FILES, tabs.files, <Folder aria-hidden="true" />, 'Files'),
-    ...viewTab(DESIGN, tabs.design, <DesignsMark />, 'Designs'),
-    ...viewTab(CHANGES, tabs.changes, <ChangesMark />, 'Changes'),
-    ...viewTab(BROWSER, tabs.browser && !browser.pages.length, <Globe aria-hidden="true" />, 'Browser'),
-    ...viewTab(COMPUTER, tabs.computer, <Monitor aria-hidden="true" />, 'Computer'),
-    ...viewTab(
-      BACKGROUND,
-      tabs.background,
-      <BackgroundTasksMark />,
-      'Background',
-      runningOf(room.background).length ? <StateMark state="working" size={9} spin /> : undefined,
-    ),
-  ];
-  const items = [...views, ...pages, ...terms, ...files];
+  const items = [...pages, ...terms, ...files];
   const closeAll = (keep?: Item) => {
-    close([...views, ...files].filter((i) => i !== keep).map((i) => i.key));
+    close(files.filter((i) => i !== keep).map((i) => i.key));
     for (const p of [...pages, ...terms]) if (p !== keep) p.close();
   };
   // The page and file tabs that fit, in the order opened, with the shown one always among them; the rest in the list.
@@ -451,13 +484,10 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   const at = items.findIndex((i) => i.selected);
   const rest = items.length - shown.length;
   const find = (f: Opened) => (f.crumbs[0] === 'Designs' ? openTab(chat, f.path) : show(chat, f));
-  const folders = tree ? [tree.project, tree.shared, ...tree.agents].filter(Boolean).length : 0;
   return (
     <>
-      <div className="workspace-tabs">
+      <div className="workspace-tabs" hidden={!items.length}>
         <div className="workspace-tablist" role="tablist" aria-label="Sidebar tabs">
-          <div className="workspace-fixed">{tab(HOME, <House aria-hidden="true" />, 'Home')}</div>
-          {items.length > 0 && <i className="workspace-sep" />}
           <div className="workspace-files" ref={strip} style={{ '--fit': `${fit}px` } as CSSProperties}>
             {shown.map((i) => (
               <Tab
@@ -496,42 +526,10 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         </div>
       </div>
       {view(
-        HOME,
-        <div className="home">
-          <Find
-            chat={chat}
-            icon={<Search aria-hidden="true" />}
-            label="Find file"
-            project={tree?.project?.name}
-            changes={changes}
-            onOpen={find}
-          >
-            <h2>Open</h2>
-            <div className="home-tiles">
-              <button type="button" className="home-tile" onClick={() => go(FILES)}>
-                <span className="home-tile-name">
-                  <Folder aria-hidden="true" />
-                  Files
-                </span>
-                <span className="home-tile-sub">{tree && (folders ? count(folders, 'folder') : 'None')}</span>
-              </button>
-              <DesignsTile chat={chat} room={room} open={tabs.at === HOME} onOpen={() => go(DESIGN)} />
-              <ChangesTile changes={changes} onOpen={() => go(CHANGES)} />
-              <BrowserTile onOpen={() => go(BROWSER)} />
-              <ComputerTile chat={chat} onOpen={() => go(COMPUTER)} />
-              <TerminalTile
-                chat={chat}
-                onOpen={() => {
-                  const last = terminals.at(-1);
-                  if (last) go(termKey(last.id));
-                  else openTerminal(chat);
-                }}
-              />
-              <BackgroundTile tasks={room.background} onOpen={() => go(BACKGROUND)} />
-            </div>
-            <h2>Board</h2>
-            <Board chat={chat} />
-          </Find>
+        BOARD,
+        <div className="board-view">
+          <h2>Task board</h2>
+          <Board chat={chat} />
         </div>,
       )}
       {tabs.files &&
@@ -540,7 +538,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
           <Find
             chat={chat}
             icon={<Search aria-hidden="true" />}
-            label="Filter files"
+            label="Find file"
             project={tree?.project?.name}
             changes={changes}
             onOpen={find}
@@ -619,33 +617,6 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
   );
 }
 
-/** Home's Designs tile: how many designs, and whether one is being written. */
-function DesignsTile({
-  chat,
-  room,
-  open,
-  onOpen,
-}: {
-  chat: string;
-  room: RoomState;
-  open: boolean;
-  onOpen: () => void;
-}) {
-  const { list, writer } = useDesigns(chat, room, open);
-  const by = list?.map(writer).find((w) => w.writing)?.by;
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <DesignsMark />
-        Designs
-      </span>
-      <span className="home-tile-sub">
-        {list && (list.length ? (by ? `${list.length} · writing` : count(list.length, 'design')) : 'None')}
-      </span>
-    </button>
-  );
-}
-
 interface TabProps {
   id: number;
   /** The view it shows, when not its own: a page's tab shows the Browser view. */
@@ -655,32 +626,28 @@ interface TabProps {
   name: string;
   mark?: ReactNode;
   onSelect: () => void;
-  /** A tab that closes, and shows its name; Home shows its icon only. */
-  onClose?: () => void;
+  onClose: () => void;
 }
 
-/** One tab: Home by its icon; a view, a page or a file by its name, with a close mark. */
+/** One opened page, terminal, file or design, with its close mark. */
 function Tab({ id, controls, selected, icon, name, mark, onSelect, onClose }: TabProps) {
   return (
-    <div className="workspace-tab" data-selected={selected} data-file={!!onClose || undefined}>
+    <div className="workspace-tab" data-selected={selected} data-file>
       <button
         type="button"
         role="tab"
         id={`room-tab-${id}`}
-        aria-label={onClose ? undefined : name}
         aria-selected={selected}
         aria-controls={`room-view-${controls ?? id}`}
         onClick={onSelect}
       >
         {icon}
-        {onClose && <span>{name}</span>}
+        <span>{name}</span>
         {mark}
       </button>
-      {onClose && (
-        <IconButton aria-label={`Close ${name}`} className="workspace-close" onClick={onClose}>
-          <X />
-        </IconButton>
-      )}
+      <IconButton aria-label={`Close ${name}`} className="workspace-close" onClick={onClose}>
+        <X />
+      </IconButton>
     </div>
   );
 }

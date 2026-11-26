@@ -834,7 +834,7 @@ html.light .room-peek-faces > * {
   align-items: center;
   gap: 4px;
 }
-.head-button.needs-button[data-state="open"] {
+.room-actions .head-button:is([aria-pressed="true"], [data-on], [data-state="open"]) {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }

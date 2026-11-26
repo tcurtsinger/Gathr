@@ -111,22 +111,6 @@ export function BrowserView({ open }: { open: boolean }) {
   );
 }
 
-/** Home's Browser tile: how many pages are open. */
-export function BrowserTile({ onOpen }: { onOpen: () => void }) {
-  const { pages } = useBrowser();
-  return (
-    <button type="button" className="home-tile" onClick={onOpen}>
-      <span className="home-tile-name">
-        <Globe aria-hidden="true" />
-        Browser
-      </span>
-      <span className="home-tile-sub">
-        {pages.length ? `${pages.length} ${pages.length === 1 ? 'page' : 'pages'}` : 'None'}
-      </span>
-    </button>
-  );
-}
-
 const MODIFIERS = (e: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
   (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 const BUTTONS = ['left', 'middle', 'right', 'back', 'forward'];
