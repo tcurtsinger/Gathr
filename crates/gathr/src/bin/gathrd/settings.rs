@@ -28,8 +28,8 @@ struct Picked {
     model: String,
 }
 
-/// Settings > General: the agent folder (0034), the hand-off limit, Auto-compact, the person's name
-/// and their assistant; and for Settings > Connect, what an AI app on this PC runs.
+/// Settings > General: the agent folder (0034), the hand-off limit, Auto-compact, the person's name,
+/// their assistant and Keep awake; and for Settings > Connect, what an AI app on this PC runs.
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     let data = s.data.path().to_path_buf();
     let shown = db(&s, &t, "Settings failed", move |c| shown(c, &data)).await?;
@@ -70,6 +70,8 @@ struct Change {
     /// The background model, or `null` for Gathr's own pick; left out, unchanged.
     #[serde(default, deserialize_with = "present")]
     background_model: Option<Option<Picked>>,
+    /// Keep awake: whether the system stays awake while agents work; left out, unchanged.
+    keep_awake: Option<bool>,
 }
 
 /// A field that, when there, has a value: `null` is refused as a wrong type.
@@ -128,6 +130,9 @@ async fn change_settings(
                 .map(|p| (p.account.as_str(), p.model.as_str()));
             saved = gathr::titles::set_model(c, picked);
         }
+        if let (Ok(()), Some(on)) = (&saved, body.keep_awake) {
+            saved = gathr::awake::set_keep_awake(c, on);
+        }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;
         }
@@ -140,6 +145,7 @@ async fn change_settings(
             .attr("handoff_limit", gathr::handoffs::limit(c)?)
             .attr("auto_compact", gathr::context::auto_compact(c)?)
             .attr("assistant", assistant::assistant(c)?)
+            .attr("keep_awake", gathr::awake::keep_awake(c)?)
             .attr(
                 "agent_folder",
                 folders::root(c, &data)?.display().to_string(),
@@ -149,6 +155,9 @@ async fn change_settings(
         shown(c, &data)
     })
     .await?;
+    if let Some(on) = answer.0["keep_awake"].as_bool() {
+        s.chats.states.awake.set_on(on);
+    }
     // The new assistant takes its chat over now.
     if picked {
         crate::team::take_over(&s, &t).await;
@@ -167,6 +176,7 @@ fn shown(
         "agent_folder": folder,
         "handoff_limit": handoff_limit,
         "auto_compact": auto_compact,
+        "keep_awake": gathr::awake::keep_awake(c)?,
         "person_name": assistant::person_name(c)?,
         "assistant": assistant::assistant(c)?,
         "background_model": gathr::titles::model(c)?

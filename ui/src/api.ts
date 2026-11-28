@@ -351,6 +351,8 @@ export interface Settings {
   assistant?: string | null;
   /** The background model the person picked; null for Gathr's own pick. */
   background_model?: { account: string; model: string } | null;
+  /** Whether this computer stays awake while agents work. */
+  keep_awake?: boolean;
   /** Settings > Connect: what an AI app on this PC runs; null with no command line here. Read only. */
   connect?: Connect | null;
 }
