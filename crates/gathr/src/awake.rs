@@ -96,29 +96,36 @@ fn helper() -> Option<Command> {
 mod tests {
     use super::*;
 
-    /// Temporary: shows on each CI system that the helper really holds the system awake.
+    /// Temporary: shows on Windows CI whether the helper really holds the system awake.
     #[test]
     fn the_helper_holds_the_system_awake() {
-        if !cfg!(any(windows, target_os = "macos")) {
+        if !cfg!(windows) {
             return;
         }
-        let mut hold = Hold::new().unwrap();
-        std::thread::sleep(std::time::Duration::from_secs(8));
-        assert_eq!(hold.stopped(), None);
-        let (program, args): (&str, &[&str]) = if cfg!(windows) {
-            ("powercfg", &["/requests"])
-        } else if cfg!(target_os = "macos") {
-            ("pmset", &["-g", "assertions"])
-        } else {
-            return;
-        };
-        let out = Command::new(program).args(args).output().unwrap();
-        let text = String::from_utf8_lossy(&out.stdout).to_string()
-            + &String::from_utf8_lossy(&out.stderr);
-        println!("KEEP-AWAKE CHECK\n{text}");
-        drop(hold);
-        let out = Command::new(program).args(args).output().unwrap();
-        println!("AFTER RELEASE\n{}", String::from_utf8_lossy(&out.stdout));
+        let mut child = helper()
+            .unwrap()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let began = std::time::Instant::now();
+        let mut text = String::new();
+        while began.elapsed().as_secs() < 40 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let out = Command::new("powercfg").arg("/requests").output().unwrap();
+            text = String::from_utf8_lossy(&out.stdout).to_string();
+            if text.contains("powershell") || child.try_wait().unwrap().is_some() {
+                break;
+            }
+        }
+        println!("KEEP-AWAKE CHECK after {:?}\n{text}", began.elapsed());
+        let _ = child.kill();
+        let out = child.wait_with_output().unwrap();
+        println!(
+            "HELPER OUT {}\nHELPER ERR {}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
         panic!("temporary: show the output");
     }
 }
