@@ -61,27 +61,18 @@ export const filesOf = (a: ChatChanges['agents'][number]) => [
   ...a.outside.flatMap((o) => o.files),
 ];
 
-// Each chat's change as the person last saw it with the panel open, while the window is open.
+// Each chat's change as the person last saw it in Changes, while the window is open.
 const seen = new Map<string, string>();
 const said = (c: ChatChanges) =>
   JSON.stringify(c.agents.map((a) => filesOf(a).map((f) => [f.path, f.added, f.removed])));
 
-/**
- * Whether the chat has a change the person hasn't seen: read on each look while the panel is closed, against the
- * change last read while it was open.
- */
-export function useUnseen(chat: string, room: RoomState, sidebar: boolean) {
-  const changes = useChanges(chat, room, !sidebar);
+/** Changes stay unseen until their view is open, including while another panel view is shown. */
+export function useUnseen(chat: string, room: RoomState, open: boolean) {
+  const changes = useChanges(chat, room, true);
   useEffect(() => {
-    if (!sidebar) return;
-    const mark = () => {
-      const c = last.get(chat);
-      if (c?.agents) seen.set(chat, said(c));
-    };
-    mark();
-    return mark;
-  }, [chat, sidebar]);
-  if (sidebar || !changes?.agents?.some((a) => filesOf(a).length)) return false;
+    if (open && changes) seen.set(chat, said(changes));
+  }, [chat, open, changes]);
+  if (open || !changes?.agents?.some((a) => filesOf(a).length)) return false;
   return said(changes) !== seen.get(chat);
 }
 

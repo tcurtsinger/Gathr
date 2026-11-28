@@ -4,7 +4,6 @@ import {
   File as FileIcon,
   Folder,
   Globe,
-  List,
   LoaderCircle,
   Monitor,
   Search,
@@ -20,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { api, type FileTree } from '../api';
+import { BoardMark } from '../components/BoardMark';
 import { ChangesMark } from '../components/ChangesMark';
 import { DesignsMark } from '../components/DesignsMark';
 import { Face } from '../components/Face';
@@ -31,7 +31,7 @@ import { widest } from '../components/workspace';
 import { BackgroundTasksMark, BackgroundView } from './Background';
 import { Board } from './Board';
 import { BrowserView } from './Browser';
-import { Changes, useChanges } from './Changes';
+import { Changes, useChanges, useUnseen } from './Changes';
 import { ComputerView } from './Computer';
 import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
@@ -145,9 +145,20 @@ export function usePanelTabs(chat: string, open: boolean, onOpen: (open: boolean
 }
 
 /** Direct view access, beside Agents and Needs you; available even when the panel is shut. */
-export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boolean; onOpen: () => void }) {
+export function PanelShortcuts({
+  chat,
+  room,
+  open,
+  onOpen,
+}: {
+  chat: string;
+  room: RoomState;
+  open: boolean;
+  onOpen: () => void;
+}) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
   const terminals = useTerminals(chat).list;
+  const unseen = useUnseen(chat, room, open && tabs.at === CHANGES);
   const selected = (key: string) =>
     open && (key === 'terminal' ? tabs.at.startsWith('term:') : tabs.at === key);
   const choose = (key: string) => {
@@ -159,7 +170,7 @@ export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boo
     } else openView(chat, key);
   };
   const shortcuts = [
-    { key: BOARD, name: 'Task board', icon: <List /> },
+    { key: BOARD, name: 'Task board', icon: <BoardMark /> },
     { key: FILES, name: 'Files', icon: <Folder /> },
     { key: 'terminal', name: 'Terminal', icon: <SquareTerminal /> },
     { key: BROWSER, name: 'Browser', icon: <Globe /> },
@@ -191,6 +202,7 @@ export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boo
             data-on={more.some((s) => selected(s.key)) || undefined}
           >
             <Ellipsis />
+            {unseen && <span className="head-dot" />}
           </IconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -202,6 +214,7 @@ export function PanelShortcuts({ chat, open, onOpen }: { chat: string; open: boo
             >
               {s.icon}
               {s.name}
+              {s.key === CHANGES && unseen && <span className="panel-change-dot" />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -522,7 +535,7 @@ function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
         ]
       : [];
   const views = [
-    ...viewTab(BOARD, tabs.board, <List />),
+    ...viewTab(BOARD, tabs.board, <BoardMark />),
     ...viewTab(FILES, tabs.files, <Folder />),
     ...viewTab(DESIGN, tabs.design, <DesignsMark />),
     ...viewTab(CHANGES, tabs.changes, <ChangesMark />),
