@@ -665,17 +665,34 @@ impl Task {
     }
 
     /// The messages sent into a turn that the engine just read, taken off `unread`: the one with that
-    /// text, else each the text holds. Claude Code 2.1.332 read three at once as one, joined with
-    /// line breaks; left unread, they held every next turn while its engine stayed open.
+    /// text, else the ones whose whole texts, in order, joined with line breaks, make it up. Claude
+    /// Code 2.1.332 read three at once that way; left unread, they held every next turn while its
+    /// engine stayed open.
     fn read(&mut self, text: &str) -> Vec<(String, String, gathr::words::Opened)> {
         if let Some(i) = self.unread.iter().position(|(_, t, _)| t == text) {
             return vec![self.unread.remove(i)];
         }
-        let (read, unread) = std::mem::take(&mut self.unread)
-            .into_iter()
-            .partition(|(_, t, _)| !t.is_empty() && text.contains(t.as_str()));
-        self.unread = unread;
-        read
+        let (mut rest, mut taken) = (text, Vec::new());
+        for (i, (_, t, _)) in self.unread.iter().enumerate() {
+            let Some(after) = rest.strip_prefix(t.as_str()).filter(|_| !t.is_empty()) else {
+                continue;
+            };
+            match after.strip_prefix('\n') {
+                Some(next) => rest = next,
+                None if after.is_empty() => rest = after,
+                None => continue,
+            }
+            taken.push(i);
+            if rest.is_empty() {
+                break;
+            }
+        }
+        if !rest.is_empty() || taken.is_empty() {
+            return Vec::new();
+        }
+        // In order: each one taken shifts those after it down by one.
+        let taken = taken.iter().enumerate();
+        taken.map(|(n, &i)| self.unread.remove(i - n)).collect()
     }
 
     /// Messages sent into a turn that the engine will now never read become the chat's next
