@@ -15,7 +15,7 @@
   background: transparent;
   font-size: 16px;
   outline: none;
-  caret-color: var(--attention);
+  caret-color: var(--foreground);
 }
 .composer-input::placeholder {
   color: var(--muted-foreground);
