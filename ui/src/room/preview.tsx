@@ -7,6 +7,7 @@ import type { Picked } from '../components/mention';
 import { WorkspaceToggle } from '../components/workspace';
 import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
+import { useChanges } from './Changes';
 import { NeedsYou } from './Question';
 import { people, Room } from './Room';
 import { PanelShortcuts, RoomSidebar, usePanelTabs } from './Sidebar';
@@ -319,6 +320,7 @@ window.fetch = (url, init) => {
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
+  const changes = useChanges('preview', state, true);
   const [sidebar, setSidebar] = useState(true);
   const toggleSidebar = usePanelTabs('preview', sidebar, setSidebar);
   const [chosen, setChosen] = useState('mira');
@@ -382,7 +384,7 @@ function Preview() {
             turns={state.turns}
             people={everyone}
           />
-          <PanelShortcuts chat="preview" room={state} open={sidebar} onOpen={() => setSidebar(true)} />
+          <PanelShortcuts chat="preview" changes={changes} open={sidebar} onOpen={() => setSidebar(true)} />
           <WorkspaceToggle open={sidebar} onToggle={toggleSidebar} />
         </div>
       </TopLine>
@@ -401,7 +403,15 @@ function Preview() {
           />
         </Room>
       </main>
-      {sidebar && <RoomSidebar chat="preview" room={state} onAnswer={answer} onNote={() => undefined} />}
+      {sidebar && (
+        <RoomSidebar
+          changes={changes}
+          chat="preview"
+          room={state}
+          onAnswer={answer}
+          onNote={() => undefined}
+        />
+      )}
     </div>
   );
 }

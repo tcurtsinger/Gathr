@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { api, type FileTree } from '../api';
+import { api, type Changes as ChatChanges, type FileTree } from '../api';
 import { BoardMark } from '../components/BoardMark';
 import { ChangesMark } from '../components/ChangesMark';
 import { DesignsMark } from '../components/DesignsMark';
@@ -31,7 +31,7 @@ import { widest } from '../components/workspace';
 import { BackgroundTasksMark, BackgroundView } from './Background';
 import { Board } from './Board';
 import { BrowserView } from './Browser';
-import { Changes, useChanges, useUnseen } from './Changes';
+import { Changes, useUnseen } from './Changes';
 import { ComputerView } from './Computer';
 import { Designs, DesignTab } from './Design';
 import { FileTab, type Opened, Tree } from './Files';
@@ -147,18 +147,18 @@ export function usePanelTabs(chat: string, open: boolean, onOpen: (open: boolean
 /** Direct view access, beside Agents and Needs you; available even when the panel is shut. */
 export function PanelShortcuts({
   chat,
-  room,
+  changes,
   open,
   onOpen,
 }: {
   chat: string;
-  room: RoomState;
+  changes?: ChatChanges;
   open: boolean;
   onOpen: () => void;
 }) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
   const terminals = useTerminals(chat).list;
-  const unseen = useUnseen(chat, room, open && tabs.at === CHANGES);
+  const unseen = useUnseen(chat, changes, open && tabs.at === CHANGES);
   const selected = (key: string) =>
     open && (key === 'terminal' ? tabs.at.startsWith('term:') : tabs.at === key);
   const choose = (key: string) => {
@@ -296,6 +296,7 @@ export function RoomSidebar(props: PanelProps) {
 }
 
 interface PanelProps {
+  changes?: ChatChanges;
   chat: string;
   room: RoomState;
   onAnswer: OnAnswer;
@@ -377,9 +378,8 @@ function fitting(items: Item[], width: number, strip: HTMLElement | null) {
   return { shown: shown.map((n) => items[n]), fit };
 }
 
-function Panel({ chat, room, onAnswer, onNote }: PanelProps) {
+function Panel({ chat, room, changes, onAnswer, onNote }: PanelProps) {
   const tabs = useSyncExternalStore(listen, () => tabsOf(chat));
-  const changes = useChanges(chat, room, true);
   const [tree, setTree] = useState<FileTree>();
   useEffect(() => {
     api.tree(chat).then(setTree, () => {});

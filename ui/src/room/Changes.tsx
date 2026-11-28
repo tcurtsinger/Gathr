@@ -67,8 +67,7 @@ const said = (c: ChatChanges) =>
   JSON.stringify(c.agents.map((a) => filesOf(a).map((f) => [f.path, f.added, f.removed])));
 
 /** Changes stay unseen until their view is open, including while another panel view is shown. */
-export function useUnseen(chat: string, room: RoomState, open: boolean) {
-  const changes = useChanges(chat, room, true);
+export function useUnseen(chat: string, changes: ChatChanges | undefined, open: boolean) {
   useEffect(() => {
     if (open && changes) seen.set(chat, said(changes));
   }, [chat, open, changes]);
