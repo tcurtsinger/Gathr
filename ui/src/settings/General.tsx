@@ -9,6 +9,7 @@ import { AgentFolder } from './AgentFolder';
 import { AppVersion } from './AppVersion';
 import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
+import { KeepAwake } from './KeepAwake';
 import { Page, Row } from './Row';
 import { YourName } from './YourName';
 
@@ -87,6 +88,7 @@ export function General() {
             <Switch on={on} labelledBy="startup-label" disabled={saving} onChange={change} />
           </Row>
         )}
+        <KeepAwake />
         <AppVersion />
       </div>
     </Page>

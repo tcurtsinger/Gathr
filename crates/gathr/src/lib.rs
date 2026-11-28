@@ -8,6 +8,7 @@ pub mod app;
 pub mod approvals;
 pub mod archive;
 pub mod assistant;
+pub mod awake;
 pub mod background;
 pub mod board;
 pub mod browser;

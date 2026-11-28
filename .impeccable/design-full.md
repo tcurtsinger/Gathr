@@ -412,7 +412,9 @@ right; its menus and dropdown lists open at 13px with 14px icons, the size of th
 and preserve the chat's draft and position.
 
 General has Your name, then Theme (System, the default, follows the system's setting; Light or Dark), applied at
-once without a reload, and Open at login, applied immediately with Switch, both for this computer only. The window
+once without a reload, and Open at login, applied immediately with Switch, both for this computer only. Keep awake
+("While agents work.", on by default) is a Switch that keeps the system from sleeping while a turn or a background
+command runs; the screen may still turn off. The window
 keeps the theme and the navigation and workspace widths across restarts. General ends with the version, with
 Update while a release is ready, else Check.
 

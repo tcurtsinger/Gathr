@@ -89,6 +89,8 @@ pub async fn changed(chats: &crate::chats::Chats, chat: &str, trace: &str) {
 pub struct States {
     live: broadcast::Sender<Value>,
     known: Mutex<Known>,
+    /// Told whether any chat works.
+    pub awake: Arc<crate::awake::KeepAwake>,
 }
 
 #[derive(Default)]
@@ -100,10 +102,11 @@ struct Known {
 }
 
 impl States {
-    pub fn new(live: broadcast::Sender<Value>) -> States {
+    pub fn new(live: broadcast::Sender<Value>, awake: Arc<crate::awake::KeepAwake>) -> States {
         States {
             live,
             known: Mutex::default(),
+            awake,
         }
     }
 
@@ -154,6 +157,7 @@ impl States {
             false => known.sent.insert(chat.to_string(), state),
             true => known.sent.remove(chat),
         };
+        self.awake.working(known.sent.values().any(|s| s.working));
         let ChatState {
             working,
             needs,
@@ -183,6 +187,7 @@ impl States {
                 known.sent.insert(id.to_string(), state);
             }
         }
+        self.awake.working(known.sent.values().any(|s| s.working));
         Ok(())
     }
 }

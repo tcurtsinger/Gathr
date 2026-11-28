@@ -8,6 +8,7 @@ mod agents;
 mod api;
 mod app_update;
 mod archive;
+mod awake;
 mod background;
 mod board;
 mod browser;
@@ -133,7 +134,10 @@ fn start(
     let early_lines = crash_log.take();
     chat_state::watch(&conn).map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let live = tokio::sync::broadcast::channel(4096).0;
-    let states = Arc::new(chat_state::States::new(live.clone()));
+    let keep_awake = gathr::awake::keep_awake(&conn)
+        .map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
+    let awake = Arc::new(awake::KeepAwake::new(keep_awake));
+    let states = Arc::new(chat_state::States::new(live.clone(), awake.clone()));
     let (moved, changed) = tokio::sync::mpsc::unbounded_channel();
     let after = chat_state::after_write(moved);
     let writer = Writer::start(conn, crash_log.clone(), after);
@@ -266,6 +270,8 @@ async fn serve(
     // After the turns left waiting are taken over: a run queued now is never taken over twice.
     tokio::spawn(scheduled::every(chats.clone()));
     tokio::spawn(chat_state::run(chats.clone(), changed));
+    let (awake, records) = (chats.states.awake.clone(), chats.writer.clone());
+    tokio::spawn(async move { awake.run(records).await });
     tokio::spawn(cleanup::every(chats.clone()));
     tokio::spawn(updates::run(updates.clone(), chats.clone()));
     tokio::spawn(updates::run(codex_updates.clone(), chats.clone()));
