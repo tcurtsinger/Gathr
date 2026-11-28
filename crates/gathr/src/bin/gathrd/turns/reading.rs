@@ -258,11 +258,10 @@ impl Task {
             }
             Frame::ToolShape { tool, field } => self.tool_shape(tool, field),
             Frame::Read(text) => {
-                let unread = self.unread.iter().position(|(_, t, _)| *t == text);
-                let read = unread.map(|i| self.unread.remove(i));
+                let read = self.read(&text);
                 // Read inside the turn: part of what it was given (0020), recorded now, so the
                 // turn keeps it however it ends.
-                if let (Some(_), Some(turn)) = (&read, self.turn.as_ref()) {
+                if let (false, Some(turn)) = (read.is_empty(), self.turn.as_ref()) {
                     let chars = text.chars().count();
                     let event = Event::point("gathr.turn.read")
                         .trace(&turn.ids.trace)
@@ -272,13 +271,14 @@ impl Task {
                         .attr("gathr.context.ask.tokens_estimate", chars.div_ceil(4));
                     self.record(event);
                 }
-                if let Some((message, _, opened)) = read
+                if let Some(&(_, _, opened)) = read.first()
                     && self.turn.is_none()
                 {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the
-                    // turn, then reads the message sent into it and answers it as a turn of
-                    // its own. That turn gets its row here, and the message moves to it.
-                    self.begin_read_turn(&message, opened, text.chars().count())
+                    // turn, then reads the messages sent into it and answers them as a turn of
+                    // its own. That turn gets its row here, and the messages move to it.
+                    let messages: Vec<String> = read.into_iter().map(|(m, ..)| m).collect();
+                    self.begin_read_turn(&messages, opened, text.chars().count())
                         .await;
                 }
                 let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
