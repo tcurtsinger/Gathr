@@ -49,6 +49,8 @@ const heading = (title: string) => page.getByRole('heading', { level: 1, name: t
 
 test('deleting the open chat asks first, then opens the next chat in the sidebar', async () => {
   service([chat('a'), chat('b'), chat('c')], []);
+  // The window's own minimum width: narrower, the top line's buttons cover the chat's More.
+  await page.viewport(960, 700);
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up b', exact: true }).click();
   await expect.element(heading('Made-up b')).toBeInTheDocument();
