@@ -10,22 +10,12 @@ export function widest() {
 }
 
 /** The sidebar's button in the top line, open or closed. */
-/** `unseen`: a dot, for a change the person hasn't seen while it is shut. */
-export function WorkspaceToggle({
-  open,
-  unseen,
-  onToggle,
-}: {
-  open: boolean;
-  unseen?: boolean;
-  onToggle: () => void;
-}) {
+export function WorkspaceToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <IconButton
       aria-label={open ? 'Close sidebar' : 'Open sidebar'}
       aria-expanded={open}
       className="head-button workspace-toggle"
-      data-unseen={unseen || undefined}
       onClick={onToggle}
     >
       <PanelRight />

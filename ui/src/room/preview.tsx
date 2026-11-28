@@ -382,7 +382,7 @@ function Preview() {
             turns={state.turns}
             people={everyone}
           />
-          <PanelShortcuts chat="preview" open={sidebar} onOpen={() => setSidebar(true)} />
+          <PanelShortcuts chat="preview" room={state} open={sidebar} onOpen={() => setSidebar(true)} />
           <WorkspaceToggle open={sidebar} onToggle={toggleSidebar} />
         </div>
       </TopLine>

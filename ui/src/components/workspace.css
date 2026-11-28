@@ -161,21 +161,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Something changed the person hasn't seen, while the panel is shut. */
-.workspace-toggle[data-unseen] {
-  position: relative;
-}
-.workspace-toggle[data-unseen]::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--attention);
-  box-shadow: 0 0 0 2px var(--frame);
-}
 .workspace-view {
   display: flex;
   flex: 1;

@@ -30,7 +30,6 @@ import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
 import { AgentsPanel } from './AgentsPanel';
-import { useUnseen } from './Changes';
 import { NeedsYou } from './Question';
 import { type Found, people as peopleOf, Room } from './Room';
 import {
@@ -131,7 +130,6 @@ export function RoomView(props: Props) {
   const running = Object.values(state.turns).some((t) => t.status === 'running');
   const sidebar = !fresh && props.sidebar;
   const toggleSidebar = usePanelTabs(chat.id, sidebar, props.onSidebar);
-  const unseen = useUnseen(chat.id, state, sidebar || fresh);
   // The assistant is null only with no agents at all (unset until read): the box is off.
   const none = props.you.assistant === null;
   const mine = own ? agents.find((a) => a.id === props.you.assistant) : undefined;
@@ -247,8 +245,8 @@ export function RoomView(props: Props) {
               turns={state.turns}
               people={team}
             />
-            <PanelShortcuts chat={chat.id} open={sidebar} onOpen={() => props.onSidebar(true)} />
-            <WorkspaceToggle open={sidebar} unseen={unseen} onToggle={toggleSidebar} />
+            <PanelShortcuts chat={chat.id} room={state} open={sidebar} onOpen={() => props.onSidebar(true)} />
+            <WorkspaceToggle open={sidebar} onToggle={toggleSidebar} />
           </div>
         )}
       </TopLine>
