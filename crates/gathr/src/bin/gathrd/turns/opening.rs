@@ -76,10 +76,10 @@ impl Task {
         });
     }
 
-    /// A turn the engine began itself, to answer a message sent into the last one.
+    /// A turn the engine began itself, to answer the messages sent into the last one.
     pub(super) async fn begin_read_turn(
         &mut self,
-        message: &str,
+        messages: &[String],
         opened: gathr::words::Opened,
         ask_chars: usize,
     ) {
@@ -94,7 +94,7 @@ impl Task {
             answers: None,
             person: true,
         };
-        let (row, id) = (ids.clone(), message.to_string());
+        let (row, ids_read) = (ids.clone(), messages.to_vec());
         let saved = self
             .chats
             .writer
@@ -107,11 +107,15 @@ impl Task {
                     (row.agent.as_deref(), row.answers.as_deref()),
                     opened,
                 )?;
-                store::move_message(conn, &id, &row.turn)
+                let moved: Result<Vec<_>, _> = ids_read
+                    .iter()
+                    .map(|id| store::move_message(conn, id, &row.turn))
+                    .collect();
+                moved
             })
             .await;
-        // An open window moves the message to its new turn, where its reply or failure shows.
-        if let Some(Ok(message)) = &saved {
+        // An open window moves each message to its new turn, where its reply or failure shows.
+        for message in saved.iter().flatten().flatten() {
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         }
         if let Some(Err(e)) = saved {

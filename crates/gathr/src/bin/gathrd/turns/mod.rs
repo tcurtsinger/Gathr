@@ -664,6 +664,20 @@ impl Task {
         self.engine.is_some() && !self.unread.is_empty()
     }
 
+    /// The messages sent into a turn that the engine just read, taken off `unread`: the one with that
+    /// text, else each the text holds. Claude Code 2.1.332 read three at once as one, joined with
+    /// line breaks; left unread, they held every next turn while its engine stayed open.
+    fn read(&mut self, text: &str) -> Vec<(String, String, gathr::words::Opened)> {
+        if let Some(i) = self.unread.iter().position(|(_, t, _)| t == text) {
+            return vec![self.unread.remove(i)];
+        }
+        let (read, unread) = std::mem::take(&mut self.unread)
+            .into_iter()
+            .partition(|(_, t, _)| !t.is_empty() && text.contains(t.as_str()));
+        self.unread = unread;
+        read
+    }
+
     /// Messages sent into a turn that the engine will now never read become the chat's next
     /// turns, first in the queue, so each still gets its answer.
     pub(super) async fn requeue_unread(&mut self) {

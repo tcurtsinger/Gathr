@@ -466,6 +466,62 @@ fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
     );
 }
 
+/// Claude Code 2.1.332 read three messages sent into a turn as one, joined with line breaks: all three count
+/// as read, move to the turn that answers them, and the next turn starts. Made from `steered_after_turn`.
+#[test]
+fn messages_read_together_after_a_turn_count_as_read_and_the_next_turn_starts() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("read_merged"))]);
+    service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let first = service.send(
+        "POST",
+        &path,
+        json!({ "text": "Count slowly from 1 to 200, one number per line. Use no tools." }),
+    );
+    assert_eq!(first.json()["status"], "running", "{}", first.body);
+    let sent = [
+        "Also note the folder name.",
+        "And keep the list short.",
+        "Then reply with only the word MERGED.",
+    ];
+    for text in sent {
+        let steer = service.send("POST", &path, json!({ "text": text }));
+        assert_eq!(steer.json()["steered"], true, "{}", steer.body);
+    }
+    let done = |n: usize| {
+        move |h: &Value| {
+            let turns = h["turns"].as_array().unwrap();
+            turns.len() == n && turns.iter().all(|t| t["status"] == "done")
+        }
+    };
+    let history = service.wait_for(&chat, 10, "the read turn, done", done(2));
+    let read_turn = history["turns"][1]["id"].clone();
+    let in_read: Vec<&Value> = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["turn"] == read_turn)
+        .collect();
+    let bodies: Vec<&str> = in_read.iter().filter_map(|m| m["body"].as_str()).collect();
+    assert_eq!(
+        bodies.len(),
+        4,
+        "the three messages and their answer: {bodies:?}"
+    );
+    assert_eq!(bodies[..3], sent, "{bodies:?}");
+    assert!(bodies[3].contains("MERGED"), "{bodies:?}");
+
+    let next = service.send(
+        "POST",
+        &path,
+        json!({ "text": "Now reply with only the word NEXT." }),
+    );
+    assert_eq!(next.json()["status"], "running", "{}", next.body);
+    service.wait_for(&chat, 10, "the next turn, done", done(3));
+}
+
 /// A tool approval asked over `--permission-prompt-tool stdio` and answered through the API.
 /// Recorded live: Claude Code 2.1.318 asked to run Write, was allowed, and ran it.
 #[test]
